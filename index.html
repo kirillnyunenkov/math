@@ -70,6 +70,14 @@
   .btn.sol:hover{background:#f7ece6;}
   .solution{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);display:none;}
   .solution.open{display:block;}
+  /* html-задачи (формулы и чертежи Школково встроены в куски) */
+  .tex{font-family:'Times New Roman',serif;font-size:18px;color:#000;line-height:normal;}
+  .tex img{max-width:100%;height:auto;}
+  .tex img.math{vertical-align:middle;max-width:100%;}
+  .tex .center,.tex .math-display{text-align:center;}
+  .tex p{margin:0 0 .5em;}
+  .answer{display:inline-block;background:var(--green-soft);color:var(--green);font-weight:600;
+    padding:4px 12px;border-radius:8px;margin-bottom:12px;font-size:15px;font-family:'Golos Text',sans-serif;}
   @media (max-width:760px){
     .wrap{grid-template-columns:1fr;gap:18px;padding:18px 14px 60px;}
     .grid-panel{position:static;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px;}
@@ -100,9 +108,9 @@
    Картинки берутся по пути:  img/t{n}/cond/0001.png  и  img/t{n}/sol/0001.png
    ============================================================ */
 const TASKS = [
-  { n:1,  title:"Планиметрия (практика)",        count:0  },
+  { n:1,  title:"Планиметрия (практика)",        count:50, mode:"html" },
   { n:2,  title:"Векторы",                        count:0  },
-  { n:3,  title:"Стереометрия",                   count:70 },
+  { n:3,  title:"Стереометрия",                   count:70, mode:"img" },
   { n:4,  title:"Теория вероятностей",            count:0  },
   { n:5,  title:"Вероятность (сложная)",          count:0  },
   { n:6,  title:"Уравнения",                      count:0  },
@@ -124,6 +132,19 @@ const TASKS = [
 /* ============================================================ ЛОГИКА — не трогай ============================================================ */
 const COND = (n,id)=>`img/t${n}/cond/${String(id).padStart(4,'0')}.png`;
 const SOL  = (n,id)=>`img/t${n}/sol/${String(id).padStart(4,'0')}.png`;
+const taskCfg = n => TASKS.find(t=>t.n===n);
+window.TASKDATA = window.TASKDATA || {};
+const dataLoading = {};
+function ensureData(n, cb){
+  if(window.TASKDATA[n]){cb();return;}
+  if(dataLoading[n]){dataLoading[n].push(cb);return;}
+  dataLoading[n]=[cb];
+  const s=document.createElement('script');
+  s.src=`img/t${n}/data.js`;
+  s.onload=()=>{(dataLoading[n]||[]).forEach(f=>f());dataLoading[n]=null;};
+  s.onerror=()=>{(dataLoading[n]||[]).forEach(f=>f());dataLoading[n]=null;};
+  document.head.appendChild(s);
+}
 const STORAGE_KEY='ege_hub_v1';
 let state={};
 try{state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){state={};}
@@ -172,13 +193,26 @@ function renderHub(){
 }
 
 function renderTask(n){
-  const task=TASKS.find(t=>t.n===n);
+  const task=taskCfg(n);
   if(!task||task.count===0){go('#/');return;}
+  if(task.mode==='html' && !window.TASKDATA[n]){
+    backEl.style.display='inline'; statsEl.innerHTML='';
+    appEl.innerHTML='<div class="wrap"><div></div><main class="list"><p style="color:var(--muted)">Загрузка задач…</p></main></div>';
+    ensureData(n,()=>{ if(parseRoute().n===n) renderTask(n); });
+    return;
+  }
   backEl.style.display='inline';
   const ts=taskState(n),{g,b}=countTask(n);
+  const data = task.mode==='html' ? (window.TASKDATA[n]||[]) : null;
   statsEl.innerHTML=`<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
     `<span class="stat"><i class="dot b"></i>Остановился: <b>${b}</b></span>`+
     `<span class="stat"><i class="dot n"></i>Осталось: <b>${task.count-g-b}</b></span>`;
+  const condHTML=id=> task.mode==='html'
+      ? `<div class="cond"><div class="tex">${(data[id-1]||{}).c||''}</div></div>`
+      : `<div class="cond"><img loading="lazy" src="${COND(n,id)}" alt="Задача ${id}"></div>`;
+  const solBox=id=> task.mode==='html'
+      ? `<div class="solution" id="sol-${id}" data-html="1"></div>`
+      : `<div class="solution" id="sol-${id}"><div class="sol-body"><img loading="lazy" data-src="${SOL(n,id)}" alt="Решение ${id}"></div></div>`;
   appEl.innerHTML=`<div class="wrap">
     <aside class="grid-panel"><div class="grid-label">Задание ${n}</div>
       <div class="grid">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='b'?'b':'';
@@ -186,13 +220,13 @@ function renderTask(n){
     <main class="list">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'is-g':st==='b'?'is-b':'';
       return `<article class="card ${c}" id="task-${id}">
         <div class="card-top"><span class="num">${id}</span></div>
-        <div class="cond"><img loading="lazy" src="${COND(n,id)}" alt="Задача ${id}"></div>
+        ${condHTML(id)}
         <div class="actions">
           <button class="btn mk-g ${st==='g'?'on':''}" data-mark="g" data-id="${id}">✓ Умею решать</button>
           <button class="btn mk-b ${st==='b'?'on':''}" data-mark="b" data-id="${id}">⏸ Остановился тут</button>
           <button class="btn sol" data-sol="${id}">Показать решение</button>
         </div>
-        <div class="solution" id="sol-${id}"><div class="sol-body"><img loading="lazy" data-src="${SOL(n,id)}" alt="Решение ${id}"></div></div>
+        ${solBox(id)}
       </article>`;}).join('')}</main></div>`;
 }
 
@@ -204,8 +238,13 @@ appEl.addEventListener('click',e=>{
   if(mk){const r=parseRoute();if(r.view!=='task')return;const ts=taskState(r.n),id=+mk.dataset.id,m=mk.dataset.mark;
     if(ts[id]===m)delete ts[id];else ts[id]=m;save();renderTask(r.n);return;}
   const sol=e.target.closest('[data-sol]');
-  if(sol){const box=document.getElementById('sol-'+sol.dataset.sol);box.classList.toggle('open');
-    const img=box.querySelector('img');if(img&&!img.src&&img.dataset.src)img.src=img.dataset.src;return;}
+  if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id);box.classList.toggle('open');
+    if(box.dataset.html==='1'){
+      if(!box.dataset.filled){const n=parseRoute().n,d=(window.TASKDATA[n]||[])[id-1]||{};
+        box.innerHTML=(d.a?`<span class="answer">Ответ: ${d.a}</span>`:'')+`<div class="sol-body"><div class="tex">${d.s||''}</div></div>`;
+        box.dataset.filled='1';}
+    } else {const img=box.querySelector('img');if(img&&!img.src&&img.dataset.src)img.src=img.dataset.src;}
+    return;}
   const cell=e.target.closest('[data-cell]');
   if(cell){document.getElementById('task-'+cell.dataset.cell).scrollIntoView({behavior:'smooth',block:'start'});return;}
 });
