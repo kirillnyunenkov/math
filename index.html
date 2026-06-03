@@ -73,7 +73,8 @@
   /* html-задачи (формулы и чертежи Школково встроены в куски) */
   .tex{font-family:'Times New Roman',serif;font-size:18px;color:#000;line-height:normal;}
   .tex img{max-width:100%;height:auto;width:auto;}
-  .tex img.math{vertical-align:middle;width:auto;}
+  .tex img.math{display:inline;vertical-align:middle;width:auto;}
+  .tex img:not(.math){display:block;max-width:100%;margin:.5em auto;}
   .tex .center,.tex .math-display{text-align:center;}
   .tex p{margin:0 0 .5em;}
   .answer{display:inline-block;background:var(--green-soft);color:var(--green);font-weight:600;
@@ -109,7 +110,7 @@
    ============================================================ */
 const TASKS = [
   { n:1,  title:"Планиметрия (практика)",        count:50, mode:"html" },
-  { n:2, title:"Векторы", count:24, mode:"html" },
+  { n:2,  title:"Векторы",                        count:0  },
   { n:3,  title:"Стереометрия",                   count:70, mode:"img" },
   { n:4,  title:"Теория вероятностей",            count:0  },
   { n:5,  title:"Вероятность (сложная)",          count:0  },
