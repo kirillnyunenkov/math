@@ -137,13 +137,17 @@ const taskCfg = n => TASKS.find(t=>t.n===n);
 window.TASKDATA = window.TASKDATA || {};
 const dataLoading = {};
 function ensureData(n, cb){
-  if(window.TASKDATA[n]){cb();return;}
+  if(n in (window.TASKDATA||{})){cb();return;}
   if(dataLoading[n]){dataLoading[n].push(cb);return;}
   dataLoading[n]=[cb];
   const s=document.createElement('script');
   s.src=`img/t${n}/data.js`;
   s.onload=()=>{(dataLoading[n]||[]).forEach(f=>f());dataLoading[n]=null;};
-  s.onerror=()=>{(dataLoading[n]||[]).forEach(f=>f());dataLoading[n]=null;};
+  s.onerror=()=>{
+    window.TASKDATA=window.TASKDATA||{};
+    window.TASKDATA[n]='error'; // флаг ошибки — предотвращает повторную загрузку
+    (dataLoading[n]||[]).forEach(f=>f());dataLoading[n]=null;
+  };
   document.head.appendChild(s);
 }
 const STORAGE_KEY='ege_hub_v1';
@@ -196,10 +200,16 @@ function renderHub(){
 function renderTask(n){
   const task=taskCfg(n);
   if(!task||task.count===0){go('#/');return;}
-  if(task.mode==='html' && !window.TASKDATA[n]){
+  if(task.mode==='html' && !(n in (window.TASKDATA||{}))){
     backEl.style.display='inline'; statsEl.innerHTML='';
     appEl.innerHTML='<div class="wrap"><div></div><main class="list"><p style="color:var(--muted)">Загрузка задач…</p></main></div>';
     ensureData(n,()=>{ if(parseRoute().n===n) renderTask(n); });
+    return;
+  }
+  if(task.mode==='html' && window.TASKDATA[n]==='error'){
+    backEl.style.display='inline'; statsEl.innerHTML='';
+    appEl.innerHTML=`<div class="wrap"><div></div><main class="list"><p style="color:var(--accent)">
+      Не удалось загрузить задачи.<br>Убедись, что файл <code>img/t${n}/data.js</code> загружен в репозиторий.</p></main></div>`;
     return;
   }
   backEl.style.display='inline';
