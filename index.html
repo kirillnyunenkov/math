@@ -3,375 +3,170 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Тренажёр ЕГЭ по математике</title>
-
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js"></script>
-
+<title>Стереометрия (№3) — тренажёр ЕГЭ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
-
 <style>
-  :root {
-    --bg:#f4f1ea; --paper:#fbfaf6; --ink:#1f2421; --muted:#6b6f6a; --line:#e0dccf;
-    --green:#2f8f5b; --green-soft:#e3f1e8; --dark:#2a2d2a; --accent:#b5532a;
+  :root{
+    --bg:#f4f1ea;--paper:#fbfaf6;--ink:#1f2421;--muted:#6b6f6a;--line:#e0dccf;
+    --green:#2f8f5b;--green-soft:#e3f1e8;--dark:#2a2d2a;--accent:#b5532a;
     --shadow:0 1px 2px rgba(31,36,33,.06),0 8px 24px rgba(31,36,33,.06);
   }
-  * { box-sizing:border-box; }
-  html { scroll-behavior:smooth; }
-  body { margin:0; background:var(--bg); color:var(--ink);
-    font-family:'Golos Text',system-ui,sans-serif; line-height:1.55; -webkit-font-smoothing:antialiased; }
-
-  header { position:sticky; top:0; z-index:50; background:rgba(244,241,234,.92);
-    backdrop-filter:blur(8px); border-bottom:1px solid var(--line); }
-  .head-inner { max-width:1180px; margin:0 auto; padding:14px 24px;
-    display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-  .title { font-family:'Lora',serif; font-weight:700; font-size:20px; letter-spacing:-.01em;
-    margin:0; white-space:nowrap; cursor:pointer; }
-  .title span { color:var(--accent); }
-  .back { font:inherit; font-size:13.5px; color:var(--muted); background:none; border:none;
-    cursor:pointer; padding:0; display:none; }
-  .back:hover { color:var(--accent); }
-  .stats { display:flex; gap:16px; margin-left:auto; flex-wrap:wrap; }
-  .stat { display:flex; align-items:center; gap:6px; font-size:13.5px; color:var(--muted); }
-  .dot { width:11px; height:11px; border-radius:3px; display:inline-block; }
-  .dot.g{background:var(--green);} .dot.b{background:var(--dark);} .dot.n{background:#fff;border:1px solid var(--line);}
-  .stat b { color:var(--ink); font-weight:600; }
-  .ghost { font:inherit; font-size:12.5px; color:var(--muted); background:none;
-    border:1px solid var(--line); border-radius:8px; padding:5px 11px; cursor:pointer; transition:.15s; }
-  .ghost:hover { border-color:var(--accent); color:var(--accent); }
-
-  /* ---------- Главная ---------- */
-  .hub { max-width:1180px; margin:0 auto; padding:32px 24px 80px; }
-  .hub h2 { font-family:'Lora',serif; font-weight:600; font-size:26px; margin:0 0 6px; }
-  .hub .sub { color:var(--muted); margin:0 0 28px; font-size:15px; }
-  .tasks { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
-  .tcard { background:var(--paper); border:1px solid var(--line); border-radius:14px;
-    padding:18px 20px; box-shadow:var(--shadow); cursor:pointer; transition:transform .12s,border-color .15s;
-    display:flex; flex-direction:column; gap:12px; text-align:left; font:inherit; }
-  .tcard:hover { transform:translateY(-2px); border-color:var(--accent); }
-  .tcard:disabled { opacity:.55; cursor:default; }
-  .tcard:disabled:hover { transform:none; border-color:var(--line); }
-  .tcard .tnum { font-family:'Lora',serif; font-weight:700; color:var(--accent); font-size:15px; }
-  .tcard .tname { font-size:16px; font-weight:500; line-height:1.3; flex:1; }
-  .bar { height:7px; border-radius:99px; background:#eceadf; overflow:hidden; display:flex; }
-  .bar .bg { background:var(--green); } .bar .bb { background:var(--dark); }
-  .tmeta { display:flex; justify-content:space-between; font-size:12.5px; color:var(--muted); }
-
-  /* ---------- Тренажёр ---------- */
-  .wrap { max-width:1180px; margin:0 auto; padding:28px 24px 80px;
-    display:grid; grid-template-columns:168px 1fr; gap:36px; align-items:start; }
-  .grid-panel { position:sticky; top:78px; }
-  .grid-label { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); margin-bottom:10px; }
-  .grid { display:grid; grid-template-columns:repeat(5,1fr); gap:5px; }
-  .cell { aspect-ratio:1; border:1px solid var(--line); border-radius:6px; background:var(--paper);
-    color:var(--muted); font-size:12px; font-weight:500; cursor:pointer; display:flex;
-    align-items:center; justify-content:center; transition:transform .1s,background .15s,color .15s;
-    font-family:'Golos Text',sans-serif; }
-  .cell:hover { transform:scale(1.12); border-color:var(--ink); }
+  *{box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:'Golos Text',system-ui,sans-serif;line-height:1.55;-webkit-font-smoothing:antialiased;}
+  header{position:sticky;top:0;z-index:50;background:rgba(244,241,234,.92);
+    backdrop-filter:blur(8px);border-bottom:1px solid var(--line);}
+  .head-inner{max-width:1180px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
+  .title{font-family:'Lora',serif;font-weight:700;font-size:20px;letter-spacing:-.01em;margin:0;white-space:nowrap;}
+  .title span{color:var(--accent);}
+  .stats{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap;}
+  .stat{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--muted);}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
+  .dot.g{background:var(--green);}.dot.b{background:var(--dark);}.dot.n{background:#fff;border:1px solid var(--line);}
+  .stat b{color:var(--ink);font-weight:600;}
+  .ghost{font:inherit;font-size:12.5px;color:var(--muted);background:none;border:1px solid var(--line);
+    border-radius:8px;padding:5px 11px;cursor:pointer;transition:.15s;}
+  .ghost:hover{border-color:var(--accent);color:var(--accent);}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px;display:grid;grid-template-columns:168px 1fr;gap:36px;align-items:start;}
+  .grid-panel{position:sticky;top:78px;}
+  .grid-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;}
+  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;}
+  .cell{aspect-ratio:1;border:1px solid var(--line);border-radius:6px;background:var(--paper);color:var(--muted);
+    font-size:12px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    transition:transform .1s,background .15s,color .15s;font-family:'Golos Text',sans-serif;}
+  .cell:hover{transform:scale(1.12);border-color:var(--ink);}
   .cell.g{background:var(--green);border-color:var(--green);color:#fff;}
   .cell.b{background:var(--dark);border-color:var(--dark);color:#fff;}
-
-  .list { display:flex; flex-direction:column; gap:18px; }
-  .empty { color:var(--muted); padding:40px 0; font-size:15px; }
-  .card { background:var(--paper); border:1px solid var(--line); border-radius:14px; padding:22px 24px;
-    box-shadow:var(--shadow); scroll-margin-top:78px; border-left:4px solid var(--line); transition:border-color .2s; }
-  .card.is-g{border-left-color:var(--green);} .card.is-b{border-left-color:var(--dark);}
-  .card-top { display:flex; align-items:baseline; gap:12px; margin-bottom:12px; }
-  .num { font-family:'Lora',serif; font-weight:700; font-size:22px; color:var(--accent); line-height:1; }
-  .condition { font-size:16px; } .condition p { margin:0 0 8px; }
-  .actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
-  .btn { font:inherit; font-size:13.5px; font-weight:500; cursor:pointer; border-radius:9px;
-    padding:8px 14px; border:1px solid var(--line); background:var(--paper); color:var(--ink); transition:.15s; }
-  .btn:hover { border-color:var(--ink); }
+  .list{display:flex;flex-direction:column;gap:18px;}
+  .card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;
+    box-shadow:var(--shadow);scroll-margin-top:78px;border-left:4px solid var(--line);transition:border-color .2s;}
+  .card.is-g{border-left-color:var(--green);}.card.is-b{border-left-color:var(--dark);}
+  .card-top{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;}
+  .num{font-family:'Lora',serif;font-weight:700;font-size:22px;color:var(--accent);line-height:1;}
+  .cond,.sol-body{width:100%;}
+  .cond img,.sol-body img{max-width:760px;width:100%;height:auto;display:block;border-radius:6px;}
+  .actions{display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;}
+  .btn{font:inherit;font-size:13.5px;font-weight:500;cursor:pointer;border-radius:9px;padding:8px 14px;
+    border:1px solid var(--line);background:var(--paper);color:var(--ink);transition:.15s;}
+  .btn:hover{border-color:var(--ink);}
   .btn.mk-g.on{background:var(--green);border-color:var(--green);color:#fff;}
   .btn.mk-b.on{background:var(--dark);border-color:var(--dark);color:#fff;}
-  .btn.sol { margin-left:auto; color:var(--accent); border-color:#e8d2c6; }
-  .btn.sol:hover { background:#f7ece6; }
-  .solution { margin-top:16px; padding-top:16px; border-top:1px dashed var(--line); display:none; }
-  .solution.open { display:block; animation:fade .25s ease; }
-  @keyframes fade { from{opacity:0;transform:translateY(-4px);} to{opacity:1;transform:none;} }
-  .answer { display:inline-block; background:var(--green-soft); color:var(--green); font-weight:600;
-    padding:4px 12px; border-radius:8px; margin-bottom:12px; font-size:15px; }
-  .sol-body { font-size:15px; color:#333; } .sol-body p { margin:0 0 10px; }
-
-  @media (max-width:760px) {
-    .wrap { grid-template-columns:1fr; gap:18px; padding:18px 14px 60px; }
-    .grid-panel { position:static; background:var(--paper); border:1px solid var(--line);
-      border-radius:12px; padding:14px; }
-    .grid { grid-template-columns:repeat(10,1fr); }
-    .head-inner { padding:12px 14px; gap:10px; }
-    .stats { width:100%; margin-left:0; } .title { font-size:17px; }
-    .hub { padding:20px 14px 60px; }
+  .btn.sol{margin-left:auto;color:var(--accent);border-color:#e8d2c6;}
+  .btn.sol:hover{background:#f7ece6;}
+  .solution{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);display:none;}
+  .solution.open{display:block;}
+  .answer{display:inline-block;background:var(--green-soft);color:var(--green);font-weight:600;
+    padding:4px 12px;border-radius:8px;margin-bottom:12px;font-size:14px;}
+  @media (max-width:760px){
+    .wrap{grid-template-columns:1fr;gap:18px;padding:18px 14px 60px;}
+    .grid-panel{position:static;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px;}
+    .grid{grid-template-columns:repeat(10,1fr);}
+    .head-inner{padding:12px 14px;gap:10px;}.stats{width:100%;margin-left:0;}.title{font-size:16px;}
   }
 </style>
 </head>
 <body>
-
 <header>
   <div class="head-inner">
-    <button class="back" id="back">← К списку заданий</button>
-    <h1 class="title" id="home-link">Тренажёр <span>ЕГЭ</span></h1>
-    <div class="stats" id="stats"></div>
+    <h1 class="title">Стереометрия <span>№3</span></h1>
+    <div class="stats">
+      <span class="stat"><i class="dot g"></i>Умею: <b id="cnt-g">0</b></span>
+      <span class="stat"><i class="dot b"></i>Остановился: <b id="cnt-b">0</b></span>
+      <span class="stat"><i class="dot n"></i>Осталось: <b id="cnt-n">0</b></span>
+    </div>
     <button class="ghost" id="share">🔗 Поделиться прогрессом</button>
     <button class="ghost" id="reset">Сбросить</button>
   </div>
 </header>
 
-<div id="app"></div>
+<div class="wrap">
+  <aside class="grid-panel">
+    <div class="grid-label">Прогресс</div>
+    <div class="grid" id="grid"></div>
+  </aside>
+  <main class="list" id="list"></main>
+</div>
 
 <script>
-/* ============================================================
-   ДАННЫЕ. Структура: 19 заданий, у каждого свой массив problems.
-   Поля задачи: id, condition, answer, solution (HTML + LaTeX в $...$).
-   Пустой массив problems => карточка задания будет неактивной ("скоро").
-   Заголовки title правь под актуальную нумерацию ЕГЭ.
-   ============================================================ */
-const TASKS = [
-  { n:1,  title:"Планиметрия (практика)", problems:[
-      { id:1, condition:`Найдите площадь прямоугольника со сторонами 6 и $\\sqrt{2}$.`,
-        answer:`6\\sqrt{2}`, solution:`<p>$S = a\\cdot b = 6\\cdot\\sqrt{2} = 6\\sqrt{2}.$</p>` },
-      { id:2, condition:`Гипотенуза прямоугольного треугольника равна 10, один катет 6. Найдите второй катет.`,
-        answer:`8`, solution:`<p>$\\sqrt{10^2 - 6^2} = \\sqrt{64} = 8.$</p>` }
-  ]},
-  { n:2,  title:"Векторы", problems:[] },
-  { n:3,  title:"Планиметрия", problems:[] },
-  { n:4,  title:"Теория вероятностей", problems:[
-      { id:1, condition:`В урне 3 белых и 7 чёрных шаров. Найдите вероятность вытащить белый.`,
-        answer:`0,3`, solution:`<p>$P = \\dfrac{3}{3+7} = \\dfrac{3}{10} = 0{,}3.$</p>` }
-  ]},
-  { n:5,  title:"Вероятность (сложная)", problems:[] },
-  { n:6,  title:"Уравнения", problems:[] },
-  { n:7,  title:"Вычисления и преобразования", problems:[] },
-  { n:8,  title:"Производная и первообразная", problems:[] },
-  { n:9,  title:"Прикладная задача", problems:[] },
-  { n:10, title:"Текстовая задача", problems:[] },
-  { n:11, title:"Графики функций", problems:[] },
-  { n:12, title:"Наибольшее/наименьшее значение", problems:[] },
-  { n:13, title:"Уравнение (тригонометрия)", problems:[] },
-  { n:14, title:"Стереометрия", problems:[] },
-  { n:15, title:"Неравенства", problems:[] },
-  { n:16, title:"Финансовая математика", problems:[
-      { id:1, condition:`В июле планируется взять кредит на сумму 9 млн рублей. Каждый январь долг растёт
-        на $r\\%$, с февраля по июнь выплачивается часть долга. Кредит погашен за два года, платежи
-        первого и второго года относятся как $2:1$. Найдите $r$.`,
-        answer:`r = 25`,
-        solution:`<p>Пусть $S=9$, $k=1+\\tfrac{r}{100}$. После первого года долг $Sk$, платёж $2x$,
-          остаток $Sk-2x$ снова растёт и гасится платежом $x$:</p>
-          $$(Sk-2x)k - x = 0.$$
-          <p>С условием полного погашения получаем $r=25\\%$.</p>` },
-      { id:2, condition:`Вклад 100 000 ₽ открыт на 4 года, в конце каждого года растёт на $10\\%$,
-        затем довносится сумма $D$. Итог — 200 000 ₽. Найдите $D$.`,
-        answer:`D ≈ 19 800 ₽`,
-        solution:`<p>$100000\\cdot1{,}1^4 + D(1{,}1^3+1{,}1^2+1{,}1+1)=200000.$ Решаем относительно $D$.</p>` },
-      { id:3, condition:`Цена акции $a$ ₽ растёт каждый день на $15\\%$. Через сколько дней цена
-        вырастет более чем вдвое?`,
-        answer:`на 6-й день`,
-        solution:`<p>Наименьшее $n$ с $1{,}15^n>2$. $1{,}15^4\\approx1{,}75$, $1{,}15^5\\approx2{,}01$ —
-          удвоение на 5-й шаг роста, т.е. на 6-й день.</p>` }
-  ]},
-  { n:17, title:"Геометрия (с доказательством)", problems:[] },
-  { n:18, title:"Задача с параметром", problems:[] },
-  { n:19, title:"Числа и их свойства", problems:[] }
-];
+const COUNT = 70;                       // число задач
+const COND = n => `img/t3/cond/${String(n).padStart(4,'0')}.png`;
+const SOL  = n => `img/t3/sol/${String(n).padStart(4,'0')}.png`;
 
-/* ============================================================
-   ЛОГИКА. Менять не нужно.
-   ============================================================ */
-const STORAGE_KEY = 'ege_trainer_v2';
-let state = {}; // { taskN: { problemId: 'g'|'b' } }
-try { state = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch(e) { state = {}; }
+const STORAGE_KEY='ege_t3_stereo_v1';
+let state={};
+try{state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){state={};}
+const listEl=document.getElementById('list'), gridEl=document.getElementById('grid');
+function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
 
-const appEl = document.getElementById('app');
-const statsEl = document.getElementById('stats');
-const backEl = document.getElementById('back');
+function setMark(id,m){ if(state[id]===m) delete state[id]; else state[id]=m; save(); render(); }
 
-function save(){ try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){} }
-function taskState(n){ return state[n] || (state[n] = {}); }
-
-/* ---- упаковка ВСЕГО прогресса: 2 бита на задачу, по порядку TASKS ---- */
+/* упаковка прогресса в ссылку: 2 бита на задачу */
 function encodeState(){
-  let bits=0,bitLen=0,bytes=[];
-  TASKS.forEach(t=>{
-    const ts = state[t.n] || {};
-    t.problems.forEach(p=>{
-      const v = ts[p.id]==='g'?1 : ts[p.id]==='b'?2 : 0;
-      bits=(bits<<2)|v; bitLen+=2;
-      if(bitLen===8){ bytes.push(bits); bits=0; bitLen=0; }
-    });
-  });
-  if(bitLen>0) bytes.push(bits<<(8-bitLen));
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  let bits=0,bl=0,by=[];
+  for(let n=1;n<=COUNT;n++){const v=state[n]==='g'?1:state[n]==='b'?2:0;bits=(bits<<2)|v;bl+=2;if(bl===8){by.push(bits);bits=0;bl=0;}}
+  if(bl>0)by.push(bits<<(8-bl));
+  return btoa(String.fromCharCode(...by)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
 function decodeState(str){
-  try{
-    let b64=str.replace(/-/g,'+').replace(/_/g,'/'); while(b64.length%4) b64+='=';
-    const bin=atob(b64); const bytes=Array.from(bin,c=>c.charCodeAt(0));
-    const res={}; let i=0;
-    TASKS.forEach(t=>{
-      res[t.n]={};
-      t.problems.forEach(p=>{
-        const byte=bytes[Math.floor(i/4)]||0; const shift=6-(i%4)*2; const v=(byte>>shift)&3;
-        if(v===1) res[t.n][p.id]='g'; else if(v===2) res[t.n][p.id]='b';
-        i++;
-      });
-    });
-    return res;
-  }catch(e){ return null; }
+  try{let b=str.replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
+    const bin=atob(b),by=Array.from(bin,c=>c.charCodeAt(0)),res={};
+    for(let i=0;i<COUNT;i++){const byte=by[Math.floor(i/4)]||0;const v=(byte>>(6-(i%4)*2))&3;
+      if(v===1)res[i+1]='g';else if(v===2)res[i+1]='b';}
+    return res;}catch(e){return null;}
 }
 function shareLink(){
-  const url = location.origin + location.pathname + '?p=' + encodeState();
-  navigator.clipboard.writeText(url).then(()=>{
-    const b=document.getElementById('share'), old=b.textContent;
-    b.textContent='✓ Ссылка скопирована'; setTimeout(()=>b.textContent=old,1800);
-  }, ()=> prompt('Скопируй ссылку с прогрессом:', url));
-}
-
-/* ---- счётчики по конкретному заданию или по всему ---- */
-function countTask(n){
-  const ts=state[n]||{}, vals=Object.values(ts);
-  return { g:vals.filter(v=>v==='g').length, b:vals.filter(v=>v==='b').length };
-}
-function totalProblems(){ return TASKS.reduce((s,t)=>s+t.problems.length,0); }
-
-/* ---- роутинг ---- */
-function parseRoute(){ const m=location.hash.match(/#\/t\/(\d+)/); return m?{view:'task',n:+m[1]}:{view:'hub'}; }
-function go(hash){ location.hash = hash; }
-
-/* ---- рендер главной ---- */
-function renderHub(){
-  backEl.style.display='none';
-  const total = totalProblems();
-  let allG=0; TASKS.forEach(t=>allG+=countTask(t.n).g);
-  statsEl.innerHTML = `<span class="stat"><i class="dot g"></i>Освоено: <b>${allG}</b> из ${total}</span>`;
-
-  appEl.innerHTML = `
-    <section class="hub">
-      <h2>Задания ЕГЭ</h2>
-      <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
-      <div class="tasks">
-        ${TASKS.map(t=>{
-          const {g,b}=countTask(t.n), tot=t.problems.length;
-          const gp=tot?g/tot*100:0, bp=tot?b/tot*100:0;
-          const dis = tot===0 ? 'disabled' : '';
-          return `<button class="tcard" ${dis} data-go="${t.n}">
-            <span class="tnum">Задание ${t.n}</span>
-            <span class="tname">${t.title}</span>
-            <span class="bar"><span class="bg" style="width:${gp}%"></span><span class="bb" style="width:${bp}%"></span></span>
-            <span class="tmeta"><span>${tot? 'Освоено '+g+'/'+tot : 'Скоро'}</span><span>${b?('пауза '+b):''}</span></span>
-          </button>`;
-        }).join('')}
-      </div>
-    </section>`;
-}
-
-/* ---- рендер тренажёра задания ---- */
-function renderTask(n){
-  const task = TASKS.find(t=>t.n===n);
-  if(!task || task.problems.length===0){ go('#/'); return; }
-  backEl.style.display='inline';
-  const ts = taskState(n);
-  const {g,b}=countTask(n);
-  statsEl.innerHTML =
-    `<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
-    `<span class="stat"><i class="dot b"></i>Остановился: <b>${b}</b></span>`+
-    `<span class="stat"><i class="dot n"></i>Осталось: <b>${task.problems.length-g-b}</b></span>`;
-
-  appEl.innerHTML = `
-    <div class="wrap">
-      <aside class="grid-panel">
-        <div class="grid-label">Задание ${n}</div>
-        <div class="grid">
-          ${task.problems.map(p=>{
-            const st=ts[p.id], cls=st==='g'?'g':st==='b'?'b':'';
-            return `<button class="cell ${cls}" data-cell="${p.id}">${p.id}</button>`;
-          }).join('')}
-        </div>
-      </aside>
-      <main class="list">
-        ${task.problems.map(p=>{
-          const st=ts[p.id], cls=st==='g'?'is-g':st==='b'?'is-b':'';
-          return `<article class="card ${cls}" id="task-${p.id}">
-            <div class="card-top"><span class="num">${p.id}</span><div class="condition">${p.condition}</div></div>
-            <div class="actions">
-              <button class="btn mk-g ${st==='g'?'on':''}" data-mark="g" data-id="${p.id}">✓ Умею решать</button>
-              <button class="btn mk-b ${st==='b'?'on':''}" data-mark="b" data-id="${p.id}">⏸ Остановился тут</button>
-              <button class="btn sol" data-sol="${p.id}">Показать решение</button>
-            </div>
-            <div class="solution" id="sol-${p.id}">
-              <span class="answer">Ответ: ${p.answer}</span>
-              <div class="sol-body">${p.solution}</div>
-            </div>
-          </article>`;
-        }).join('')}
-      </main>
-    </div>`;
-  if(window.renderMathInElement) renderMath();
-}
-
-function renderMath(){
-  renderMathInElement(appEl, {
-    delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],
-    throwOnError:false
-  });
+  const url=location.origin+location.pathname+'?p='+encodeState();
+  navigator.clipboard.writeText(url).then(()=>{const b=document.getElementById('share'),o=b.textContent;
+    b.textContent='✓ Ссылка скопирована';setTimeout(()=>b.textContent=o,1800);},()=>prompt('Ссылка с прогрессом:',url));
 }
 
 function render(){
-  const r=parseRoute();
-  if(r.view==='task') renderTask(r.n); else renderHub();
+  listEl.innerHTML=Array.from({length:COUNT},(_,i)=>{
+    const n=i+1,st=state[n],cls=st==='g'?'is-g':st==='b'?'is-b':'';
+    return `<article class="card ${cls}" id="task-${n}">
+      <div class="card-top"><span class="num">${n}</span></div>
+      <div class="cond"><img loading="lazy" src="${COND(n)}" alt="Задача ${n}"></div>
+      <div class="actions">
+        <button class="btn mk-g ${st==='g'?'on':''}" data-mark="g" data-id="${n}">✓ Умею решать</button>
+        <button class="btn mk-b ${st==='b'?'on':''}" data-mark="b" data-id="${n}">⏸ Остановился тут</button>
+        <button class="btn sol" data-sol="${n}">Показать решение</button>
+      </div>
+      <div class="solution" id="sol-${n}">
+        <div class="sol-body"><img loading="lazy" data-src="${SOL(n)}" alt="Решение ${n}"></div>
+      </div>
+    </article>`;
+  }).join('');
+  gridEl.innerHTML=Array.from({length:COUNT},(_,i)=>{
+    const n=i+1,st=state[n],cls=st==='g'?'g':st==='b'?'b':'';
+    return `<button class="cell ${cls}" data-go="${n}">${n}</button>`;
+  }).join('');
+  const g=Object.values(state).filter(v=>v==='g').length, b=Object.values(state).filter(v=>v==='b').length;
+  document.getElementById('cnt-g').textContent=g;
+  document.getElementById('cnt-b').textContent=b;
+  document.getElementById('cnt-n').textContent=COUNT-g-b;
 }
 
-/* ---- события ---- */
-let currentTask=null;
-appEl.addEventListener('click', e=>{
-  const t=e.target.closest('[data-go]');      // карточка задания на главной
-  if(t){ go('#/t/'+t.dataset.go); return; }
-
-  const mk=e.target.closest('[data-mark]');    // метка задачи
-  if(mk){
-    const r=parseRoute(); if(r.view!=='task') return;
-    const ts=taskState(r.n), id=+mk.dataset.id, mark=mk.dataset.mark;
-    if(ts[id]===mark) delete ts[id]; else ts[id]=mark;
-    save(); renderTask(r.n); return;
-  }
-  const sol=e.target.closest('[data-sol]');    // раскрыть решение
-  if(sol){ document.getElementById('sol-'+sol.dataset.sol).classList.toggle('open'); return; }
-
-  const cell=e.target.closest('[data-cell]');  // прыжок по сетке
-  if(cell){ document.getElementById('task-'+cell.dataset.cell).scrollIntoView({behavior:'smooth',block:'start'}); return; }
+document.addEventListener('click',e=>{
+  const mk=e.target.closest('[data-mark]'); if(mk){setMark(+mk.dataset.id,mk.dataset.mark);return;}
+  const sol=e.target.closest('[data-sol]');
+  if(sol){const box=document.getElementById('sol-'+sol.dataset.sol);box.classList.toggle('open');
+    const img=box.querySelector('img');if(img&&!img.src&&img.dataset.src)img.src=img.dataset.src;return;}
+  const go=e.target.closest('[data-go]');
+  if(go){document.getElementById('task-'+go.dataset.go).scrollIntoView({behavior:'smooth',block:'start'});return;}
 });
+document.getElementById('share').addEventListener('click',shareLink);
+document.getElementById('reset').addEventListener('click',()=>{if(confirm('Сбросить весь прогресс?')){state={};save();render();}});
 
-document.getElementById('home-link').addEventListener('click', ()=>go('#/'));
-backEl.addEventListener('click', ()=>go('#/'));
-document.getElementById('share').addEventListener('click', shareLink);
-document.getElementById('reset').addEventListener('click', ()=>{
-  const r=parseRoute();
-  if(r.view==='task'){
-    if(confirm('Сбросить прогресс по заданию '+r.n+'?')){ state[r.n]={}; save(); renderTask(r.n); }
-  } else {
-    if(confirm('Сбросить ВЕСЬ прогресс?')){ state={}; save(); renderHub(); }
-  }
-});
-
-window.addEventListener('hashchange', render);
-
-window.addEventListener('DOMContentLoaded', ()=>{
-  // импорт прогресса из ссылки ?p=...
+window.addEventListener('DOMContentLoaded',()=>{
   const sp=new URLSearchParams(location.search).get('p');
-  if(sp){
-    const incoming=decodeState(sp);
-    if(incoming){
-      const has=Object.values(state).some(o=>Object.keys(o||{}).length>0);
-      if(!has || confirm('Загрузить прогресс из ссылки? Текущий на этом устройстве будет заменён.')){
-        state=incoming; save();
-      }
-    }
-    history.replaceState(null,'',location.pathname);
-  }
+  if(sp){const inc=decodeState(sp);
+    if(inc){const has=Object.keys(state).length>0;
+      if(!has||confirm('Загрузить прогресс из ссылки? Текущий на этом устройстве будет заменён.')){state=inc;save();}}
+    history.replaceState(null,'',location.pathname);}
   render();
-  const tmr=setInterval(()=>{ if(window.renderMathInElement){ renderMath(); clearInterval(tmr); } },60);
 });
 </script>
 </body>
