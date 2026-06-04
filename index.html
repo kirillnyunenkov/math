@@ -86,6 +86,65 @@
   .ans-input.shake{animation:ans-shake .42s;}
   .ans-input.pop{animation:ans-pop .35s;}
   .ans-msg.flash{animation:ans-flash .28s;}
+
+  /* фильтры по статусу */
+  .filters{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;}
+  .chip{font:inherit;font-size:13px;font-weight:500;cursor:pointer;border-radius:99px;padding:6px 14px;
+    border:1px solid var(--line);background:var(--paper);color:var(--muted);transition:.15s;}
+  .chip:hover{border-color:var(--ink);color:var(--ink);}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg);}
+  .filters-empty{color:var(--muted);font-size:14px;padding:8px 2px;}
+
+  /* кнопка-баннер «Собрать вариант» */
+  .variant-cta{display:flex;align-items:center;gap:16px;width:100%;text-align:left;font:inherit;cursor:pointer;
+    background:linear-gradient(135deg,#2f3b34,#1f2421);color:#f4f1ea;border:none;border-radius:14px;
+    padding:18px 22px;margin-bottom:22px;box-shadow:var(--shadow);transition:transform .12s;}
+  .variant-cta:hover{transform:translateY(-2px);}
+  .variant-cta .vc-ico{font-size:26px;line-height:1;}
+  .variant-cta .vc-t{font-family:'Lora',serif;font-weight:600;font-size:17px;margin:0 0 2px;}
+  .variant-cta .vc-s{font-size:13px;opacity:.8;}
+  .variant-cta .vc-go{margin-left:auto;font-size:13px;opacity:.85;white-space:nowrap;}
+
+  /* экран варианта */
+  .vbox{max-width:820px;margin:0 auto;padding:28px 24px 80px;}
+  .vintro{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:26px;box-shadow:var(--shadow);}
+  .vintro h2{font-family:'Lora',serif;font-weight:600;font-size:24px;margin:0 0 8px;}
+  .vintro .lead{color:var(--muted);margin:0 0 18px;}
+  .vwarn{display:flex;gap:10px;background:var(--orange-soft);border:1px solid #ecd3ad;border-radius:11px;
+    padding:13px 15px;font-size:14px;color:#7a4b16;margin-bottom:20px;line-height:1.5;}
+  .vwarn b{color:#5c380f;}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-size:14.5px;padding:11px 22px;}
+  .btn.primary:hover{filter:brightness(1.07);border-color:var(--accent);}
+  .vbar{position:sticky;top:62px;z-index:20;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    background:rgba(251,250,246,.95);backdrop-filter:blur(8px);border:1px solid var(--line);border-radius:12px;
+    padding:12px 16px;margin-bottom:20px;box-shadow:var(--shadow);}
+  .vtimer{font-family:'Lora',serif;font-weight:700;font-size:20px;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .vbar .vprog{font-size:13px;color:var(--muted);}
+  .vbar .spacer{margin-left:auto;}
+  .vcard{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;
+    box-shadow:var(--shadow);margin-bottom:16px;border-left:4px solid var(--line);}
+  .vcard.r-ok{border-left-color:var(--green);}
+  .vcard.r-no{border-left-color:var(--red);}
+  .vcard .vlabel{font-family:'Lora',serif;font-weight:700;color:var(--accent);font-size:14px;margin-bottom:10px;}
+  .v-input{font:inherit;font-size:14px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;
+    background:#fff;color:var(--ink);width:180px;outline:none;margin-top:12px;}
+  .v-input:focus{border-color:var(--accent);}
+  .vresult{background:linear-gradient(135deg,#2f3b34,#1f2421);color:#f4f1ea;border-radius:16px;
+    padding:24px 26px;margin-bottom:22px;box-shadow:var(--shadow);}
+  .vresult h2{font-family:'Lora',serif;font-weight:600;font-size:22px;margin:0 0 16px;}
+  .vscores{display:flex;gap:14px;flex-wrap:wrap;}
+  .vscore{background:rgba(255,255,255,.08);border-radius:12px;padding:14px 18px;flex:1;min-width:120px;}
+  .vscore .vk{font-size:12.5px;opacity:.75;margin-bottom:4px;}
+  .vscore .vv{font-family:'Lora',serif;font-weight:700;font-size:28px;line-height:1;}
+  .vresult .vactions{display:flex;gap:10px;margin-top:18px;flex-wrap:wrap;}
+  .vresult .btn{background:rgba(255,255,255,.12);border-color:transparent;color:#f4f1ea;}
+  .vresult .btn:hover{background:rgba(255,255,255,.22);border-color:transparent;}
+  .vtag{display:inline-block;font-size:12.5px;font-weight:600;border-radius:7px;padding:3px 10px;margin-left:8px;}
+  .vtag.ok{background:var(--green-soft);color:var(--green);}
+  .vtag.no{background:var(--red-soft);color:var(--red);}
+  .vans-row{margin-top:12px;font-size:14px;}
+  .vans-row .yours{color:var(--muted);}
+  .vans-row .right{color:var(--green);font-weight:600;}
   .btn.sol{margin-left:auto;color:var(--accent);border-color:#e8d2c6;}
   .btn.sol:hover{background:#f7ece6;}
   .solution{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);display:none;}
@@ -194,8 +253,33 @@ function refreshCard(n,id){const st=(state[n]||{})[id]||'';const card=document.g
   if(!card)return;card.className='card'+(st?' is-'+st:'');
   card.querySelectorAll('[data-mark]').forEach(b=>b.classList.toggle('on',b.dataset.mark===st));}
 function refreshStats(n){statsEl.innerHTML=taskStatsHTML(n);}
-function setStatus(n,id,status){const ts=taskState(n);if(status)ts[id]=status;else delete ts[id];
-  save();refreshCard(n,id);refreshCell(n,id);refreshStats(n);}
+function recordStatus(n,id,status){const ts=taskState(n);if(status)ts[id]=status;else delete ts[id];}
+function setStatus(n,id,status){recordStatus(n,id,status);save();refreshCard(n,id);refreshCell(n,id);refreshStats(n);applyFilter();}
+
+// --- фильтр по статусу внутри задания ---
+let viewFilter='all';
+function applyFilter(){
+  if(parseRoute().view!=='task')return;
+  const ts=state[parseRoute().n]||{};
+  let shown=0;
+  document.querySelectorAll('.list .card').forEach(card=>{
+    const id=+card.id.replace('task-','');const st=ts[id]||'';
+    let ok=true;
+    if(viewFilter==='o')ok=st==='o';
+    else if(viewFilter==='b')ok=st==='b';
+    else if(viewFilter==='none')ok=!st;
+    card.style.display=ok?'':'none';if(ok)shown++;
+  });
+  const empty=document.getElementById('filter-empty');
+  if(empty)empty.style.display=shown?'none':'block';
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.filter===viewFilter));
+}
+
+// --- перевод первичного балла в тестовый (профиль; 0..12 задач = 0..12 баллов) ---
+const SEC_SCORE=[0,6,11,17,22,27,34,40,46,52,58,64,70];
+function secondaryScore(primary){return SEC_SCORE[Math.min(primary,SEC_SCORE.length-1)];}
+function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
+function ensureAll(ns,cb){let left=ns.length;if(!left){cb();return;}ns.forEach(n=>ensureData(n,()=>{if(--left===0)cb();}));}
 
 function encodeState(){
   let bits=0,bl=0,by=[];
@@ -218,15 +302,24 @@ function shareLink(){
     b.textContent='✓ Скопировано';setTimeout(()=>b.textContent=o,1800);},()=>prompt('Ссылка с прогрессом:',url));
 }
 
-function parseRoute(){const m=location.hash.match(/#\/t\/(\d+)/);return m?{view:'task',n:+m[1]}:{view:'hub'};}
+function parseRoute(){
+  if(/#\/v\b/.test(location.hash))return{view:'variant'};
+  const m=location.hash.match(/#\/t\/(\d+)/);return m?{view:'task',n:+m[1]}:{view:'hub'};
+}
 function go(h){location.hash=h;}
 
 function renderHub(){
   backEl.style.display='none';
   let allG=0,total=0; TASKS.forEach(t=>{allG+=countTask(t.n).g;total+=t.count;});
   statsEl.innerHTML=`<span class="stat"><i class="dot g"></i>Освоено: <b>${allG}</b> из ${total}</span>`;
+  const active=TASKS.filter(t=>t.count>0).length;
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
+    <button class="variant-cta" data-variant>
+      <span class="vc-ico">🎯</span>
+      <span><span class="vc-t">Собрать пробный вариант</span><span class="vc-s">По одной случайной задаче из каждого задания · сейчас ${active} шт.</span></span>
+      <span class="vc-go">Начать →</span>
+    </button>
     <div class="tasks">${TASKS.map(t=>{
       const{g,o,b}=countTask(t.n),tot=t.count,gp=tot?g/tot*100:0,op=tot?o/tot*100:0,bp=tot?b/tot*100:0,dis=tot===0?'disabled':'';
       return `<button class="tcard" ${dis} data-go="${t.n}">
@@ -265,10 +358,18 @@ function renderTask(n){
     <aside class="grid-panel"><div class="grid-label">Задание ${n}</div>
       <div class="grid">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
         return `<button class="cell ${c}" data-cell="${id}">${id}</button>`;}).join('')}</div></aside>
-    <main class="list">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
+    <main class="list">
+      <div class="filters">
+        <button class="chip on" data-filter="all">Все</button>
+        <button class="chip" data-filter="o">Надо повторить</button>
+        <button class="chip" data-filter="b">Надо разобраться</button>
+        <button class="chip" data-filter="none">Не решал</button>
+      </div>
+      <div class="filters-empty" id="filter-empty" style="display:none">В этой категории пока пусто.</div>
+      ${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
       const ansTxt = task.mode==='html' ? plainAnswer((data[id-1]||{}).a) : '';
       const ac = ansTxt ? `<div class="answer-check">
-          <input class="ans-input" type="text" placeholder="Ваш ответ" data-id="${id}" autocomplete="off">
+          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" data-id="${id}" autocomplete="off">
           <button class="btn check" data-check="${id}">Проверить</button>
           <span class="ans-msg"></span>
         </div>` : '';
@@ -286,9 +387,109 @@ function renderTask(n){
       </article>`;}).join('')}</main></div>`;
 }
 
-function render(){const r=parseRoute();if(r.view==='task')renderTask(r.n);else renderHub();}
+let variant=null, variantTimerId=null;
+function render(){
+  if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
+  viewFilter='all';
+  const r=parseRoute();
+  if(r.view==='variant')renderVariant();
+  else if(r.view==='task')renderTask(r.n);
+  else renderHub();
+}
+
+function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function startVariantTimer(){const el=document.getElementById('v-timer');if(!el)return;
+  const upd=()=>{el.textContent=fmtTime(Date.now()-variant.startAt);};upd();variantTimerId=setInterval(upd,1000);}
+function startVariant(){
+  appEl.innerHTML='<div class="vbox"><p style="color:var(--muted)">Собираю вариант…</p></div>';
+  const active=TASKS.filter(t=>t.count>0).map(t=>t.n);
+  ensureAll(active,()=>{
+    const items=[];
+    active.forEach(n=>{if(!Array.isArray(window.TASKDATA[n]))return;
+      const id=1+Math.floor(Math.random()*taskCfg(n).count);items.push({n,id});});
+    variant={items,started:true,finished:false,startAt:Date.now(),elapsed:0};
+    renderVariant();
+  });
+}
+function finishVariant(){
+  variant.elapsed=Date.now()-variant.startAt;
+  variant.items.forEach((it,i)=>{
+    const inp=document.querySelector('.v-input[data-vi="'+i+'"]');
+    const given=inp?inp.value.trim():'';it.given=given;
+    const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
+    const ok = given!=='' && normAns(given)===normAns(plainAnswer(d.a));it.ok=ok;
+    const cur=(state[it.n]||{})[it.id];
+    recordStatus(it.n,it.id, ok ? ((cur==='b'||cur==='o')?'o':'g') : 'b');
+  });
+  save();variant.finished=true;
+  if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
+  renderVariant();
+}
+function renderVariant(){
+  backEl.style.display='inline';statsEl.innerHTML='';
+  if(!variant||!variant.started){
+    const active=TASKS.filter(t=>t.count>0);
+    appEl.innerHTML=`<div class="vbox"><div class="vintro">
+      <h2>Пробный вариант</h2>
+      <p class="lead">Соберём ${active.length} задач — по одной случайной из каждого активного задания. Реши все и нажми «Завершить» — получишь первичный и тестовый балл.</p>
+      <div class="vwarn"><span>⚠️</span><div><b>Ответы влияют на прогресс.</b> Верный ответ отметит задачу как «умею решать» или «надо повторить», неверный — как «надо разобраться».</div></div>
+      <button class="btn primary" data-vstart>Начать вариант</button>
+    </div></div>`;
+    return;
+  }
+  if(!variant.finished){
+    const items=variant.items;
+    appEl.innerHTML=`<div class="vbox">
+      <div class="vbar">
+        <span class="vtimer" id="v-timer">00:00</span>
+        <span class="vprog">${items.length} заданий</span>
+        <span class="spacer"></span>
+        <button class="btn primary" data-vfinish>Завершить</button>
+      </div>
+      ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
+        return `<div class="vcard">
+          <div class="vlabel">Задание ${it.n}</div>
+          <div class="cond"><div class="tex">${d.c||''}</div></div>
+          <input class="v-input" type="text" inputmode="decimal" placeholder="Ответ" data-vi="${i}" autocomplete="off">
+        </div>`;}).join('')}
+      <div style="text-align:center;margin-top:8px"><button class="btn primary" data-vfinish>Завершить вариант</button></div>
+    </div>`;
+    startVariantTimer();return;
+  }
+  const items=variant.items,correct=items.filter(x=>x.ok).length,primary=correct,sec=secondaryScore(primary);
+  appEl.innerHTML=`<div class="vbox">
+    <div class="vresult">
+      <h2>Вариант завершён</h2>
+      <div class="vscores">
+        <div class="vscore"><div class="vk">Решено</div><div class="vv">${correct}<span style="font-size:16px;font-weight:500;opacity:.7">/${items.length}</span></div></div>
+        <div class="vscore"><div class="vk">Первичный балл</div><div class="vv">${primary}</div></div>
+        <div class="vscore"><div class="vk">Тестовый балл</div><div class="vv">${sec}</div></div>
+        <div class="vscore"><div class="vk">Время</div><div class="vv" style="font-size:22px">${fmtTime(variant.elapsed)}</div></div>
+      </div>
+      <div class="vactions">
+        <button class="btn" data-variant>Новый вариант</button>
+        <button class="btn" data-home>К заданиям</button>
+      </div>
+    </div>
+    ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
+      return `<div class="vcard ${it.ok?'r-ok':'r-no'}">
+        <div class="vlabel">Задание ${it.n}<span class="vtag ${it.ok?'ok':'no'}">${it.ok?'верно':'неверно'}</span></div>
+        <div class="cond"><div class="tex">${d.c||''}</div></div>
+        <div class="vans-row"><span class="yours">Твой ответ: ${it.given?escapeHtml(it.given):'—'}</span> · <span class="right">Верный: ${d.a||'—'}</span></div>
+        <div class="actions"><button class="btn sol" data-vsol="${i}">Показать решение</button></div>
+        <div class="solution" id="vsol-${i}"><div class="sol-body"><div class="tex">${d.s||''}</div></div></div>
+      </div>`;}).join('')}
+  </div>`;
+}
 
 appEl.addEventListener('click',e=>{
+  const dv=e.target.closest('[data-variant]');
+  if(dv){variant=null;if(/#\/v\b/.test(location.hash))renderVariant();else go('#/v');return;}
+  const vst=e.target.closest('[data-vstart]'); if(vst){startVariant();return;}
+  const vf=e.target.closest('[data-vfinish]'); if(vf){if(confirm('Завершить вариант? Ответы повлияют на прогресс.'))finishVariant();return;}
+  const hm=e.target.closest('[data-home]'); if(hm){go('#/');return;}
+  const vs=e.target.closest('[data-vsol]'); if(vs){const box=document.getElementById('vsol-'+vs.dataset.vsol);if(box)box.classList.toggle('open');return;}
+  const ch=e.target.closest('[data-filter]'); if(ch){viewFilter=ch.dataset.filter;applyFilter();return;}
   const t=e.target.closest('[data-go]'); if(t){go('#/t/'+t.dataset.go);return;}
   const mk=e.target.closest('[data-mark]');
   if(mk){const r=parseRoute();if(r.view!=='task')return;const ts=taskState(r.n),id=+mk.dataset.id,m=mk.dataset.mark;
@@ -326,7 +527,8 @@ appEl.addEventListener('click',e=>{
     } else {const img=box.querySelector('img');if(img&&!img.src&&img.dataset.src)img.src=img.dataset.src;}
     return;}
   const cell=e.target.closest('[data-cell]');
-  if(cell){document.getElementById('task-'+cell.dataset.cell).scrollIntoView({behavior:'smooth',block:'start'});return;}
+  if(cell){viewFilter='all';applyFilter();const tc=document.getElementById('task-'+cell.dataset.cell);
+    if(tc)tc.scrollIntoView({behavior:'smooth',block:'start'});return;}
 });
 document.getElementById('home').addEventListener('click',()=>go('#/'));
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
@@ -334,6 +536,7 @@ appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.targe
 backEl.addEventListener('click',()=>go('#/'));
 document.getElementById('share').addEventListener('click',shareLink);
 document.getElementById('reset').addEventListener('click',()=>{const r=parseRoute();
+  if(r.view==='variant'){return;}
   if(r.view==='task'){if(confirm('Сбросить прогресс по заданию '+r.n+'?')){state[r.n]={};save();renderTask(r.n);}}
   else{if(confirm('Сбросить ВЕСЬ прогресс?')){state={};save();renderHub();}}});
 window.addEventListener('hashchange',render);
