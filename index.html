@@ -253,6 +253,10 @@ const TASKS = [
 const COND = (n,id)=>`img/t${n}/cond/${String(id).padStart(4,'0')}.png`;
 const SOL  = (n,id)=>`img/t${n}/sol/${String(id).padStart(4,'0')}.png`;
 const taskCfg = n => TASKS.find(t=>t.n===n);
+// Источник правды о количестве задач — сам data.js. После загрузки приводим
+// count в конфиге к реальной длине, чтобы рассинхрон count↔данные не давал
+// пустых карточек или потерянных задач.
+function syncCount(n){const t=taskCfg(n);if(t&&Array.isArray(window.TASKDATA[n]))t.count=window.TASKDATA[n].length;}
 window.TASKDATA = window.TASKDATA || {};
 const dataLoading = {};
 function ensureData(n, cb){
@@ -261,7 +265,7 @@ function ensureData(n, cb){
   dataLoading[n]=[cb];
   const s=document.createElement('script');
   s.src=`img/t${n}/data.js`;
-  s.onload=()=>{(dataLoading[n]||[]).forEach(f=>f());dataLoading[n]=null;};
+  s.onload=()=>{syncCount(n);(dataLoading[n]||[]).forEach(f=>f());dataLoading[n]=null;};
   s.onerror=()=>{
     window.TASKDATA=window.TASKDATA||{};
     window.TASKDATA[n]='error'; // флаг ошибки — предотвращает повторную загрузку
