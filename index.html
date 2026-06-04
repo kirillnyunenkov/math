@@ -80,6 +80,12 @@
   .ans-msg{font-size:13.5px;font-weight:600;}
   .ans-msg.ok{color:var(--green);}
   .ans-msg.no{color:var(--red);}
+  @keyframes ans-shake{0%,100%{transform:translateX(0)}15%{transform:translateX(-6px)}30%{transform:translateX(6px)}45%{transform:translateX(-4px)}60%{transform:translateX(4px)}80%{transform:translateX(-2px)}}
+  @keyframes ans-pop{0%{transform:scale(1)}40%{transform:scale(1.07)}100%{transform:scale(1)}}
+  @keyframes ans-flash{0%{opacity:0;transform:translateY(3px)}100%{opacity:1;transform:translateY(0)}}
+  .ans-input.shake{animation:ans-shake .42s;}
+  .ans-input.pop{animation:ans-pop .35s;}
+  .ans-msg.flash{animation:ans-flash .28s;}
   .btn.sol{margin-left:auto;color:var(--accent);border-color:#e8d2c6;}
   .btn.sol:hover{background:#f7ece6;}
   .solution{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);display:none;}
@@ -176,6 +182,7 @@ function countTask(n){const ts=state[n]||{},v=Object.values(ts);return{
 // ответы нигде не сохраняются — в прогресс/ссылку попадает только итоговый статус
 function plainAnswer(html){if(!html)return'';const t=document.createElement('div');t.innerHTML=html;return(t.textContent||'').trim();}
 function normAns(s){return(s||'').toLowerCase().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.');}
+function reanim(el,cls){el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);}
 function taskStatsHTML(n){const task=taskCfg(n),{g,o,b}=countTask(n);
   return `<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
     `<span class="stat"><i class="dot o"></i>Повторить: <b>${o}</b></span>`+
@@ -293,12 +300,20 @@ appEl.addEventListener('click',e=>{
     const correct=normAns(plainAnswer(((window.TASKDATA[n]||[])[id-1]||{}).a));
     if(given===correct){
       input.classList.remove('wrong');input.classList.add('correct');
-      msg.textContent='Правильно';msg.className='ans-msg ok';
+      reanim(input,'pop');
       const cur=(state[n]||{})[id];
-      setStatus(n,id, cur==='b' ? 'o' : 'g');
+      if(cur==='b'||cur==='o'){
+        msg.textContent='Правильно! Отметь «умею решать», когда закрепишь';msg.className='ans-msg ok';
+        setStatus(n,id,'o');
+      }else{
+        msg.textContent='Правильно';msg.className='ans-msg ok';
+        setStatus(n,id,'g');
+      }
+      reanim(msg,'flash');
     }else{
       input.classList.remove('correct');input.classList.add('wrong');
       msg.textContent='Неправильно';msg.className='ans-msg no';
+      reanim(input,'shake');reanim(msg,'flash');
       setStatus(n,id,'b');
     }
     return;}
