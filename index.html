@@ -173,8 +173,7 @@ function taskState(n){return state[n]||(state[n]={});}
 function countTask(n){const ts=state[n]||{},v=Object.values(ts);return{
   g:v.filter(x=>x==='g').length,o:v.filter(x=>x==='o').length,b:v.filter(x=>x==='b').length};}
 
-// попытки ответа храним только в памяти сессии — в прогресс/ссылку не попадают
-const attempts={};
+// ответы нигде не сохраняются — в прогресс/ссылку попадает только итоговый статус
 function plainAnswer(html){if(!html)return'';const t=document.createElement('div');t.innerHTML=html;return(t.textContent||'').trim();}
 function normAns(s){return(s||'').toLowerCase().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.');}
 function taskStatsHTML(n){const task=taskCfg(n),{g,o,b}=countTask(n);
@@ -292,11 +291,11 @@ appEl.addEventListener('click',e=>{
     const wrap=chk.closest('.answer-check'),input=wrap.querySelector('.ans-input'),msg=wrap.querySelector('.ans-msg');
     const given=normAns(input.value);if(!given)return;
     const correct=normAns(plainAnswer(((window.TASKDATA[n]||[])[id-1]||{}).a));
-    attempts[n]=attempts[n]||{};attempts[n][id]=(attempts[n][id]||0)+1;
     if(given===correct){
       input.classList.remove('wrong');input.classList.add('correct');
       msg.textContent='Правильно';msg.className='ans-msg ok';
-      setStatus(n,id, attempts[n][id]>1 ? 'o' : 'g');
+      const cur=(state[n]||{})[id];
+      setStatus(n,id, cur==='b' ? 'o' : 'g');
     }else{
       input.classList.remove('correct');input.classList.add('wrong');
       msg.textContent='Неправильно';msg.className='ans-msg no';
