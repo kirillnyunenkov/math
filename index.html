@@ -57,9 +57,12 @@
   .cell.g{background:var(--green);border-color:var(--green);color:#fff;}
   .cell.o{background:var(--orange);border-color:var(--orange);color:#fff;}
   .cell.b{background:var(--dark);border-color:var(--dark);color:#fff;}
-  .list{display:flex;flex-direction:column;gap:18px;}
+  .list{display:flex;flex-direction:column;gap:18px;min-width:0;}
+  .grid-panel{min-width:0;}
+  .tex{overflow-wrap:break-word;}
   .card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow);
-    scroll-margin-top:78px;border-left:4px solid var(--line);transition:border-color .2s;}
+    scroll-margin-top:78px;border-left:4px solid var(--line);transition:border-color .2s;
+    content-visibility:auto;contain-intrinsic-size:auto 360px;}
   .card.is-g{border-left-color:var(--green);}.card.is-o{border-left-color:var(--orange);}.card.is-b{border-left-color:var(--dark);}
   .card-top{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;}
   .num{font-family:'Lora',serif;font-weight:700;font-size:22px;color:var(--accent);line-height:1;}
@@ -181,9 +184,14 @@
   @media (max-width:760px){
     .wrap{grid-template-columns:1fr;gap:18px;padding:18px 14px 60px;}
     .grid-panel{position:static;background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:14px;}
-    .grid{grid-template-columns:repeat(10,1fr);}
-    .head-inner{padding:12px 14px;gap:10px;}.stats{width:100%;margin-left:0;}.title{font-size:16px;}
+    .grid{grid-template-columns:repeat(auto-fill,minmax(34px,1fr));}
+    .head-inner{padding:12px 14px;gap:10px 14px;}.stats{width:100%;margin-left:0;gap:12px;}.title{font-size:16px;}
     .hub{padding:20px 14px 60px;}
+    .vbox{padding:20px 14px 70px;}
+    .vbar{position:static;top:auto;}
+    .vhist-row{gap:8px;font-size:12px;padding:7px 9px;}
+    .vresult{padding:20px 18px;}
+    .variant-cta{padding:16px 18px;gap:12px;}
   }
 </style>
 </head>
@@ -261,6 +269,11 @@ function countTask(n){const ts=state[n]||{},v=Object.values(ts);return{
 // ответы нигде не сохраняются — в прогресс/ссылку попадает только итоговый статус
 function plainAnswer(html){if(!html)return'';const t=document.createElement('div');t.innerHTML=html;return(t.textContent||'').trim();}
 function normAns(s){return(s||'').toLowerCase().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.');}
+function parseNum(s){let t=(s||'').toString().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.').replace(/\.$/,'');
+  if(t===''||!/^-?\d*\.?\d+$/.test(t))return null;const n=parseFloat(t);return isFinite(n)?n:null;}
+function answersEqual(given,correct){const a=parseNum(given),b=parseNum(correct);
+  if(a!==null&&b!==null)return Math.abs(a-b)<1e-9;
+  return normAns(given)===normAns(correct);}
 function reanim(el,cls){el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);}
 function taskStatsHTML(n){const task=taskCfg(n),{g,o,b}=countTask(n);
   return `<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
@@ -503,7 +516,7 @@ function finishVariant(){
     const inp=document.querySelector('.v-input[data-vi="'+i+'"]');
     const given=inp?inp.value.trim():'';it.given=given;
     const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
-    const ok = given!=='' && normAns(given)===normAns(plainAnswer(d.a));it.ok=ok;if(ok)correct++;
+    const ok = given!=='' && answersEqual(given, plainAnswer(d.a));it.ok=ok;if(ok)correct++;
     const cur=(state[it.n]||{})[it.id];
     recordStatus(it.n,it.id, ok ? ((cur==='b'||cur==='o')?'o':'g') : 'b');
   });
@@ -595,9 +608,9 @@ appEl.addEventListener('click',e=>{
   const chk=e.target.closest('[data-check]');
   if(chk){const r=parseRoute();if(r.view!=='task')return;const id=+chk.dataset.check,n=r.n;
     const wrap=chk.closest('.answer-check'),input=wrap.querySelector('.ans-input'),msg=wrap.querySelector('.ans-msg');
-    const given=normAns(input.value);if(!given)return;
-    const correct=normAns(plainAnswer(((window.TASKDATA[n]||[])[id-1]||{}).a));
-    if(given===correct){
+    const rawGiven=input.value.trim();if(!rawGiven)return;
+    const correctRaw=plainAnswer(((window.TASKDATA[n]||[])[id-1]||{}).a);
+    if(answersEqual(rawGiven,correctRaw)){
       input.classList.remove('wrong');input.classList.add('correct');
       reanim(input,'pop');
       const cur=(state[n]||{})[id];
@@ -630,7 +643,7 @@ appEl.addEventListener('click',e=>{
 });
 appEl.addEventListener('input',e=>{const el=e.target;
   if(el.classList.contains('ans-input')||el.classList.contains('v-input')){
-    const cleaned=el.value.replace(/[^0-9.,\-]/g,'');
+    const cleaned=el.value.replace(/\./g,',').replace(/[^0-9,\-]/g,'');
     if(cleaned!==el.value){const p=el.selectionStart-(el.value.length-cleaned.length);el.value=cleaned;try{el.setSelectionRange(p,p);}catch(_){}}}
 });
 document.getElementById('home').addEventListener('click',()=>go('#/'));
