@@ -47,6 +47,18 @@
   .bar .bg{background:var(--green);}.bar .bo{background:var(--orange);}.bar .bb{background:var(--dark);}
   .tmeta{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);}
 
+  .title a.by{text-decoration:none;cursor:pointer;}
+  .title a.by:hover{color:var(--accent);opacity:1;text-decoration:underline;}
+  .hub-foot{margin-top:40px;}
+  .hf-card{display:flex;align-items:center;gap:18px;flex-wrap:wrap;background:var(--paper);border:1px solid var(--line);
+    border-radius:14px;padding:20px 24px;box-shadow:var(--shadow);}
+  .hf-title{font-family:'Lora',serif;font-weight:600;font-size:17px;margin-bottom:4px;}
+  .hf-sub{color:var(--muted);font-size:14px;line-height:1.5;max-width:520px;}
+  .hf-text{flex:1;min-width:220px;}
+  .hf-btn{margin-left:auto;white-space:nowrap;text-decoration:none;background:var(--accent);color:#fff;font-weight:600;
+    font-size:14.5px;padding:11px 20px;border-radius:10px;transition:filter .15s;align-self:center;}
+  .hf-btn:hover{filter:brightness(1.08);}
+
   .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px;display:grid;grid-template-columns:168px 1fr;gap:36px;align-items:start;}
   .grid-panel{position:sticky;top:78px;}
   .grid-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;}
@@ -199,7 +211,7 @@
 <header>
   <div class="head-inner">
     <button class="back" id="back">← К списку заданий</button>
-    <h1 class="title" id="home">Тренажёр <span>ЕГЭ</span> <span class="by">от Кирилла</span></h1>
+    <h1 class="title" id="home">Тренажёр <span>ЕГЭ</span> <a class="by" href="https://t.me/kirill_math_tutor" target="_blank" rel="noopener">от Кирилла</a></h1>
     <div class="stats" id="stats"></div>
     <button class="ghost" id="share">🔗 Поделиться прогрессом</button>
     <button class="ghost" id="reset">Сбросить</button>
@@ -377,20 +389,34 @@ function histPanel(){
   </div>`;
 }
 
+const STATE_VER=2;
+// Самоописываемый формат: версия + для каждого задания с отметками его номер,
+// максимальный отмеченный id и статусы 1..maxId. Не зависит от текущего TASKS,
+// поэтому смена count / порядка / добавление заданий не ломает старые ссылки.
 function encodeState(){
-  let bits=0,bl=0,by=[];
-  TASKS.forEach(t=>{const ts=state[t.n]||{};for(let id=1;id<=t.count;id++){
-    const v=ts[id]==='g'?1:ts[id]==='b'?2:ts[id]==='o'?3:0;bits=(bits<<2)|v;bl+=2;if(bl===8){by.push(bits);bits=0;bl=0;}}});
-  if(bl>0)by.push(bits<<(8-bl));
-  return btoa(String.fromCharCode(...by)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  const L=[],blocks=[];
+  Object.keys(state).forEach(k=>{const n=+k,ts=state[k]||{};
+    const ids=Object.keys(ts).map(Number).filter(id=>ts[id]);
+    if(ids.length)blocks.push({n,maxId:Math.max(...ids),ts});});
+  L.push([STATE_VER,8]);L.push([blocks.length,8]);
+  blocks.forEach(b=>{L.push([b.n,8]);L.push([b.maxId,16]);
+    for(let id=1;id<=b.maxId;id++){const s=b.ts[id];L.push([s==='g'?1:s==='b'?2:s==='o'?3:0,2]);}});
+  return bytesToB64(packBits(L));
 }
 function decodeState(str){
-  try{let b=str.replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';
-    const bin=atob(b),by=Array.from(bin,c=>c.charCodeAt(0)),res={};let i=0;
-    TASKS.forEach(t=>{res[t.n]={};for(let id=1;id<=t.count;id++){
-      const byte=by[Math.floor(i/4)]||0;const v=(byte>>(6-(i%4)*2))&3;
-      if(v===1)res[t.n][id]='g';else if(v===2)res[t.n][id]='b';else if(v===3)res[t.n][id]='o';i++;}});
-    return res;}catch(e){return null;}
+  try{const by=b64ToBytes(str);let idx=0,bit=0;
+    const read=n=>{let v=0;for(let k=0;k<n;k++){v=(v<<1)|((by[idx]>>(7-bit))&1);if(++bit===8){bit=0;idx++;}}return v;};
+    if(read(8)!==STATE_VER)return null;          // другая версия формата — отвергаем явно
+    const tc=read(8);if(tc>40)return null;
+    const res={};
+    for(let i=0;i<tc;i++){const n=read(8),maxId=read(16);
+      if(n<1||n>40||maxId<1||maxId>2000)return null;
+      res[n]=res[n]||{};
+      for(let id=1;id<=maxId;id++){const v=read(2);
+        if(v===1)res[n][id]='g';else if(v===2)res[n][id]='b';else if(v===3)res[n][id]='o';}}
+    if(idx>by.length)return null;                // строка обрезана — не доверяем
+    return res;
+  }catch(e){return null;}
 }
 function shareLink(){
   let q='?p='+encodeState();const h=histEncode();if(h)q+='&h='+h;
@@ -423,7 +449,14 @@ function renderHub(){
         <span class="tnum">Задание ${t.n}</span><span class="tname">${t.title}</span>
         <span class="bar"><span class="bg" style="width:${gp}%"></span><span class="bo" style="width:${op}%"></span><span class="bb" style="width:${bp}%"></span></span>
         <span class="tmeta"><span>${tot?'Освоено '+g+'/'+tot:'Скоро'}</span><span>${o||b?[o?'повтор '+o:'',b?'разбор '+b:''].filter(Boolean).join(' · '):''}</span></span>
-      </button>`;}).join('')}</div></section>`;
+      </button>`;}).join('')}</div>
+    <footer class="hub-foot"><div class="hf-card">
+      <div class="hf-text">
+        <div class="hf-title">Подготовка к ЕГЭ и ОГЭ по математике</div>
+        <div class="hf-sub">Этот тренажёр я сделал для своих учеников. Если нужна подготовка — напишите мне в Telegram, обсудим занятия.</div>
+      </div>
+      <a class="hf-btn" href="https://t.me/kirill_math_tutor" target="_blank" rel="noopener">Написать · @kirill_math_tutor</a>
+    </div></footer></section>`;
 }
 
 function renderTask(n){
@@ -646,7 +679,7 @@ appEl.addEventListener('input',e=>{const el=e.target;
     const cleaned=el.value.replace(/\./g,',').replace(/[^0-9,\-]/g,'');
     if(cleaned!==el.value){const p=el.selectionStart-(el.value.length-cleaned.length);el.value=cleaned;try{el.setSelectionRange(p,p);}catch(_){}}}
 });
-document.getElementById('home').addEventListener('click',()=>go('#/'));
+document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
   if(inp){e.preventDefault();const b=appEl.querySelector('[data-check="'+inp.dataset.id+'"]');if(b)b.click();}});
 backEl.addEventListener('click',()=>go('#/'));
@@ -661,6 +694,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   const sp=params.get('p'),hp=params.get('h');
   if(sp||hp){
     const inc=sp?decodeState(sp):null, incH=hp?histDecode(hp):null;
+    if(sp&&!inc) alert('Не удалось прочитать прогресс из ссылки — возможно, она создана в другой версии тренажёра. Прогресс не загружен.');
     const hasProgress=Object.values(state).some(o=>Object.keys(o||{}).length>0);
     let proceed=true;
     if(inc&&hasProgress) proceed=confirm('Загрузить данные из ссылки? Прогресс на этом устройстве будет заменён, история пробников — объединена.');
