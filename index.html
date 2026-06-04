@@ -146,6 +146,25 @@
   .vans-row{margin-top:12px;font-size:14px;}
   .vans-row .yours{color:var(--muted);}
   .vans-row .right{color:var(--green);font-weight:600;}
+
+  /* кнопка «случайная задача» */
+  .btn.rnd{width:100%;margin-top:8px;color:var(--accent);border-color:#e8d2c6;font-size:13px;}
+  .btn.rnd:hover{background:#f7ece6;}
+  @keyframes card-flash{0%{box-shadow:0 0 0 3px rgba(181,83,42,.5);}100%{box-shadow:0 0 0 3px rgba(181,83,42,0);}}
+  .card.flash-card{animation:card-flash .9s ease-out;}
+
+  /* история пробников */
+  .vhist{margin-top:22px;}
+  .vhist-head{display:flex;align-items:center;justify-content:space-between;font-family:'Lora',serif;font-weight:600;font-size:16px;margin-bottom:12px;}
+  .vhist-clear{font:inherit;font-family:'Golos Text',sans-serif;font-size:12.5px;color:var(--muted);background:none;border:none;cursor:pointer;text-decoration:underline;}
+  .vhist-clear:hover{color:var(--accent);}
+  .spark{display:block;width:100%;height:48px;margin-bottom:14px;overflow:visible;}
+  .vhist-list{display:flex;flex-direction:column;gap:6px;max-height:260px;overflow:auto;}
+  .vhist-row{display:grid;grid-template-columns:1fr auto auto auto;gap:14px;font-size:13px;color:var(--muted);
+    padding:8px 12px;background:var(--bg);border:1px solid var(--line);border-radius:9px;align-items:center;}
+  .vhist-row .vh-score{color:var(--ink);font-weight:500;}
+  .vhist-row .vh-sec{color:var(--accent);font-weight:700;}
+  .vhist-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow);margin-bottom:16px;}
   .btn.sol{margin-left:auto;color:var(--accent);border-color:#e8d2c6;}
   .btn.sol:hover{background:#f7ece6;}
   .solution{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);display:none;}
@@ -282,6 +301,36 @@ function secondaryScore(primary){return SEC_SCORE[Math.min(primary,SEC_SCORE.len
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
 function ensureAll(ns,cb){let left=ns.length;if(!left){cb();return;}ns.forEach(n=>ensureData(n,()=>{if(--left===0)cb();}));}
 
+// --- история пробников (отдельный ключ, в ссылку прогресса не входит) ---
+const HIST_KEY='ege_variants_v1';
+function loadHistory(){try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}catch(e){return[];}}
+function saveHistory(a){try{localStorage.setItem(HIST_KEY,JSON.stringify(a));}catch(e){}}
+function pushHistory(rec){const a=loadHistory();a.push(rec);if(a.length>50)a.splice(0,a.length-50);saveHistory(a);}
+function fmtDate(ts){try{return new Date(ts).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return'';}}
+function sparkline(hist){
+  const vals=hist.map(h=>h.s);if(vals.length<2)return'';
+  const w=320,h=48,max=Math.max(...vals),min=Math.min(...vals),span=Math.max(max-min,1);
+  const xy=vals.map((v,i)=>{const x=6+i*(w-12)/(vals.length-1);const y=h-6-((v-min)/span)*(h-16);return[x,y];});
+  const line=xy.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' ');
+  const dots=xy.map(p=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.4" fill="var(--accent)"/>`).join('');
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+    <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
+}
+function histPanel(){
+  const hist=loadHistory();if(!hist.length)return'';
+  const rows=hist.slice().reverse().slice(0,12).map(h=>`<div class="vhist-row">
+      <span class="vh-date">${fmtDate(h.t)}</span>
+      <span class="vh-score">${h.p}/${h.total} верно</span>
+      <span class="vh-sec">тест. ${h.s}</span>
+      <span class="vh-time">${fmtTime(h.ms)}</span>
+    </div>`).join('');
+  return `<div class="vhist">
+    <div class="vhist-head"><span>Мои пробники</span><button class="vhist-clear" data-vhclear>очистить</button></div>
+    ${sparkline(hist)}
+    <div class="vhist-list">${rows}</div>
+  </div>`;
+}
+
 function encodeState(){
   let bits=0,bl=0,by=[];
   TASKS.forEach(t=>{const ts=state[t.n]||{};for(let id=1;id<=t.count;id++){
@@ -358,7 +407,8 @@ function renderTask(n){
   appEl.innerHTML=`<div class="wrap">
     <aside class="grid-panel"><div class="grid-label">Задание ${n}</div>
       <div class="grid">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
-        return `<button class="cell ${c}" data-cell="${id}">${id}</button>`;}).join('')}</div></aside>
+        return `<button class="cell ${c}" data-cell="${id}">${id}</button>`;}).join('')}</div>
+      <button class="btn rnd" data-random>🎲 Случайная задача</button></aside>
     <main class="list">
       <div class="filters">
         <button class="chip on" data-filter="all">Все</button>
@@ -414,15 +464,17 @@ function startVariant(){
 }
 function finishVariant(){
   variant.elapsed=Date.now()-variant.startAt;
+  let correct=0;
   variant.items.forEach((it,i)=>{
     const inp=document.querySelector('.v-input[data-vi="'+i+'"]');
     const given=inp?inp.value.trim():'';it.given=given;
     const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
-    const ok = given!=='' && normAns(given)===normAns(plainAnswer(d.a));it.ok=ok;
+    const ok = given!=='' && normAns(given)===normAns(plainAnswer(d.a));it.ok=ok;if(ok)correct++;
     const cur=(state[it.n]||{})[it.id];
     recordStatus(it.n,it.id, ok ? ((cur==='b'||cur==='o')?'o':'g') : 'b');
   });
   save();variant.finished=true;
+  pushHistory({t:Date.now(),p:correct,s:secondaryScore(correct),ms:variant.elapsed,total:variant.items.length});
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
   renderVariant();
 }
@@ -435,6 +487,7 @@ function renderVariant(){
       <p class="lead">Соберём ${active.length} задач — по одной случайной из каждого активного задания. Реши все и нажми «Завершить» — получишь первичный и тестовый балл.</p>
       <div class="vwarn"><span>⚠️</span><div><b>Ответы влияют на прогресс.</b> Верный ответ отметит задачу как «умею решать» или «надо повторить», неверный или пустой — как «надо разобраться».</div></div>
       <button class="btn primary" data-vstart>Начать вариант</button>
+      ${histPanel()}
     </div></div>`;
     return;
   }
@@ -472,6 +525,7 @@ function renderVariant(){
         <button class="btn" data-home>К заданиям</button>
       </div>
     </div>
+    ${histPanel()?`<div class="vhist-card">${histPanel()}</div>`:''}
     ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
       return `<div class="vcard ${it.ok?'r-ok':'r-no'}">
         <div class="vlabel">Задание ${it.n}<span class="vtag ${it.ok?'ok':'no'}">${it.ok?'верно':'неверно'}</span></div>
@@ -491,6 +545,15 @@ appEl.addEventListener('click',e=>{
   const hm=e.target.closest('[data-home]'); if(hm){go('#/');return;}
   const vs=e.target.closest('[data-vsol]'); if(vs){const box=document.getElementById('vsol-'+vs.dataset.vsol);if(box)box.classList.toggle('open');return;}
   const ch=e.target.closest('[data-filter]'); if(ch){viewFilter=ch.dataset.filter;applyFilter();return;}
+  const rnd=e.target.closest('[data-random]');
+  if(rnd){const r=parseRoute();if(r.view!=='task')return;const task=taskCfg(r.n);
+    const id=1+Math.floor(Math.random()*task.count);viewFilter='all';applyFilter();
+    const card=document.getElementById('task-'+id);
+    if(card){card.scrollIntoView({behavior:'smooth',block:'center'});
+      reanim(card,'flash-card');const inp=card.querySelector('.ans-input');if(inp)setTimeout(()=>inp.focus(),320);}
+    return;}
+  const vhc=e.target.closest('[data-vhclear]');
+  if(vhc){if(confirm('Очистить историю пробников?')){saveHistory([]);renderVariant();}return;}
   const t=e.target.closest('[data-go]'); if(t){go('#/t/'+t.dataset.go);return;}
   const mk=e.target.closest('[data-mark]');
   if(mk){const r=parseRoute();if(r.view!=='task')return;const ts=taskState(r.n),id=+mk.dataset.id,m=mk.dataset.mark;
@@ -530,6 +593,11 @@ appEl.addEventListener('click',e=>{
   const cell=e.target.closest('[data-cell]');
   if(cell){viewFilter='all';applyFilter();const tc=document.getElementById('task-'+cell.dataset.cell);
     if(tc)tc.scrollIntoView({behavior:'smooth',block:'start'});return;}
+});
+appEl.addEventListener('input',e=>{const el=e.target;
+  if(el.classList.contains('ans-input')||el.classList.contains('v-input')){
+    const cleaned=el.value.replace(/[^0-9.,\-]/g,'');
+    if(cleaned!==el.value){const p=el.selectionStart-(el.value.length-cleaned.length);el.value=cleaned;try{el.setSelectionRange(p,p);}catch(_){}}}
 });
 document.getElementById('home').addEventListener('click',()=>go('#/'));
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
