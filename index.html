@@ -21,6 +21,7 @@
   .head-inner{max-width:1180px;margin:0 auto;padding:14px 24px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
   .title{font-family:'Lora',serif;font-weight:700;font-size:20px;letter-spacing:-.01em;margin:0;white-space:nowrap;cursor:pointer;}
   .title span{color:var(--accent);}
+  .title .by{color:var(--muted);font-weight:500;font-size:.72em;opacity:.6;letter-spacing:0;}
   .back{font:inherit;font-size:13.5px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;display:none;}
   .back:hover{color:var(--accent);}
   .stats{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap;}
@@ -101,8 +102,8 @@
     padding:18px 22px;margin-bottom:22px;box-shadow:var(--shadow);transition:transform .12s;}
   .variant-cta:hover{transform:translateY(-2px);}
   .variant-cta .vc-ico{font-size:26px;line-height:1;}
-  .variant-cta .vc-t{font-family:'Lora',serif;font-weight:600;font-size:17px;margin:0 0 2px;}
-  .variant-cta .vc-s{font-size:13px;opacity:.8;}
+  .variant-cta .vc-t{display:block;font-family:'Lora',serif;font-weight:600;font-size:17px;margin:0 0 3px;}
+  .variant-cta .vc-s{display:block;font-size:13px;opacity:.8;line-height:1.4;}
   .variant-cta .vc-go{margin-left:auto;font-size:13px;opacity:.85;white-space:nowrap;}
 
   /* экран варианта */
@@ -171,7 +172,7 @@
 <header>
   <div class="head-inner">
     <button class="back" id="back">← К списку заданий</button>
-    <h1 class="title" id="home">Тренажёр <span>ЕГЭ</span></h1>
+    <h1 class="title" id="home">Тренажёр <span>ЕГЭ</span> <span class="by">от Кирилла</span></h1>
     <div class="stats" id="stats"></div>
     <button class="ghost" id="share">🔗 Поделиться прогрессом</button>
     <button class="ghost" id="reset">Сбросить</button>
@@ -317,7 +318,7 @@ function renderHub(){
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
     <button class="variant-cta" data-variant>
       <span class="vc-ico">🎯</span>
-      <span><span class="vc-t">Собрать пробный вариант</span><span class="vc-s">По одной случайной задаче из каждого задания · сейчас ${active} шт.</span></span>
+      <span><span class="vc-t">Собрать пробный вариант</span><span class="vc-s">По одной случайной задаче из каждого задания · ${active} шт.</span></span>
       <span class="vc-go">Начать →</span>
     </button>
     <div class="tasks">${TASKS.map(t=>{
@@ -432,7 +433,7 @@ function renderVariant(){
     appEl.innerHTML=`<div class="vbox"><div class="vintro">
       <h2>Пробный вариант</h2>
       <p class="lead">Соберём ${active.length} задач — по одной случайной из каждого активного задания. Реши все и нажми «Завершить» — получишь первичный и тестовый балл.</p>
-      <div class="vwarn"><span>⚠️</span><div><b>Ответы влияют на прогресс.</b> Верный ответ отметит задачу как «умею решать» или «надо повторить», неверный — как «надо разобраться».</div></div>
+      <div class="vwarn"><span>⚠️</span><div><b>Ответы влияют на прогресс.</b> Верный ответ отметит задачу как «умею решать» или «надо повторить», неверный или пустой — как «надо разобраться».</div></div>
       <button class="btn primary" data-vstart>Начать вариант</button>
     </div></div>`;
     return;
