@@ -11,6 +11,7 @@
   :root{
     --bg:#f4f1ea;--paper:#fbfaf6;--ink:#1f2421;--muted:#6b6f6a;--line:#e0dccf;
     --green:#2f8f5b;--green-soft:#e3f1e8;--dark:#2a2d2a;--accent:#b5532a;
+    --orange:#d9822b;--orange-soft:#f6ecdd;--red:#c0392b;--red-soft:#fbe9e7;
     --shadow:0 1px 2px rgba(31,36,33,.06),0 8px 24px rgba(31,36,33,.06);
   }
   *{box-sizing:border-box;} html{scroll-behavior:smooth;}
@@ -25,7 +26,7 @@
   .stats{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap;}
   .stat{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--muted);}
   .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
-  .dot.g{background:var(--green);}.dot.b{background:var(--dark);}.dot.n{background:#fff;border:1px solid var(--line);}
+  .dot.g{background:var(--green);}.dot.o{background:var(--orange);}.dot.b{background:var(--dark);}.dot.n{background:#fff;border:1px solid var(--line);}
   .stat b{color:var(--ink);font-weight:600;}
   .ghost{font:inherit;font-size:12.5px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:8px;padding:5px 11px;cursor:pointer;transition:.15s;}
   .ghost:hover{border-color:var(--accent);color:var(--accent);}
@@ -42,7 +43,7 @@
   .tcard .tnum{font-family:'Lora',serif;font-weight:700;color:var(--accent);font-size:15px;}
   .tcard .tname{font-size:16px;font-weight:500;line-height:1.3;flex:1;}
   .bar{height:7px;border-radius:99px;background:#eceadf;overflow:hidden;display:flex;}
-  .bar .bg{background:var(--green);}.bar .bb{background:var(--dark);}
+  .bar .bg{background:var(--green);}.bar .bo{background:var(--orange);}.bar .bb{background:var(--dark);}
   .tmeta{display:flex;justify-content:space-between;font-size:12.5px;color:var(--muted);}
 
   .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px;display:grid;grid-template-columns:168px 1fr;gap:36px;align-items:start;}
@@ -53,11 +54,12 @@
     font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .1s,background .15s,color .15s;font-family:'Golos Text',sans-serif;}
   .cell:hover{transform:scale(1.12);border-color:var(--ink);}
   .cell.g{background:var(--green);border-color:var(--green);color:#fff;}
+  .cell.o{background:var(--orange);border-color:var(--orange);color:#fff;}
   .cell.b{background:var(--dark);border-color:var(--dark);color:#fff;}
   .list{display:flex;flex-direction:column;gap:18px;}
   .card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow);
     scroll-margin-top:78px;border-left:4px solid var(--line);transition:border-color .2s;}
-  .card.is-g{border-left-color:var(--green);}.card.is-b{border-left-color:var(--dark);}
+  .card.is-g{border-left-color:var(--green);}.card.is-o{border-left-color:var(--orange);}.card.is-b{border-left-color:var(--dark);}
   .card-top{display:flex;align-items:baseline;gap:12px;margin-bottom:12px;}
   .num{font-family:'Lora',serif;font-weight:700;font-size:22px;color:var(--accent);line-height:1;}
   .cond img,.sol-body img{max-width:760px;width:100%;height:auto;display:block;border-radius:6px;}
@@ -65,7 +67,19 @@
   .btn{font:inherit;font-size:13.5px;font-weight:500;cursor:pointer;border-radius:9px;padding:8px 14px;border:1px solid var(--line);background:var(--paper);color:var(--ink);transition:.15s;}
   .btn:hover{border-color:var(--ink);}
   .btn.mk-g.on{background:var(--green);border-color:var(--green);color:#fff;}
+  .btn.mk-o.on{background:var(--orange);border-color:var(--orange);color:#fff;}
   .btn.mk-b.on{background:var(--dark);border-color:var(--dark);color:#fff;}
+  .answer-check{display:flex;align-items:center;gap:8px;margin-top:14px;flex-wrap:wrap;}
+  .ans-input{font:inherit;font-size:14px;padding:8px 12px;border:1px solid var(--line);border-radius:9px;
+    background:var(--paper);color:var(--ink);width:170px;outline:none;transition:.15s;}
+  .ans-input:focus{border-color:var(--accent);}
+  .ans-input.correct{border-color:var(--green);background:var(--green-soft);color:var(--green);font-weight:600;}
+  .ans-input.wrong{border-color:var(--red);background:var(--red-soft);color:var(--red);font-weight:600;}
+  .btn.check{color:var(--accent);border-color:#e8d2c6;}
+  .btn.check:hover{background:#f7ece6;}
+  .ans-msg{font-size:13.5px;font-weight:600;}
+  .ans-msg.ok{color:var(--green);}
+  .ans-msg.no{color:var(--red);}
   .btn.sol{margin-left:auto;color:var(--accent);border-color:#e8d2c6;}
   .btn.sol:hover{background:#f7ece6;}
   .solution{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);display:none;}
@@ -156,12 +170,31 @@ try{state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){state={};}
 const appEl=document.getElementById('app'), statsEl=document.getElementById('stats'), backEl=document.getElementById('back');
 function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
 function taskState(n){return state[n]||(state[n]={});}
-function countTask(n){const ts=state[n]||{},v=Object.values(ts);return{g:v.filter(x=>x==='g').length,b:v.filter(x=>x==='b').length};}
+function countTask(n){const ts=state[n]||{},v=Object.values(ts);return{
+  g:v.filter(x=>x==='g').length,o:v.filter(x=>x==='o').length,b:v.filter(x=>x==='b').length};}
+
+// попытки ответа храним только в памяти сессии — в прогресс/ссылку не попадают
+const attempts={};
+function plainAnswer(html){if(!html)return'';const t=document.createElement('div');t.innerHTML=html;return(t.textContent||'').trim();}
+function normAns(s){return(s||'').toLowerCase().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.');}
+function taskStatsHTML(n){const task=taskCfg(n),{g,o,b}=countTask(n);
+  return `<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
+    `<span class="stat"><i class="dot o"></i>Повторить: <b>${o}</b></span>`+
+    `<span class="stat"><i class="dot b"></i>Разобраться: <b>${b}</b></span>`+
+    `<span class="stat"><i class="dot n"></i>Осталось: <b>${task.count-g-o-b}</b></span>`;}
+function refreshCell(n,id){const st=(state[n]||{})[id]||'';const c=document.querySelector('.grid [data-cell="'+id+'"]');
+  if(c)c.className='cell'+(st?' '+st:'');}
+function refreshCard(n,id){const st=(state[n]||{})[id]||'';const card=document.getElementById('task-'+id);
+  if(!card)return;card.className='card'+(st?' is-'+st:'');
+  card.querySelectorAll('[data-mark]').forEach(b=>b.classList.toggle('on',b.dataset.mark===st));}
+function refreshStats(n){statsEl.innerHTML=taskStatsHTML(n);}
+function setStatus(n,id,status){const ts=taskState(n);if(status)ts[id]=status;else delete ts[id];
+  save();refreshCard(n,id);refreshCell(n,id);refreshStats(n);}
 
 function encodeState(){
   let bits=0,bl=0,by=[];
   TASKS.forEach(t=>{const ts=state[t.n]||{};for(let id=1;id<=t.count;id++){
-    const v=ts[id]==='g'?1:ts[id]==='b'?2:0;bits=(bits<<2)|v;bl+=2;if(bl===8){by.push(bits);bits=0;bl=0;}}});
+    const v=ts[id]==='g'?1:ts[id]==='b'?2:ts[id]==='o'?3:0;bits=(bits<<2)|v;bl+=2;if(bl===8){by.push(bits);bits=0;bl=0;}}});
   if(bl>0)by.push(bits<<(8-bl));
   return btoa(String.fromCharCode(...by)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
 }
@@ -170,7 +203,7 @@ function decodeState(str){
     const bin=atob(b),by=Array.from(bin,c=>c.charCodeAt(0)),res={};let i=0;
     TASKS.forEach(t=>{res[t.n]={};for(let id=1;id<=t.count;id++){
       const byte=by[Math.floor(i/4)]||0;const v=(byte>>(6-(i%4)*2))&3;
-      if(v===1)res[t.n][id]='g';else if(v===2)res[t.n][id]='b';i++;}});
+      if(v===1)res[t.n][id]='g';else if(v===2)res[t.n][id]='b';else if(v===3)res[t.n][id]='o';i++;}});
     return res;}catch(e){return null;}
 }
 function shareLink(){
@@ -189,11 +222,11 @@ function renderHub(){
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
     <div class="tasks">${TASKS.map(t=>{
-      const{g,b}=countTask(t.n),tot=t.count,gp=tot?g/tot*100:0,bp=tot?b/tot*100:0,dis=tot===0?'disabled':'';
+      const{g,o,b}=countTask(t.n),tot=t.count,gp=tot?g/tot*100:0,op=tot?o/tot*100:0,bp=tot?b/tot*100:0,dis=tot===0?'disabled':'';
       return `<button class="tcard" ${dis} data-go="${t.n}">
         <span class="tnum">Задание ${t.n}</span><span class="tname">${t.title}</span>
-        <span class="bar"><span class="bg" style="width:${gp}%"></span><span class="bb" style="width:${bp}%"></span></span>
-        <span class="tmeta"><span>${tot?'Освоено '+g+'/'+tot:'Скоро'}</span><span>${b?('пауза '+b):''}</span></span>
+        <span class="bar"><span class="bg" style="width:${gp}%"></span><span class="bo" style="width:${op}%"></span><span class="bb" style="width:${bp}%"></span></span>
+        <span class="tmeta"><span>${tot?'Освоено '+g+'/'+tot:'Скоро'}</span><span>${o||b?[o?'повтор '+o:'',b?'разбор '+b:''].filter(Boolean).join(' · '):''}</span></span>
       </button>`;}).join('')}</div></section>`;
 }
 
@@ -213,11 +246,9 @@ function renderTask(n){
     return;
   }
   backEl.style.display='inline';
-  const ts=taskState(n),{g,b}=countTask(n);
+  const ts=taskState(n);
   const data = task.mode==='html' ? (window.TASKDATA[n]||[]) : null;
-  statsEl.innerHTML=`<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
-    `<span class="stat"><i class="dot b"></i>Остановился: <b>${b}</b></span>`+
-    `<span class="stat"><i class="dot n"></i>Осталось: <b>${task.count-g-b}</b></span>`;
+  statsEl.innerHTML=taskStatsHTML(n);
   const condHTML=id=> task.mode==='html'
       ? `<div class="cond"><div class="tex">${(data[id-1]||{}).c||''}</div></div>`
       : `<div class="cond"><img loading="lazy" src="${COND(n,id)}" alt="Задача ${id}"></div>`;
@@ -226,15 +257,23 @@ function renderTask(n){
       : `<div class="solution" id="sol-${id}"><div class="sol-body"><img loading="lazy" data-src="${SOL(n,id)}" alt="Решение ${id}"></div></div>`;
   appEl.innerHTML=`<div class="wrap">
     <aside class="grid-panel"><div class="grid-label">Задание ${n}</div>
-      <div class="grid">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='b'?'b':'';
+      <div class="grid">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
         return `<button class="cell ${c}" data-cell="${id}">${id}</button>`;}).join('')}</div></aside>
-    <main class="list">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'is-g':st==='b'?'is-b':'';
+    <main class="list">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
+      const ansTxt = task.mode==='html' ? plainAnswer((data[id-1]||{}).a) : '';
+      const ac = ansTxt ? `<div class="answer-check">
+          <input class="ans-input" type="text" placeholder="Ваш ответ" data-id="${id}" autocomplete="off">
+          <button class="btn check" data-check="${id}">Проверить</button>
+          <span class="ans-msg"></span>
+        </div>` : '';
       return `<article class="card ${c}" id="task-${id}">
         <div class="card-top"><span class="num">${id}</span></div>
         ${condHTML(id)}
+        ${ac}
         <div class="actions">
           <button class="btn mk-g ${st==='g'?'on':''}" data-mark="g" data-id="${id}">✓ Умею решать</button>
-          <button class="btn mk-b ${st==='b'?'on':''}" data-mark="b" data-id="${id}">⏸ Остановился тут</button>
+          <button class="btn mk-o ${st==='o'?'on':''}" data-mark="o" data-id="${id}">↻ Надо повторить</button>
+          <button class="btn mk-b ${st==='b'?'on':''}" data-mark="b" data-id="${id}">✗ Надо разобраться</button>
           <button class="btn sol" data-sol="${id}">Показать решение</button>
         </div>
         ${solBox(id)}
@@ -247,7 +286,23 @@ appEl.addEventListener('click',e=>{
   const t=e.target.closest('[data-go]'); if(t){go('#/t/'+t.dataset.go);return;}
   const mk=e.target.closest('[data-mark]');
   if(mk){const r=parseRoute();if(r.view!=='task')return;const ts=taskState(r.n),id=+mk.dataset.id,m=mk.dataset.mark;
-    if(ts[id]===m)delete ts[id];else ts[id]=m;save();renderTask(r.n);return;}
+    setStatus(r.n,id, ts[id]===m?null:m);return;}
+  const chk=e.target.closest('[data-check]');
+  if(chk){const r=parseRoute();if(r.view!=='task')return;const id=+chk.dataset.check,n=r.n;
+    const wrap=chk.closest('.answer-check'),input=wrap.querySelector('.ans-input'),msg=wrap.querySelector('.ans-msg');
+    const given=normAns(input.value);if(!given)return;
+    const correct=normAns(plainAnswer(((window.TASKDATA[n]||[])[id-1]||{}).a));
+    attempts[n]=attempts[n]||{};attempts[n][id]=(attempts[n][id]||0)+1;
+    if(given===correct){
+      input.classList.remove('wrong');input.classList.add('correct');
+      msg.textContent='Правильно';msg.className='ans-msg ok';
+      setStatus(n,id, attempts[n][id]>1 ? 'o' : 'g');
+    }else{
+      input.classList.remove('correct');input.classList.add('wrong');
+      msg.textContent='Неправильно';msg.className='ans-msg no';
+      setStatus(n,id,'b');
+    }
+    return;}
   const sol=e.target.closest('[data-sol]');
   if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id);box.classList.toggle('open');
     if(box.dataset.html==='1'){
@@ -260,6 +315,8 @@ appEl.addEventListener('click',e=>{
   if(cell){document.getElementById('task-'+cell.dataset.cell).scrollIntoView({behavior:'smooth',block:'start'});return;}
 });
 document.getElementById('home').addEventListener('click',()=>go('#/'));
+appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
+  if(inp){e.preventDefault();const b=appEl.querySelector('[data-check="'+inp.dataset.id+'"]');if(b)b.click();}});
 backEl.addEventListener('click',()=>go('#/'));
 document.getElementById('share').addEventListener('click',shareLink);
 document.getElementById('reset').addEventListener('click',()=>{const r=parseRoute();
