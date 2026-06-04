@@ -306,6 +306,39 @@ const HIST_KEY='ege_variants_v1';
 function loadHistory(){try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}catch(e){return[];}}
 function saveHistory(a){try{localStorage.setItem(HIST_KEY,JSON.stringify(a));}catch(e){}}
 function pushHistory(rec){const a=loadHistory();a.push(rec);if(a.length>50)a.splice(0,a.length-50);saveHistory(a);}
+
+// компактная упаковка истории в ссылку (отдельный параметр &h=)
+function packBits(list){const by=[];let cur=0,fill=0;
+  for(const[v,n]of list){for(let i=n-1;i>=0;i--){cur=(cur<<1)|((v>>i)&1);if(++fill===8){by.push(cur);cur=0;fill=0;}}}
+  if(fill>0)by.push(cur<<(8-fill));return by;}
+function bytesToB64(by){return btoa(String.fromCharCode(...by)).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+function b64ToBytes(str){let b=str.replace(/-/g,'+').replace(/_/g,'/');while(b.length%4)b+='=';return Array.from(atob(b),c=>c.charCodeAt(0));}
+function histEncode(){
+  const h=loadHistory();if(!h.length)return'';
+  const s=h.slice().sort((a,b)=>a.t-b.t),base=Math.floor(s[0].t/60000),L=[];
+  L.push([1,8]);L.push([Math.min(s.length,255),8]);L.push([base,32]);
+  s.slice(0,255).forEach(r=>{
+    const dm=Math.min(Math.max(Math.floor(r.t/60000)-base,0),1048575);
+    L.push([dm,20]);L.push([Math.min(r.p|0,15),4]);L.push([Math.min(r.total|0,31),5]);
+    L.push([Math.min(Math.round(r.ms/1000),16383),14]);
+  });
+  return bytesToB64(packBits(L));
+}
+function histDecode(str){
+  try{const by=b64ToBytes(str);let idx=0,bit=0;
+    const read=n=>{let v=0;for(let k=0;k<n;k++){v=(v<<1)|((by[idx]>>(7-bit))&1);if(++bit===8){bit=0;idx++;}}return v;};
+    if(read(8)!==1)return null;const count=read(8),base=read(32),out=[];
+    for(let i=0;i<count;i++){const dm=read(20),p=read(4),tot=read(5),sec=read(14);
+      out.push({t:(base+dm)*60000,p,total:tot,s:secondaryScore(p),ms:sec*1000});}
+    return out;}catch(e){return null;}
+}
+function mergeHistory(incoming){
+  const key=r=>Math.floor(r.t/60000)+':'+r.p+':'+r.total,map={};
+  loadHistory().concat(incoming).forEach(r=>{map[key(r)]=r;});
+  let arr=Object.values(map).sort((a,b)=>a.t-b.t);
+  if(arr.length>50)arr=arr.slice(arr.length-50);
+  saveHistory(arr);
+}
 function fmtDate(ts){try{return new Date(ts).toLocaleString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});}catch(e){return'';}}
 function sparkline(hist){
   const vals=hist.map(h=>h.s);if(vals.length<2)return'';
@@ -347,7 +380,8 @@ function decodeState(str){
     return res;}catch(e){return null;}
 }
 function shareLink(){
-  const url=location.origin+location.pathname+'?p='+encodeState();
+  let q='?p='+encodeState();const h=histEncode();if(h)q+='&h='+h;
+  const url=location.origin+location.pathname+q;
   navigator.clipboard.writeText(url).then(()=>{const b=document.getElementById('share'),o=b.textContent;
     b.textContent='✓ Скопировано';setTimeout(()=>b.textContent=o,1800);},()=>prompt('Ссылка с прогрессом:',url));
 }
@@ -610,11 +644,19 @@ document.getElementById('reset').addEventListener('click',()=>{const r=parseRout
   else{if(confirm('Сбросить ВЕСЬ прогресс?')){state={};save();renderHub();}}});
 window.addEventListener('hashchange',render);
 window.addEventListener('DOMContentLoaded',()=>{
-  const sp=new URLSearchParams(location.search).get('p');
-  if(sp){const inc=decodeState(sp);
-    if(inc){const has=Object.values(state).some(o=>Object.keys(o||{}).length>0);
-      if(!has||confirm('Загрузить прогресс из ссылки? Текущий на этом устройстве будет заменён.')){state=inc;save();}}
-    history.replaceState(null,'',location.pathname);}
+  const params=new URLSearchParams(location.search);
+  const sp=params.get('p'),hp=params.get('h');
+  if(sp||hp){
+    const inc=sp?decodeState(sp):null, incH=hp?histDecode(hp):null;
+    const hasProgress=Object.values(state).some(o=>Object.keys(o||{}).length>0);
+    let proceed=true;
+    if(inc&&hasProgress) proceed=confirm('Загрузить данные из ссылки? Прогресс на этом устройстве будет заменён, история пробников — объединена.');
+    if(proceed){
+      if(inc){state=inc;save();}
+      if(incH){mergeHistory(incH);}
+    }
+    history.replaceState(null,'',location.pathname);
+  }
   render();
 });
 </script>
