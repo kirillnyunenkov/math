@@ -17,6 +17,12 @@
 <meta name="twitter:title" content="Тренажёр ЕГЭ по математике">
 <meta name="twitter:description" content="Задания ЕГЭ с разбором и проверкой ответов. Репетитор — @kirill_math_tutor">
 <meta name="twitter:image" content="https://kirillnyunenkov.github.io/math/preview.png">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#f4f1ea">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Тренажёр ЕГЭ">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
@@ -111,6 +117,20 @@
   .help-way b{color:var(--ink);}
   .help-cta{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:24px;padding-top:22px;border-top:1px solid var(--line);}
   .help-cta span{color:var(--muted);font-size:15px;}
+
+  /* установка как приложение */
+  .install-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--paper);
+    border:1px solid var(--soft-border);border-left:4px solid var(--accent);border-radius:12px;
+    padding:12px 16px;margin-bottom:22px;box-shadow:var(--shadow);}
+  .install-bar .ib-text{flex:1;min-width:180px;font-size:14px;line-height:1.45;}
+  .ib-go{font:inherit;font-size:14px;font-weight:600;background:var(--accent);color:#fff;border:none;
+    border-radius:9px;padding:9px 18px;cursor:pointer;white-space:nowrap;}
+  .ib-go:hover{filter:brightness(1.08);}
+  .install-bar .ib-x{font:inherit;font-size:16px;line-height:1;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 6px;}
+  .install-bar .ib-x:hover{color:var(--accent);}
+  .install-steps{font-size:15px;line-height:1.6;}
+  .install-steps b{font-weight:600;}
+  .install-steps .ok{color:var(--green);font-weight:600;}
 
   .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px;display:grid;grid-template-columns:168px 1fr;gap:36px;align-items:start;}
   .grid-panel{position:sticky;top:78px;}
@@ -263,7 +283,8 @@
 <script>
 (function(){try{var t=localStorage.getItem('ege_theme');
   if(!t)t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
-  if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();
+  if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');
+    var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content','#181a17');}}catch(e){}})();
 </script>
 </head>
 <body>
@@ -495,6 +516,32 @@ function shareLink(){
     b.textContent='✓ Скопировано';setTimeout(()=>b.textContent=o,1800);},()=>prompt('Ссылка с прогрессом:',url));
 }
 
+// ---- PWA: установка как приложение ----
+let deferredPrompt=null, installDismissed=false;
+try{installDismissed=localStorage.getItem('ege_install_dismissed')==='1';}catch(e){}
+const isStandalone=()=>matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
+const canInstall=()=>!isStandalone()&&(!!deferredPrompt||(isIOS()&&!installDismissed));
+function installBanner(){
+  if(isStandalone()||installDismissed)return'';
+  if(!deferredPrompt&&!isIOS())return'';
+  const btn=deferredPrompt?'<button class="ib-go" data-install>Установить</button>':'';
+  const txt=deferredPrompt
+    ? 'Установи тренажёр как приложение — иконка на экране и запуск в один тап.'
+    : 'Тренажёр можно установить как приложение. Как — в разделе «❓ Как пользоваться».';
+  return `<div class="install-bar"><span class="ib-text">📲 ${txt}</span>${btn}<button class="ib-x" data-install-x aria-label="Скрыть">✕</button></div>`;
+}
+function installBlock(){
+  if(isStandalone())return '<p class="install-steps"><span class="ok">✓ Уже установлено</span> — ты открыл тренажёр как приложение.</p>';
+  if(deferredPrompt) return '<p class="install-steps">Нажми кнопку — появится системное окно установки.</p><button class="ib-go" data-install>Установить приложение</button>';
+  if(isIOS()) return '<p class="install-steps">На iPhone: внизу нажми <b>«Поделиться»</b> (квадрат со стрелкой) → пролистай и выбери <b>«На экран „Домой“»</b> → <b>«Добавить»</b>.</p>';
+  return '<p class="install-steps">На Android: меню браузера <b>⋮</b> → <b>«Установить приложение»</b> (или «Добавить на главный экран»). На компьютере — значок установки в адресной строке справа.</p>';
+}
+function doInstall(){
+  if(deferredPrompt){const dp=deferredPrompt;deferredPrompt=null;dp.prompt();
+    dp.userChoice.finally(()=>{const r=parseRoute();if(r.view==='hub'||r.view==='help')render();});}
+  else go('#/help');
+}
 function parseRoute(){
   if(/#\/help\b/.test(location.hash))return{view:'help'};
   if(/#\/v\b/.test(location.hash))return{view:'variant'};
@@ -509,6 +556,7 @@ function renderHub(){
   const active=TASKS.filter(t=>t.count>0).length;
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
+    ${installBanner()}
     <button class="variant-cta" data-variant>
       <span class="vc-ico">🎯</span>
       <span><span class="vc-t">Собрать пробный вариант</span><span class="vc-s">По одной случайной задаче из каждого задания · ${active} шт.</span></span>
@@ -636,6 +684,12 @@ function renderHelp(){
       <p>А когда всё зелёное — ты готов. На ЕГЭ попадётся то, что ты уже точно умеешь.</p>
     </div>
 
+    <div class="help-step">
+      <h3><span class="nm">+</span> Установить как приложение</h3>
+      <p>Можно добавить тренажёр на экран телефона — будет как обычное приложение, с иконкой и запуском в один тап. Бесплатно, ставится с этой же страницы.</p>
+      ${installBlock()}
+    </div>
+
     <div class="help-cta">
       <span>Нужна помощь с разбором?</span>
       <a class="hf-btn" href="https://t.me/kirill_math_tutor" target="_blank" rel="noopener">Написать · @kirill_math_tutor</a>
@@ -731,6 +785,10 @@ function renderVariant(){
 }
 
 appEl.addEventListener('click',e=>{
+  const inst=e.target.closest('[data-install]'); if(inst){doInstall();return;}
+  const instx=e.target.closest('[data-install-x]');
+  if(instx){installDismissed=true;try{localStorage.setItem('ege_install_dismissed','1');}catch(_){}
+    const bar=instx.closest('.install-bar');if(bar)bar.remove();return;}
   const dv=e.target.closest('[data-variant]');
   if(dv){variant=null;if(/#\/v\b/.test(location.hash))renderVariant();else go('#/v');return;}
   const vst=e.target.closest('[data-vstart]'); if(vst){startVariant();return;}
@@ -796,6 +854,7 @@ document.getElementById('theme').addEventListener('click',()=>{
   const dark=document.documentElement.getAttribute('data-theme')==='dark';
   if(dark)document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme','dark');
+  const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#f4f1ea':'#181a17');
   try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
 });
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
@@ -809,6 +868,12 @@ document.getElementById('reset').addEventListener('click',()=>{const r=parseRout
   if(r.view==='task'){if(confirm('Сбросить прогресс по заданию '+r.n+'?')){state[r.n]={};save();renderTask(r.n);}}
   else{if(confirm('Сбросить ВЕСЬ прогресс?')){state={};save();renderHub();}}});
 window.addEventListener('hashchange',render);
+// PWA
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;
+  const r=parseRoute();if(r.view==='hub'||r.view==='help')render();});
+window.addEventListener('appinstalled',()=>{deferredPrompt=null;
+  const b=document.querySelector('.install-bar');if(b)b.remove();});
+if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 window.addEventListener('DOMContentLoaded',()=>{
   const params=new URLSearchParams(location.search);
   const sp=params.get('p'),hp=params.get('h');
