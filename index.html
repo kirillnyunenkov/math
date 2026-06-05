@@ -4,6 +4,19 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Тренажёр ЕГЭ по математике</title>
+<meta name="description" content="Отрабатывай задания ЕГЭ по математике с разбором и проверкой ответов, следи за прогрессом. Репетитор — @kirill_math_tutor">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Тренажёр ЕГЭ по математике">
+<meta property="og:description" content="Задания ЕГЭ с разбором и проверкой ответов, пробные варианты и прогресс. Репетитор — @kirill_math_tutor">
+<meta property="og:image" content="https://kirillnyunenkov.github.io/math/preview.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="https://kirillnyunenkov.github.io/math/">
+<meta property="og:site_name" content="Тренажёр ЕГЭ по математике">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Тренажёр ЕГЭ по математике">
+<meta name="twitter:description" content="Задания ЕГЭ с разбором и проверкой ответов. Репетитор — @kirill_math_tutor">
+<meta name="twitter:image" content="https://kirillnyunenkov.github.io/math/preview.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Golos+Text:wght@400;500;600&display=swap" rel="stylesheet">
@@ -240,13 +253,14 @@ const TASKS = [
   { n:10, title:"Текстовая задача",               count:54, mode:"html"  },
   { n:11, title:"Графики функций",                count:50, mode:"html"  },
   { n:12, title:"Нахождение производной", count:61, mode:"html"  },
-  { n:13, title:"Уравнение (тригонометрия)",      count:0  },
-  { n:14, title:"Стереометрия",  count:0  },
-  { n:15, title:"Неравенства",                    count:0  },
-  { n:16, title:"Экономическая",          count:0  },
-  { n:17, title:"Геометрия",  count:0  },
-  { n:18, title:"Задача с параметром",            count:0  },
-  { n:19, title:"Числа и их свойства",            count:0  }
+  // Задания 13-19 временно скрыты с главной. Чтобы вернуть — убери hidden:true у нужного.
+  { n:13, title:"Уравнение (тригонометрия)",      count:0, hidden:true },
+  { n:14, title:"Стереометрия",  count:0, hidden:true },
+  { n:15, title:"Неравенства",                    count:0, hidden:true },
+  { n:16, title:"Экономическая",          count:0, hidden:true },
+  { n:17, title:"Геометрия",  count:0, hidden:true },
+  { n:18, title:"Задача с параметром",            count:0, hidden:true },
+  { n:19, title:"Числа и их свойства",            count:0, hidden:true }
 ];
 
 /* ============================================================ ЛОГИКА — не трогай ============================================================ */
@@ -447,7 +461,7 @@ function renderHub(){
       <span><span class="vc-t">Собрать пробный вариант</span><span class="vc-s">По одной случайной задаче из каждого задания · ${active} шт.</span></span>
       <span class="vc-go">Начать →</span>
     </button>
-    <div class="tasks">${TASKS.map(t=>{
+    <div class="tasks">${TASKS.filter(t=>!t.hidden).map(t=>{
       const{g,o,b}=countTask(t.n),tot=t.count,gp=tot?g/tot*100:0,op=tot?o/tot*100:0,bp=tot?b/tot*100:0,dis=tot===0?'disabled':'';
       return `<button class="tcard" ${dis} data-go="${t.n}">
         <span class="tnum">Задание ${t.n}</span><span class="tname">${t.title}</span>
