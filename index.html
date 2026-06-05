@@ -131,6 +131,9 @@
   .install-steps{font-size:15px;line-height:1.6;}
   .install-steps b{font-weight:600;}
   .install-steps .ok{color:var(--green);font-weight:600;}
+  .install-list{list-style:none;display:flex;flex-direction:column;gap:11px;margin:14px 0 0;padding:0;}
+  .install-list li{font-size:14.5px;line-height:1.55;}
+  .install-list b{font-weight:600;}
 
   .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px;display:grid;grid-template-columns:168px 1fr;gap:36px;align-items:start;}
   .grid-panel{position:sticky;top:78px;}
@@ -298,6 +301,7 @@
       <svg class="ic-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
     </button>
     <button class="ghost" id="guide">❓ Как пользоваться</button>
+    <button class="ghost" id="install">📲 Установить приложение</button>
     <button class="ghost" id="share">🔗 Поделиться прогрессом</button>
     <button class="ghost" id="reset">Сбросить</button>
   </div>
@@ -363,7 +367,7 @@ const STORAGE_KEY='ege_hub_v1';
 let state={};
 try{state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){state={};}
 const appEl=document.getElementById('app'), statsEl=document.getElementById('stats'), backEl=document.getElementById('back');
-const shareEl=document.getElementById('share'), resetEl=document.getElementById('reset'), guideEl=document.getElementById('guide');
+const shareEl=document.getElementById('share'), resetEl=document.getElementById('reset'), guideEl=document.getElementById('guide'), installEl=document.getElementById('install');
 function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
 function taskState(n){return state[n]||(state[n]={});}
 function countTask(n){const ts=state[n]||{},v=Object.values(ts);return{
@@ -517,25 +521,20 @@ function shareLink(){
 }
 
 // ---- PWA: установка как приложение ----
-let deferredPrompt=null, installDismissed=false;
-try{installDismissed=localStorage.getItem('ege_install_dismissed')==='1';}catch(e){}
+let deferredPrompt=null;
 const isStandalone=()=>matchMedia('(display-mode: standalone)').matches||window.navigator.standalone===true;
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
-const canInstall=()=>!isStandalone()&&(!!deferredPrompt||(isIOS()&&!installDismissed));
-function installBanner(){
-  if(isStandalone()||installDismissed)return'';
-  if(!deferredPrompt&&!isIOS())return'';
-  const btn=deferredPrompt?'<button class="ib-go" data-install>Установить</button>':'';
-  const txt=deferredPrompt
-    ? 'Установи тренажёр как приложение — иконка на экране и запуск в один тап.'
-    : 'Тренажёр можно установить как приложение. Как — в разделе «❓ Как пользоваться».';
-  return `<div class="install-bar"><span class="ib-text">📲 ${txt}</span>${btn}<button class="ib-x" data-install-x aria-label="Скрыть">✕</button></div>`;
-}
 function installBlock(){
   if(isStandalone())return '<p class="install-steps"><span class="ok">✓ Уже установлено</span> — ты открыл тренажёр как приложение.</p>';
-  if(deferredPrompt) return '<p class="install-steps">Нажми кнопку — появится системное окно установки.</p><button class="ib-go" data-install>Установить приложение</button>';
-  if(isIOS()) return '<p class="install-steps">На iPhone: внизу нажми <b>«Поделиться»</b> (квадрат со стрелкой) → пролистай и выбери <b>«На экран „Домой“»</b> → <b>«Добавить»</b>.</p>';
-  return '<p class="install-steps">На Android: меню браузера <b>⋮</b> → <b>«Установить приложение»</b> (или «Добавить на главный экран»). На компьютере — значок установки в адресной строке справа.</p>';
+  const quick=deferredPrompt
+    ? '<p class="install-steps">Самый простой способ — нажми кнопку:</p><button class="ib-go" data-install>Установить приложение</button>'
+    : '';
+  const steps=`<ul class="install-list">
+    <li><b>📱 iPhone (Safari):</b> внизу нажми «Поделиться» (квадрат со стрелкой вверх) → пролистай вниз → «На экран „Домой“» → «Добавить».</li>
+    <li><b>🤖 Android (Chrome):</b> меню браузера ⋮ справа сверху → «Установить приложение» (или «Добавить на главный экран»).</li>
+    <li><b>💻 Компьютер (Chrome / Edge):</b> значок установки в правой части адресной строки, либо меню → «Установить…». В Safari и Firefox установки нет — открывай по ссылке в браузере.</li>
+  </ul>`;
+  return quick+steps;
 }
 function doInstall(){
   if(deferredPrompt){const dp=deferredPrompt;deferredPrompt=null;dp.prompt();
@@ -556,7 +555,6 @@ function renderHub(){
   const active=TASKS.filter(t=>t.count>0).length;
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
-    ${installBanner()}
     <button class="variant-cta" data-variant>
       <span class="vc-ico">🎯</span>
       <span><span class="vc-t">Собрать пробный вариант</span><span class="vc-s">По одной случайной задаче из каждого задания · ${active} шт.</span></span>
@@ -646,6 +644,7 @@ function render(){
   shareEl.style.display=progCtrls?'':'none';
   resetEl.style.display=progCtrls?'':'none';
   guideEl.style.display=(r.view==='help')?'none':'';
+  installEl.style.display=(r.view==='help'||isStandalone())?'none':'';
   if(r.view==='help')renderHelp();
   else if(r.view==='variant')renderVariant();
   else if(r.view==='task')renderTask(r.n);
@@ -786,9 +785,6 @@ function renderVariant(){
 
 appEl.addEventListener('click',e=>{
   const inst=e.target.closest('[data-install]'); if(inst){doInstall();return;}
-  const instx=e.target.closest('[data-install-x]');
-  if(instx){installDismissed=true;try{localStorage.setItem('ege_install_dismissed','1');}catch(_){}
-    const bar=instx.closest('.install-bar');if(bar)bar.remove();return;}
   const dv=e.target.closest('[data-variant]');
   if(dv){variant=null;if(/#\/v\b/.test(location.hash))renderVariant();else go('#/v');return;}
   const vst=e.target.closest('[data-vstart]'); if(vst){startVariant();return;}
@@ -857,6 +853,7 @@ document.getElementById('theme').addEventListener('click',()=>{
   const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#f4f1ea':'#181a17');
   try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
 });
+document.getElementById('install').addEventListener('click',()=>doInstall());
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
@@ -871,8 +868,7 @@ window.addEventListener('hashchange',render);
 // PWA
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;
   const r=parseRoute();if(r.view==='hub'||r.view==='help')render();});
-window.addEventListener('appinstalled',()=>{deferredPrompt=null;
-  const b=document.querySelector('.install-bar');if(b)b.remove();});
+window.addEventListener('appinstalled',()=>{deferredPrompt=null;render();});
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 window.addEventListener('DOMContentLoaded',()=>{
   const params=new URLSearchParams(location.search);
