@@ -135,6 +135,16 @@
   .install-list li{font-size:14.5px;line-height:1.55;}
   .install-list b{font-weight:600;}
 
+  /* прототипы и похожие задачи */
+  .proto-num{font-family:'Lora',serif;font-weight:700;font-size:16px;color:var(--accent);}
+  .similar{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px;}
+  .similar-toggle{color:var(--accent);border-color:var(--soft-border);}
+  .similar-toggle:hover{background:var(--soft-bg);}
+  .similar-body{display:none;margin-top:14px;flex-direction:column;gap:14px;}
+  .similar-body.open{display:flex;}
+  .subcard{background:var(--bg);border:1px solid var(--line);border-radius:11px;padding:16px 18px;}
+  .sub-num{font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:10px;}
+
   .wrap{max-width:1180px;margin:0 auto;padding:28px 24px 80px;display:grid;grid-template-columns:168px 1fr;gap:36px;align-items:start;}
   .grid-panel{position:sticky;top:78px;}
   .grid-label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:10px;}
@@ -339,6 +349,33 @@ const TASKS = [
   { n:19, title:"Числа и их свойства",            count:0, hidden:true }
 ];
 
+/* ============================================================
+   ПРОТОТИПЫ (группировка задач по типажам внутри задания).
+   Для задания показывается по одному представителю на прототип,
+   остальные задачи того же типа открываются кнопкой «Похожие».
+   Как добавить: PROTOTYPES[номер] = [ {p:номер_прототипа, ids:"диапазоны"}, ... ]
+   ids — строка: "2-5", "1,6-7", "22" (одиночные и диапазоны через запятую).
+   Первый id в группе становится «представителем» (его статус = статус прототипа).
+   Если задания нет в PROTOTYPES — оно показывает все задачи как раньше.
+   ============================================================ */
+const PROTOTYPES = {
+  // Задание 2 — Векторы: 6 прототипов
+  2: [
+    { p:1, ids:"2-5" },
+    { p:2, ids:"1,6-7" },
+    { p:3, ids:"8-18" },
+    { p:4, ids:"22" },
+    { p:5, ids:"23-24" },
+    { p:6, ids:"19-21" },
+  ],
+};
+function parseIds(spec){const out=[];String(spec).split(',').forEach(part=>{part=part.trim();
+  const m=part.match(/^(\d+)-(\d+)$/);if(m){for(let i=+m[1];i<=+m[2];i++)out.push(i);}
+  else if(/^\d+$/.test(part))out.push(+part);});return out;}
+function protoList(n){const raw=PROTOTYPES[n];if(!raw)return null;
+  return raw.map(g=>({p:g.p,ids:parseIds(g.ids)})).filter(g=>g.ids.length).sort((a,b)=>a.p-b.p);}
+function displayCount(n){const pl=protoList(n);return pl?pl.length:taskCfg(n).count;}
+
 /* ============================================================ ЛОГИКА — не трогай ============================================================ */
 const COND = (n,id)=>`img/t${n}/cond/${String(id).padStart(4,'0')}.png`;
 const SOL  = (n,id)=>`img/t${n}/sol/${String(id).padStart(4,'0')}.png`;
@@ -370,7 +407,9 @@ const appEl=document.getElementById('app'), statsEl=document.getElementById('sta
 const shareEl=document.getElementById('share'), resetEl=document.getElementById('reset'), guideEl=document.getElementById('guide'), installEl=document.getElementById('install');
 function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
 function taskState(n){return state[n]||(state[n]={});}
-function countTask(n){const ts=state[n]||{},v=Object.values(ts);return{
+function countTask(n){const ts=state[n]||{},pl=protoList(n);
+  if(pl){let g=0,o=0,b=0;pl.forEach(grp=>{const s=ts[grp.ids[0]];if(s==='g')g++;else if(s==='o')o++;else if(s==='b')b++;});return{g,o,b};}
+  const v=Object.values(ts);return{
   g:v.filter(x=>x==='g').length,o:v.filter(x=>x==='o').length,b:v.filter(x=>x==='b').length};}
 
 // ответы нигде не сохраняются — в прогресс/ссылку попадает только итоговый статус
@@ -382,11 +421,11 @@ function answersEqual(given,correct){const a=parseNum(given),b=parseNum(correct)
   if(a!==null&&b!==null)return Math.abs(a-b)<1e-9;
   return normAns(given)===normAns(correct);}
 function reanim(el,cls){el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);}
-function taskStatsHTML(n){const task=taskCfg(n),{g,o,b}=countTask(n);
+function taskStatsHTML(n){const{g,o,b}=countTask(n),tot=displayCount(n);
   return `<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
     `<span class="stat"><i class="dot o"></i>Повторить: <b>${o}</b></span>`+
     `<span class="stat"><i class="dot b"></i>Разобраться: <b>${b}</b></span>`+
-    `<span class="stat"><i class="dot n"></i>Осталось: <b>${task.count-g-o-b}</b></span>`;}
+    `<span class="stat"><i class="dot n"></i>Осталось: <b>${tot-g-o-b}</b></span>`;}
 function refreshCell(n,id){const st=(state[n]||{})[id]||'';const c=document.querySelector('.grid [data-cell="'+id+'"]');
   if(c)c.className='cell'+(st?' '+st:'');}
 function refreshCard(n,id){const st=(state[n]||{})[id]||'';const card=document.getElementById('task-'+id);
@@ -550,7 +589,7 @@ function go(h){location.hash=h;}
 
 function renderHub(){
   backEl.style.display='none';
-  let allG=0,total=0; TASKS.forEach(t=>{allG+=countTask(t.n).g;total+=t.count;});
+  let allG=0,total=0; TASKS.forEach(t=>{allG+=countTask(t.n).g;total+=displayCount(t.n);});
   statsEl.innerHTML=`<span class="stat"><i class="dot g"></i>Освоено: <b>${allG}</b> из ${total}</span>`;
   const active=TASKS.filter(t=>t.count>0).length;
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
@@ -561,7 +600,7 @@ function renderHub(){
       <span class="vc-go">Начать →</span>
     </button>
     <div class="tasks">${TASKS.filter(t=>!t.hidden).map(t=>{
-      const{g,o,b}=countTask(t.n),tot=t.count,gp=tot?g/tot*100:0,op=tot?o/tot*100:0,bp=tot?b/tot*100:0,dis=tot===0?'disabled':'';
+      const{g,o,b}=countTask(t.n),tot=displayCount(t.n),gp=tot?g/tot*100:0,op=tot?o/tot*100:0,bp=tot?b/tot*100:0,dis=tot===0?'disabled':'';
       return `<button class="tcard" ${dis} data-go="${t.n}">
         <span class="tnum">Задание ${t.n}</span><span class="tname">${t.title}</span>
         <span class="bar"><span class="bg" style="width:${gp}%"></span><span class="bo" style="width:${op}%"></span><span class="bb" style="width:${bp}%"></span></span>
@@ -601,10 +640,43 @@ function renderTask(n){
   const solBox=id=> task.mode==='html'
       ? `<div class="solution" id="sol-${id}" data-html="1"></div>`
       : `<div class="solution" id="sol-${id}"><div class="sol-body"><img loading="lazy" data-src="${SOL(n,id)}" alt="Решение ${id}"></div></div>`;
+  const pl=protoList(n);
+  const acHTML=id=>{const ansTxt=task.mode==='html'?plainAnswer((data[id-1]||{}).a):'';
+    return ansTxt?`<div class="answer-check">
+          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" data-id="${id}" autocomplete="off">
+          <button class="btn check" data-check="${id}">Проверить</button>
+          <span class="ans-msg"></span>
+        </div>`:'';};
+  const repCard=(id,protoNum,simIds)=>{const st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
+    const label=protoNum!=null?`<span class="num proto-num">Прототип ${protoNum}</span>`:`<span class="num">${id}</span>`;
+    const sim=(simIds&&simIds.length)?`<div class="similar">
+          <button class="btn similar-toggle" data-similar="${id}" data-sim-ids="${simIds.join(',')}" data-sim-n="${simIds.length}">Похожие задачи (${simIds.length})</button>
+          <div class="similar-body" id="sim-${id}"></div></div>`:'';
+    return `<article class="card ${c}" id="task-${id}">
+        <div class="card-top">${label}</div>
+        ${condHTML(id)}
+        ${acHTML(id)}
+        <div class="actions">
+          <button class="btn mk-g ${st==='g'?'on':''}" data-mark="g" data-id="${id}">✓ Умею решать</button>
+          <button class="btn mk-o ${st==='o'?'on':''}" data-mark="o" data-id="${id}">↻ Надо повторить</button>
+          <button class="btn mk-b ${st==='b'?'on':''}" data-mark="b" data-id="${id}">✗ Надо разобраться</button>
+          <button class="btn sol" data-sol="${id}">Показать решение</button>
+        </div>
+        ${solBox(id)}
+        ${sim}
+      </article>`;};
+  const gridCells=pl
+    ? pl.map(grp=>{const id=grp.ids[0],st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
+        return `<button class="cell ${c}" data-cell="${id}" title="Прототип ${grp.p}">${grp.p}</button>`;}).join('')
+    : Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
+        return `<button class="cell ${c}" data-cell="${id}">${id}</button>`;}).join('');
+  const listBody=pl
+    ? pl.map(grp=>repCard(grp.ids[0],grp.p,grp.ids.slice(1))).join('')
+    : Array.from({length:task.count},(_,i)=>repCard(i+1,null,null)).join('');
+  const gridLabel=pl?`Задание ${n} · ${pl.length} прототипов`:`Задание ${n}`;
   appEl.innerHTML=`<div class="wrap">
-    <aside class="grid-panel"><div class="grid-label">Задание ${n}</div>
-      <div class="grid">${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
-        return `<button class="cell ${c}" data-cell="${id}">${id}</button>`;}).join('')}</div>
+    <aside class="grid-panel"><div class="grid-label">${gridLabel}</div>
+      <div class="grid">${gridCells}</div>
       <button class="btn rnd" data-random>🎲 Случайная задача</button></aside>
     <main class="list">
       <div class="filters">
@@ -614,27 +686,22 @@ function renderTask(n){
         <button class="chip" data-filter="none">Не решал</button>
       </div>
       <div class="filters-empty" id="filter-empty" style="display:none">В этой категории пока пусто.</div>
-      ${Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
-      const ansTxt = task.mode==='html' ? plainAnswer((data[id-1]||{}).a) : '';
-      const ac = ansTxt ? `<div class="answer-check">
-          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" data-id="${id}" autocomplete="off">
-          <button class="btn check" data-check="${id}">Проверить</button>
-          <span class="ans-msg"></span>
-        </div>` : '';
-      return `<article class="card ${c}" id="task-${id}">
-        <div class="card-top"><span class="num">${id}</span></div>
-        ${condHTML(id)}
-        ${ac}
-        <div class="actions">
-          <button class="btn mk-g ${st==='g'?'on':''}" data-mark="g" data-id="${id}">✓ Умею решать</button>
-          <button class="btn mk-o ${st==='o'?'on':''}" data-mark="o" data-id="${id}">↻ Надо повторить</button>
-          <button class="btn mk-b ${st==='b'?'on':''}" data-mark="b" data-id="${id}">✗ Надо разобраться</button>
-          <button class="btn sol" data-sol="${id}">Показать решение</button>
-        </div>
-        ${solBox(id)}
-      </article>`;}).join('')}</main></div>`;
+      ${listBody}</main></div>`;
 }
 
+function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
+  const ansTxt=plainAnswer(d.a);
+  const ac=ansTxt?`<div class="answer-check">
+      <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" data-id="${id}" autocomplete="off">
+      <button class="btn check" data-check="${id}" data-nostatus="1">Проверить</button>
+      <span class="ans-msg"></span></div>`:'';
+  return `<div class="subcard">
+    <div class="sub-num">№ ${id}</div>
+    <div class="cond"><div class="tex">${d.c||''}</div></div>
+    ${ac}
+    <div class="actions"><button class="btn sol" data-sol="${id}">Показать решение</button></div>
+    <div class="solution" id="sol-${id}" data-html="1"></div>
+  </div>`;}
 let variant=null, variantTimerId=null;
 function render(){
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
@@ -793,8 +860,9 @@ appEl.addEventListener('click',e=>{
   const vs=e.target.closest('[data-vsol]'); if(vs){const box=document.getElementById('vsol-'+vs.dataset.vsol);if(box)box.classList.toggle('open');return;}
   const ch=e.target.closest('[data-filter]'); if(ch){viewFilter=ch.dataset.filter;applyFilter();return;}
   const rnd=e.target.closest('[data-random]');
-  if(rnd){const r=parseRoute();if(r.view!=='task')return;const task=taskCfg(r.n);
-    const id=1+Math.floor(Math.random()*task.count);viewFilter='all';applyFilter();
+  if(rnd){const r=parseRoute();if(r.view!=='task')return;const pl=protoList(r.n);
+    const id=pl?pl[Math.floor(Math.random()*pl.length)].ids[0]:1+Math.floor(Math.random()*taskCfg(r.n).count);
+    viewFilter='all';applyFilter();
     const card=document.getElementById('task-'+id);
     if(card){card.scrollIntoView({behavior:'smooth',block:'center'});
       reanim(card,'flash-card');const inp=card.querySelector('.ans-input');if(inp)setTimeout(()=>inp.focus(),320);}
@@ -807,6 +875,7 @@ appEl.addEventListener('click',e=>{
     setStatus(r.n,id, ts[id]===m?null:m);return;}
   const chk=e.target.closest('[data-check]');
   if(chk){const r=parseRoute();if(r.view!=='task')return;const id=+chk.dataset.check,n=r.n;
+    const noStatus=chk.dataset.nostatus==='1';
     const wrap=chk.closest('.answer-check'),input=wrap.querySelector('.ans-input'),msg=wrap.querySelector('.ans-msg');
     const rawGiven=input.value.trim();if(!rawGiven)return;
     const correctRaw=plainAnswer(((window.TASKDATA[n]||[])[id-1]||{}).a);
@@ -814,21 +883,27 @@ appEl.addEventListener('click',e=>{
       input.classList.remove('wrong');input.classList.add('correct');
       reanim(input,'pop');
       const cur=(state[n]||{})[id];
-      if(cur==='b'||cur==='o'){
+      if(!noStatus&&(cur==='b'||cur==='o')){
         msg.textContent='Правильно! Отметь «умею решать», когда закрепишь';msg.className='ans-msg ok';
         setStatus(n,id,'o');
       }else{
         msg.textContent='Правильно';msg.className='ans-msg ok';
-        setStatus(n,id,'g');
+        if(!noStatus)setStatus(n,id,'g');
       }
       reanim(msg,'flash');
     }else{
       input.classList.remove('correct');input.classList.add('wrong');
       msg.textContent='Неправильно';msg.className='ans-msg no';
       reanim(input,'shake');reanim(msg,'flash');
-      setStatus(n,id,'b');
+      if(!noStatus)setStatus(n,id,'b');
     }
     return;}
+  const sm=e.target.closest('[data-similar]');
+  if(sm){const rep=+sm.dataset.similar,box=document.getElementById('sim-'+rep);if(!box)return;
+    if(!box.dataset.filled){const n=parseRoute().n,ids=sm.dataset.simIds.split(',').map(Number);
+      box.innerHTML=ids.map(id=>simCardHTML(n,id)).join('');box.dataset.filled='1';}
+    const open=box.classList.toggle('open');
+    sm.textContent=open?'Скрыть похожие':('Похожие задачи ('+sm.dataset.simN+')');return;}
   const sol=e.target.closest('[data-sol]');
   if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id);box.classList.toggle('open');
     if(box.dataset.html==='1'){
