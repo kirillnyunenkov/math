@@ -258,6 +258,32 @@
   .vans-row .yours{color:var(--muted);}
   .vans-row .right{color:var(--green);font-weight:600;}
 
+  /* конструктор варианта */
+  .mode-seg{display:inline-flex;border:1px solid var(--line);border-radius:11px;overflow:hidden;margin:2px 0 6px;}
+  .mode-seg .seg{font:inherit;font-size:14px;padding:9px 18px;background:var(--paper);color:var(--muted);border:none;cursor:pointer;transition:.15s;}
+  .mode-seg .seg+.seg{border-left:1px solid var(--line);}
+  .mode-seg .seg.on{background:var(--accent);color:#fff;font-weight:600;}
+  .mode-hint{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 16px;}
+  .cfg-presets{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+  .cfg-list{display:flex;flex-direction:column;margin:0 0 4px;}
+  .cfg-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
+  .cfg-row:last-child{border-bottom:none;}
+  .cfg-name{flex:1;font-size:14.5px;min-width:0;}
+  .cfg-name b{color:var(--accent);font-family:'Lora',serif;font-weight:700;}
+  .cfg-name .cfg-sub{display:block;color:var(--muted);font-size:12.5px;}
+  .stepper{display:flex;align-items:center;border:1px solid var(--line);border-radius:9px;overflow:hidden;flex:none;background:var(--paper);}
+  .stepper button{font:inherit;font-size:18px;width:36px;height:36px;background:none;color:var(--ink);border:none;cursor:pointer;line-height:1;transition:.12s;}
+  .stepper button:hover:not(:disabled){background:var(--soft-bg);color:var(--accent);}
+  .stepper button:disabled{opacity:.3;cursor:default;}
+  .stepper .cfg-q{min-width:34px;text-align:center;font-weight:600;font-variant-numeric:tabular-nums;}
+  .cfg-total{font-size:15px;margin:18px 0 14px;color:var(--muted);}
+  .cfg-total b{color:var(--accent);font-size:19px;font-family:'Lora',serif;}
+  .btn.primary:disabled{opacity:.5;cursor:default;filter:none;}
+  .vlabel-art{color:var(--muted);font-weight:500;font-family:'Golos Text',sans-serif;}
+  .vcard.is-g{border-left-color:var(--green);}
+  .vcard.is-o{border-left-color:var(--orange);}
+  .vcard.is-b{border-left-color:var(--dark);}
+
   /* кнопка «случайная задача» */
   .btn.rnd{width:100%;margin-top:8px;color:var(--accent);border-color:var(--soft-border);font-size:13px;}
   .btn.rnd:hover{background:var(--soft-bg);}
@@ -834,13 +860,12 @@ function renderHub(){
   backEl.style.display='none';
   let allG=0,total=0; TASKS.forEach(t=>{allG+=countTask(t.n).g;total+=displayCount(t.n);});
   statsEl.innerHTML=`<span class="stat"><i class="dot g"></i>Освоено: <b>${allG}</b> из ${total}</span>`;
-  const active=TASKS.filter(t=>t.count>0).length;
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
     <button class="variant-cta" data-variant>
       <span class="vc-ico">🎯</span>
-      <span><span class="vc-t">Собрать пробный вариант</span><span class="vc-s">По одной случайной задаче из каждого задания · ${active} шт.</span></span>
-      <span class="vc-go">Начать →</span>
+      <span><span class="vc-t">Собрать вариант</span><span class="vc-s">Выбери задания и количество — режим тренировки или экзамена</span></span>
+      <span class="vc-go">Открыть →</span>
     </button>
     <div class="tasks">${TASKS.filter(t=>!t.hidden).map(t=>{
       const{g,o,b}=countTask(t.n),tot=displayCount(t.n),gp=tot?g/tot*100:0,op=tot?o/tot*100:0,bp=tot?b/tot*100:0,dis=tot===0?'disabled':'';
@@ -1023,19 +1048,64 @@ function renderHelp(){
 }
 function startVariantTimer(){const el=document.getElementById('v-timer');if(!el)return;
   const upd=()=>{el.textContent=fmtTime(Date.now()-variant.startAt);};upd();variantTimerId=setInterval(upd,1000);}
-function startVariant(){
+// --- конструктор варианта: ученик сам выбирает задания, количество и режим ---
+const BUILDER_KEY='ege_builder_v1';
+const EXAM_HINT='Таймер, ввод ответов, в конце — первичный и тестовый балл. Ответы влияют на прогресс.';
+const TRAIN_HINT='Без таймера: решаешь и сразу проверяешь каждую задачу, отмечаешь статус. Прогресс сохраняется.';
+function activeTasks(){return TASKS.filter(t=>!t.hidden&&t.count>0);}
+function maxForTask(n){return displayCount(n);}                 // потолок = число прототипов (данные не нужны)
+function defaultBuilder(){const counts={};activeTasks().forEach(t=>counts[t.n]=Math.min(1,maxForTask(t.n)));return{counts,mode:'exam'};}
+let builder=null;
+function loadBuilder(){
+  let b=null;try{b=JSON.parse(localStorage.getItem(BUILDER_KEY));}catch(e){}
+  const d=defaultBuilder();
+  if(b&&b.counts){activeTasks().forEach(t=>{const v=b.counts[t.n];
+    if(typeof v==='number')d.counts[t.n]=Math.max(0,Math.min(v,maxForTask(t.n)));});
+    if(b.mode==='exam'||b.mode==='train')d.mode=b.mode;}
+  return d;
+}
+function saveBuilder(){try{localStorage.setItem(BUILDER_KEY,JSON.stringify(builder));}catch(e){}}
+function builderTotal(){return activeTasks().reduce((s,t)=>s+(builder.counts[t.n]||0),0);}
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function bumpBuilder(n,delta){
+  const mx=maxForTask(n),q=Math.max(0,Math.min((builder.counts[n]||0)+delta,mx));
+  builder.counts[n]=q;saveBuilder();
+  const qEl=document.getElementById('q-'+n);if(qEl)qEl.textContent=q;
+  const dec=document.querySelector('[data-dec="'+n+'"]');if(dec)dec.disabled=q<=0;
+  const inc=document.querySelector('[data-inc="'+n+'"]');if(inc)inc.disabled=q>=mx;
+  syncBuilderTotal();
+}
+function syncBuilderTotal(){const t=builderTotal();
+  const el=document.getElementById('cfg-total');if(el)el.textContent=t;
+  const b=document.querySelector('[data-build]');if(b)b.disabled=!t;}
+function applyPreset(p){
+  activeTasks().forEach(t=>{const mx=maxForTask(t.n);
+    builder.counts[t.n]=p==='each1'?Math.min(1,mx):p==='max'?mx:0;});
+  saveBuilder();renderBuilder();
+}
+function setBuilderMode(m){builder.mode=m;saveBuilder();
+  document.querySelectorAll('.mode-seg .seg').forEach(s=>s.classList.toggle('on',s.dataset.mode===m));
+  const h=document.getElementById('mode-hint');if(h)h.textContent=m==='exam'?EXAM_HINT:TRAIN_HINT;}
+function buildVariant(){
+  if(!builder)builder=loadBuilder();
+  const sel=activeTasks().filter(t=>(builder.counts[t.n]||0)>0).map(t=>t.n);
+  if(!sel.length)return;
+  const mode=builder.mode;
   appEl.innerHTML='<div class="vbox"><p style="color:var(--muted)">Собираю вариант…</p></div>';
-  const active=TASKS.filter(t=>t.count>0).map(t=>t.n);
-  ensureAll(active,()=>{
+  ensureAll(sel,()=>{
     const items=[];
-    active.forEach(n=>{if(!Array.isArray(window.TASKDATA[n]))return;
-      const pl=protoList(n);
-      let id;
-      if(pl&&pl.length){const grp=pl[Math.floor(Math.random()*pl.length)];      // 1) случайный прототип
-        id=grp.ids[Math.floor(Math.random()*grp.ids.length)];}                   // 2) случайный его экземпляр
-      else{id=1+Math.floor(Math.random()*taskCfg(n).count);}                      // нет прототипов — как раньше
-      items.push({n,id});});
-    variant={items,started:true,finished:false,startAt:Date.now(),elapsed:0};
+    sel.forEach(n=>{if(!Array.isArray(window.TASKDATA[n]))return;
+      const want=builder.counts[n],pl=protoList(n);
+      let ids;
+      if(pl&&pl.length){                                              // выбираем разные прототипы, по случайному экземпляру каждого
+        ids=shuffle(pl.slice()).slice(0,Math.min(want,pl.length))
+          .map(grp=>grp.ids[Math.floor(Math.random()*grp.ids.length)]);
+      }else{                                                          // нет прототипов — разные задачи подряд
+        ids=shuffle(Array.from({length:taskCfg(n).count},(_,i)=>i+1)).slice(0,Math.min(want,taskCfg(n).count));
+      }
+      ids.forEach(id=>items.push({n,id}));});
+    if(!items.length)return;
+    variant={items,mode,started:true,finished:false,startAt:Date.now(),elapsed:0};
     renderVariant();
   });
 }
@@ -1055,19 +1125,77 @@ function finishVariant(){
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
   renderVariant();
 }
+function renderBuilder(){
+  if(!builder)builder=loadBuilder();
+  const rows=activeTasks().map(t=>{const mx=maxForTask(t.n),q=builder.counts[t.n]||0;
+    return `<div class="cfg-row">
+      <span class="cfg-name"><b>Задание ${t.n}</b> · ${t.title}<span class="cfg-sub">макс. ${mx}</span></span>
+      <div class="stepper">
+        <button data-dec="${t.n}" ${q<=0?'disabled':''} aria-label="Меньше">−</button>
+        <span class="cfg-q" id="q-${t.n}">${q}</span>
+        <button data-inc="${t.n}" ${q>=mx?'disabled':''} aria-label="Больше">+</button>
+      </div></div>`;}).join('');
+  const total=builderTotal();
+  appEl.innerHTML=`<div class="vbox"><div class="vintro">
+    <h2>Собрать вариант</h2>
+    <p class="lead">Выбери задания и сколько задач из каждого.</p>
+    <div class="mode-seg">
+      <button class="seg ${builder.mode==='train'?'on':''}" data-mode="train">🎓 Тренировка</button>
+      <button class="seg ${builder.mode==='exam'?'on':''}" data-mode="exam">⏱ Экзамен</button>
+    </div>
+    <p class="mode-hint" id="mode-hint">${builder.mode==='exam'?EXAM_HINT:TRAIN_HINT}</p>
+    <div class="cfg-presets">
+      <button class="chip" data-preset="each1">По одной из каждого</button>
+      <button class="chip" data-preset="max">Максимум</button>
+      <button class="chip" data-preset="clear">Очистить</button>
+    </div>
+    <div class="cfg-list">${rows}</div>
+    <div class="cfg-total">Всего задач: <b id="cfg-total">${total}</b></div>
+    <button class="btn primary" data-build ${total?'':'disabled'}>Собрать вариант →</button>
+    ${histPanel()}
+  </div></div>`;
+}
+function refreshTrainCard(i){const it=variant.items[i],st=(state[it.n]||{})[it.id]||'';
+  const card=document.getElementById('tcard-'+i);if(!card)return;
+  card.className='vcard'+(st?' is-'+st:'');
+  card.querySelectorAll('[data-tmark]').forEach(b=>b.classList.toggle('on',b.dataset.tmark===st));}
+function renderTraining(){
+  const items=variant.items;
+  appEl.innerHTML=`<div class="vbox">
+    <div class="vbar">
+      <span class="vtimer" style="font-size:16px">🎓 Тренировка</span>
+      <span class="vprog">${items.length} ${items.length===1?'задача':'задач'}</span>
+      <span class="spacer"></span>
+      <button class="btn" data-newbuild>Новый набор</button>
+      <button class="btn primary" data-home>К заданиям</button>
+    </div>
+    ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
+      const st=(state[it.n]||{})[it.id]||'',c=st?'is-'+st:'';
+      const ansTxt=plainAnswer(d.a);
+      const ac=ansTxt?`<div class="answer-check">
+          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" data-id="${it.id}" autocomplete="off">
+          <button class="btn check" data-tcheck="${i}">Проверить</button>
+          <span class="ans-msg"></span></div>`:'';
+      return `<div class="vcard ${c}" id="tcard-${i}">
+        <div class="vlabel">Задание ${it.n}<span class="vlabel-art"> · № ${d.art||it.id}</span></div>
+        <div class="cond"><div class="tex">${d.c||''}</div></div>
+        ${ac}
+        <div class="actions">
+          <button class="btn mk-g ${st==='g'?'on':''}" data-tmark="g" data-ti="${i}">✓ Умею решать</button>
+          <button class="btn mk-o ${st==='o'?'on':''}" data-tmark="o" data-ti="${i}">↻ Надо повторить</button>
+          <button class="btn mk-b ${st==='b'?'on':''}" data-tmark="b" data-ti="${i}">✗ Надо разобраться</button>
+          <button class="btn sol" data-tsol="${i}">Показать ответ</button>
+        </div>
+        <div class="solution" id="tsol-${i}"></div>
+      </div>`;}).join('')}
+    <div style="text-align:center;margin-top:8px"><button class="btn primary" data-home>К заданиям</button></div>
+  </div>`;
+  typeset(appEl.querySelector('.vbox'));
+}
 function renderVariant(){
   backEl.style.display='inline';statsEl.innerHTML='';
-  if(!variant||!variant.started){
-    const active=TASKS.filter(t=>t.count>0);
-    appEl.innerHTML=`<div class="vbox"><div class="vintro">
-      <h2>Пробный вариант</h2>
-      <p class="lead">Соберём ${active.length} задач — по одной случайной из каждого активного задания. Реши все и нажми «Завершить» — получишь первичный и тестовый балл.</p>
-      <div class="vwarn"><span>⚠️</span><div><b>Ответы влияют на прогресс.</b> Верный ответ отметит задачу как «умею решать» или «надо повторить», неверный или пустой — как «надо разобраться».</div></div>
-      <button class="btn primary" data-vstart>Начать вариант</button>
-      ${histPanel()}
-    </div></div>`;
-    return;
-  }
+  if(!variant||!variant.started){renderBuilder();return;}
+  if(variant.mode==='train'){renderTraining();return;}
   if(!variant.finished){
     const items=variant.items;
     appEl.innerHTML=`<div class="vbox">
@@ -1116,7 +1244,40 @@ appEl.addEventListener('click',e=>{
   const inst=e.target.closest('[data-install]'); if(inst){doInstall();return;}
   const dv=e.target.closest('[data-variant]');
   if(dv){variant=null;if(/#\/v\b/.test(location.hash))renderVariant();else go('#/v');return;}
-  const vst=e.target.closest('[data-vstart]'); if(vst){startVariant();return;}
+  // --- конструктор ---
+  const md=e.target.closest('[data-mode]'); if(md){setBuilderMode(md.dataset.mode);return;}
+  const inc=e.target.closest('[data-inc]'); if(inc){bumpBuilder(+inc.dataset.inc,1);return;}
+  const dec=e.target.closest('[data-dec]'); if(dec){bumpBuilder(+dec.dataset.dec,-1);return;}
+  const pr=e.target.closest('[data-preset]'); if(pr){applyPreset(pr.dataset.preset);return;}
+  const bd=e.target.closest('[data-build]'); if(bd){buildVariant();return;}
+  const nb=e.target.closest('[data-newbuild]'); if(nb){variant=null;renderVariant();return;}
+  // --- тренировка: отметка статуса, проверка ответа, показать ответ ---
+  const tm=e.target.closest('[data-tmark]');
+  if(tm){const i=+tm.dataset.ti,it=variant.items[i],cur=(state[it.n]||{})[it.id],m=tm.dataset.tmark;
+    recordStatus(it.n,it.id,cur===m?null:m);save();refreshTrainCard(i);return;}
+  const tch=e.target.closest('[data-tcheck]');
+  if(tch){const i=+tch.dataset.tcheck,it=variant.items[i];
+    const wrap=tch.closest('.answer-check'),input=wrap.querySelector('.ans-input'),msg=wrap.querySelector('.ans-msg');
+    const raw=input.value.trim();if(!raw)return;
+    const correct=plainAnswer(((window.TASKDATA[it.n]||[])[it.id-1]||{}).a),cur=(state[it.n]||{})[it.id];
+    if(answersEqual(raw,correct)){
+      input.classList.remove('wrong');input.classList.add('correct');reanim(input,'pop');
+      if(cur==='b'||cur==='o'){msg.textContent='Правильно! Отметь «умею», когда закрепишь';recordStatus(it.n,it.id,'o');}
+      else{msg.textContent='Правильно';recordStatus(it.n,it.id,'g');}
+      msg.className='ans-msg ok';reanim(msg,'flash');
+    }else{
+      input.classList.remove('correct');input.classList.add('wrong');
+      msg.textContent='Неправильно';msg.className='ans-msg no';
+      reanim(input,'shake');reanim(msg,'flash');recordStatus(it.n,it.id,'b');
+    }
+    save();refreshTrainCard(i);return;}
+  const tsol=e.target.closest('[data-tsol]');
+  if(tsol){const i=+tsol.dataset.tsol,box=document.getElementById('tsol-'+i);if(!box)return;
+    box.classList.toggle('open');
+    if(!box.dataset.filled){const d=(window.TASKDATA[variant.items[i].n]||[])[variant.items[i].id-1]||{};
+      box.innerHTML=(d.a?`<span class="answer">Ответ: ${d.a}</span>`:'')+`<div class="sol-body"><div class="tex">${d.s||''}</div></div>`;
+      box.dataset.filled='1';typeset(box);}
+    return;}
   const vf=e.target.closest('[data-vfinish]'); if(vf){if(confirm('Завершить вариант? Ответы повлияют на прогресс.'))finishVariant();return;}
   const hm=e.target.closest('[data-home]'); if(hm){go('#/');return;}
   const ch=e.target.closest('[data-filter]'); if(ch){viewFilter=ch.dataset.filter;applyFilter();return;}
