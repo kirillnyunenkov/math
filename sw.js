@@ -2,10 +2,11 @@
    При выкладке новой версии сайта поднимай VERSION (любое изменение этого файла
    заставит браузер установить новый SW и удалить старый кеш). HTML грузится
    network-first, поэтому онлайн-пользователи всегда получают свежую версию. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const CACHE = 'ege-' + VERSION;
 const SHELL = ['./', './index.html', './manifest.webmanifest',
-  './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png'];
+  './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
+  './katex/katex.min.css', './katex/katex.min.js', './katex/auto-render.min.js'];
 
 self.addEventListener('install', e => {
   self.skipWaiting();
