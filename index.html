@@ -147,6 +147,10 @@
   .sub-num{font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:10px;}
   .cap{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.03em;}
   .figwrap{margin:16px 0 4px;text-align:center;}
+  .block{display:flex;flex-direction:column;gap:18px;}
+  .block + .block{margin-top:8px;}
+  .block-head{font-family:'Lora',serif;font-size:20px;font-weight:700;color:var(--ink);
+    margin:6px 2px -2px;padding-bottom:10px;border-bottom:2px solid var(--accent);}
   .tex .katex{font-size:1.06em;}
   .tex .katex-display{margin:.5em 0;}
 
@@ -685,6 +689,10 @@ function applyFilter(){
   });
   const empty=document.getElementById('filter-empty');
   if(empty)empty.style.display=shown?'none':'block';
+  document.querySelectorAll('.list .block').forEach(b=>{
+    const any=[...b.querySelectorAll('.card')].some(c=>c.style.display!=='none');
+    b.style.display=any?'':'none';
+  });
   document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.filter===viewFilter));
 }
 
@@ -904,14 +912,29 @@ function renderTask(n){
         return `<button class="cell ${c}" data-cell="${id}" title="Прототип ${grp.p}">${grp.p}</button>`;}).join('')
     : Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
         return `<button class="cell ${c}" data-cell="${id}">${id}</button>`;}).join('');
-  const listBody=pl
-    ? pl.map(grp=>repCard(grp.ids[0],grp.p,grp.ids.slice(1))).join('')
-    : Array.from({length:task.count},(_,i)=>repCard(i+1,null,null)).join('');
+  let listBody;
+  if(pl){
+    const subOf=rep=>((data[rep-1]||{}).sub)||'';
+    const distinct=new Set(pl.map(g=>subOf(g.ids[0])).filter(Boolean));
+    const showHeads=distinct.size>1;
+    if(showHeads){
+      let html='',cur=null,buf='';
+      const flush=()=>{ if(buf!==''){ html+=`<section class="block"><h3 class="block-head">${cur}</h3>${buf}</section>`; buf=''; } };
+      pl.forEach(grp=>{const s=subOf(grp.ids[0])||cur||'';
+        if(s!==cur){flush();cur=s;}
+        buf+=repCard(grp.ids[0],grp.p,grp.ids.slice(1));});
+      flush();
+      listBody=html;
+    } else {
+      listBody=pl.map(grp=>repCard(grp.ids[0],grp.p,grp.ids.slice(1))).join('');
+    }
+  } else {
+    listBody=Array.from({length:task.count},(_,i)=>repCard(i+1,null,null)).join('');
+  }
   const gridLabel=pl?`Задание ${n} · ${pl.length} прототипов`:`Задание ${n}`;
   appEl.innerHTML=`<div class="wrap">
     <aside class="grid-panel"><div class="grid-label">${gridLabel}</div>
-      <div class="grid">${gridCells}</div>
-      <button class="btn rnd" data-random>🎲 Случайная задача</button></aside>
+      <div class="grid">${gridCells}</div></aside>
     <main class="list">
       <div class="filters">
         <button class="chip on" data-filter="all">Все</button>
