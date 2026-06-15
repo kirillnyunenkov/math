@@ -138,6 +138,7 @@
 
   /* прототипы и похожие задачи */
   .proto-num{font-family:'Lora',serif;font-weight:700;font-size:16px;color:var(--accent);}
+  .card-top .proto-num{font-size:16px;}
   .similar{margin-top:16px;border-top:1px dashed var(--line);padding-top:14px;}
   .similar-toggle{color:var(--accent);border-color:var(--soft-border);}
   .similar-toggle:hover{background:var(--soft-bg);}
@@ -148,9 +149,9 @@
   .cap{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.03em;}
   .figwrap{margin:16px 0 4px;text-align:center;}
   .block{display:flex;flex-direction:column;gap:18px;}
-  .block + .block{margin-top:8px;}
-  .block-head{font-family:'Lora',serif;font-size:20px;font-weight:700;color:var(--ink);
-    margin:6px 2px -2px;padding-bottom:10px;border-bottom:2px solid var(--accent);}
+  .block + .block{margin-top:18px;}
+  .block-head{font-family:'Lora',serif;font-size:25px;font-weight:700;color:var(--ink);
+    line-height:1.15;margin:6px 2px 0;padding-bottom:11px;border-bottom:2.5px solid var(--accent);}
   .tex .katex{font-size:1.06em;}
   .tex .katex-display{margin:.5em 0;}
 
@@ -1028,7 +1029,12 @@ function startVariant(){
   ensureAll(active,()=>{
     const items=[];
     active.forEach(n=>{if(!Array.isArray(window.TASKDATA[n]))return;
-      const id=1+Math.floor(Math.random()*taskCfg(n).count);items.push({n,id});});
+      const pl=protoList(n);
+      let id;
+      if(pl&&pl.length){const grp=pl[Math.floor(Math.random()*pl.length)];      // 1) случайный прототип
+        id=grp.ids[Math.floor(Math.random()*grp.ids.length)];}                   // 2) случайный его экземпляр
+      else{id=1+Math.floor(Math.random()*taskCfg(n).count);}                      // нет прототипов — как раньше
+      items.push({n,id});});
     variant={items,started:true,finished:false,startAt:Date.now(),elapsed:0};
     renderVariant();
   });
