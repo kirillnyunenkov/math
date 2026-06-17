@@ -63,6 +63,8 @@
   .back{font:inherit;font-size:12.5px;color:var(--muted);background:none;border:1px solid var(--line);border-radius:8px;padding:5px 11px;cursor:pointer;transition:.15s;display:none;}
   .back:hover{color:var(--accent);border-color:var(--accent);}
   .task-back{display:block;margin-bottom:14px;}
+  .install-mobile-only{display:none!important;}
+  @media(max-width:760px){.install-mobile-only{display:inline-flex!important;}}
   .stats{display:flex;gap:16px;margin-left:auto;flex-wrap:wrap;}
   .stat{display:flex;align-items:center;gap:6px;font-size:13.5px;color:var(--muted);}
   .dot{width:11px;height:11px;border-radius:3px;display:inline-block;}
@@ -369,7 +371,8 @@
     <div class="stats" id="stats"></div>
     <nav class="nav-menu" id="nav-menu">
       <button class="ghost" id="guide">❓ Как пользоваться</button>
-<button class="ghost" id="share">🔗 Поделиться прогрессом</button>
+      <button class="ghost install-mobile-only" id="install">📲 Установить приложение</button>
+      <button class="ghost" id="share">🔗 Поделиться прогрессом</button>
       <button class="ghost" id="reset">Сбросить</button>
     </nav>
   </div>
@@ -687,7 +690,7 @@ const STORAGE_KEY='ege_hub_v1';
 let state={};
 try{state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){state={};}
 const appEl=document.getElementById('app'), statsEl=document.getElementById('stats'), backEl=document.getElementById('back'), headerEl=document.querySelector('header');
-const shareEl=document.getElementById('share'), resetEl=document.getElementById('reset'), guideEl=document.getElementById('guide');
+const shareEl=document.getElementById('share'), resetEl=document.getElementById('reset'), guideEl=document.getElementById('guide'), installEl=document.getElementById('install');
 function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
 function taskState(n){return state[n]||(state[n]={});}
 function countTask(n){const ts=state[n]||{},pl=protoList(n);
@@ -1014,6 +1017,7 @@ function render(){
   shareEl.style.display=progCtrls?'':'none';
   resetEl.style.display=progCtrls?'':'none';
   guideEl.style.display=(r.view==='help')?'none':'';
+  installEl.style.display=(r.view==='help'||isStandalone())?'none':'';
   if(r.view==='help')renderHelp();
   else if(r.view==='variant')renderVariant();
   else if(r.view==='task')renderTask(r.n);
@@ -1369,6 +1373,7 @@ document.getElementById('theme').addEventListener('click',()=>{
   const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#f4f1ea':'#181a17');
   try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
 });
+document.getElementById('install').addEventListener('click',()=>doInstall());
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
