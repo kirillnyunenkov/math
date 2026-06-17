@@ -390,17 +390,8 @@
   </div>
 </header>
 <div id="app"></div>
-<div class="ios-hint-overlay" id="ios-hint-overlay">
-  <div class="ios-hint-sheet">
-    <h3>📲 Установить приложение</h3>
-    <p class="ih-sub">Safari не умеет устанавливать одной кнопкой, но это займёт 10 секунд:</p>
-    <ol>
-      <li>Нажми <b>«Поделиться»</b> — кнопка <i class="ih-icon">⬆ квадрат со стрелкой</i> внизу Safari</li>
-      <li>Пролистай список вниз и выбери <b>«На экран "Домой"»</b></li>
-      <li>Нажми <b>«Добавить»</b> в правом верхнем углу</li>
-    </ol>
-    <button class="ios-hint-close" id="ios-hint-close">Понятно</button>
-  </div>
+<div class="ios-hint-overlay" id="hint-overlay">
+  <div class="ios-hint-sheet" id="hint-sheet"></div>
 </div>
 
 <script>
@@ -889,11 +880,15 @@ function installBlock(){
   </ul>`;
   return quick+steps;
 }
+const HINT_IOS=`<h3>📲 Установить приложение</h3><p class="ih-sub">Safari не умеет устанавливать одной кнопкой, но это займёт 10 секунд:</p><ol><li>Нажми <b>«Поделиться»</b> — кнопка <i class="ih-icon">⬆ квадрат со стрелкой</i> внизу Safari</li><li>Пролистай список вниз и выбери <b>«На экран "Домой"»</b></li><li>Нажми <b>«Добавить»</b> в правом верхнем углу</li></ol><button class="ios-hint-close">Понятно</button>`;
+const HINT_INSTALLED=`<h3>✓ Уже установлено</h3><p class="ih-sub">Тренажёр уже добавлен на экран домой. Открывай его оттуда — работает без интернета и без адресной строки.</p><button class="ios-hint-close">Понятно</button>`;
+function showHint(html){document.getElementById('hint-sheet').innerHTML=html;document.getElementById('hint-overlay').classList.add('open');}
 function doInstall(){
-  if(deferredPrompt){const dp=deferredPrompt;deferredPrompt=null;dp.prompt();
+  if(isStandalone()){showHint(HINT_INSTALLED);}
+  else if(deferredPrompt){const dp=deferredPrompt;deferredPrompt=null;dp.prompt();
     dp.userChoice.finally(()=>{const r=parseRoute();if(r.view==='hub'||r.view==='help')render();});}
-  else if(isIOS())document.getElementById('ios-hint-overlay').classList.add('open');
-  else go('#/help');
+  else if(isIOS()){showHint(HINT_IOS);}
+  else showHint(HINT_INSTALLED);
 }
 function parseRoute(){
   if(/#\/help\b/.test(location.hash))return{view:'help'};
@@ -1042,7 +1037,7 @@ function render(){
   shareEl.style.display=progCtrls?'':'none';
   resetEl.style.display=progCtrls?'':'none';
   guideEl.style.display=(r.view==='help')?'none':'';
-  installEl.style.display=(r.view==='help'||isStandalone())?'none':'';
+  if(r.view==='help'||isStandalone()){installEl.style.setProperty('display','none','important');}else{installEl.style.removeProperty('display');}
   if(r.view==='help')renderHelp();
   else if(r.view==='variant')renderVariant();
   else if(r.view==='task')renderTask(r.n);
@@ -1399,9 +1394,8 @@ document.getElementById('theme').addEventListener('click',()=>{
   try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
 });
 document.getElementById('install').addEventListener('click',()=>doInstall());
-const iosHintOv=document.getElementById('ios-hint-overlay');
-document.getElementById('ios-hint-close').addEventListener('click',()=>iosHintOv.classList.remove('open'));
-iosHintOv.addEventListener('click',e=>{if(e.target===iosHintOv)iosHintOv.classList.remove('open');});
+const hintOv=document.getElementById('hint-overlay');
+hintOv.addEventListener('click',e=>{if(e.target===hintOv||e.target.classList.contains('ios-hint-close'))hintOv.classList.remove('open');});
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
