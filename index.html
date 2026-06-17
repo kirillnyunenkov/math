@@ -1019,10 +1019,12 @@ function renderTask(n){
       ${listBody}</main></div>`;
   appEl.innerHTML=skHTML;
   const tmp=document.createElement('div');
-  tmp.style.cssText='position:fixed;top:-9999px;left:0;width:1px;height:1px;overflow:hidden;';
+  tmp.style.cssText='position:fixed;top:-9999px;left:0;width:375px;visibility:hidden;pointer-events:none;';
   tmp.innerHTML=fullHTML;
   document.body.appendChild(tmp);
+  typeset(tmp.querySelector('.list'));  // запускает загрузку шрифтов KaTeX
   const pending=[...tmp.querySelectorAll('img')].filter(i=>!i.complete);
+  const imgPromises=pending.map(img=>new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});}));
   const showReal=()=>{
     tmp.remove();
     if(parseRoute().n!==n)return;
@@ -1030,9 +1032,7 @@ function renderTask(n){
     appEl.innerHTML=fullHTML;
     typeset(appEl.querySelector('.list'));
   };
-  if(!pending.length){showReal();}
-  else{Promise.all(pending.map(img=>new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});})))
-    .then(showReal);}
+  Promise.all([...imgPromises, document.fonts.ready]).then(showReal);
 }
 
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
