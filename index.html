@@ -143,6 +143,18 @@
   .install-list{list-style:none;display:flex;flex-direction:column;gap:11px;margin:14px 0 0;padding:0;}
   .install-list li{font-size:14.5px;line-height:1.55;}
   .install-list b{font-weight:600;}
+  .ios-hint-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s;}
+  .ios-hint-overlay.open{opacity:1;pointer-events:auto;}
+  .ios-hint-sheet{background:var(--paper);border-radius:20px 20px 0 0;padding:24px 20px max(40px,env(safe-area-inset-bottom));width:100%;max-width:520px;transform:translateY(80px);transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:0 -4px 32px rgba(0,0,0,.15);}
+  .ios-hint-overlay.open .ios-hint-sheet{transform:translateY(0);}
+  .ios-hint-sheet h3{font-family:'Lora',serif;font-size:18px;margin:0 0 10px;font-weight:600;}
+  .ios-hint-sheet .ih-sub{font-size:13.5px;color:var(--muted);margin:0 0 16px;}
+  .ios-hint-sheet ol{margin:0 0 20px;padding-left:22px;display:flex;flex-direction:column;gap:9px;}
+  .ios-hint-sheet ol li{font-size:14.5px;line-height:1.55;}
+  .ios-hint-sheet ol li b{font-weight:600;}
+  .ios-hint-sheet .ih-icon{font-style:normal;display:inline-block;background:var(--line);border-radius:6px;padding:1px 6px;font-size:13px;font-weight:600;letter-spacing:.01em;}
+  .ios-hint-close{width:100%;font:inherit;font-size:15px;font-weight:600;background:var(--accent);color:#fff;border:none;border-radius:12px;padding:13px;cursor:pointer;transition:opacity .15s;}
+  .ios-hint-close:hover{opacity:.88;}
 
   /* прототипы и похожие задачи */
   .proto-num{font-family:'Lora',serif;font-weight:700;font-size:16px;color:var(--accent);}
@@ -378,6 +390,18 @@
   </div>
 </header>
 <div id="app"></div>
+<div class="ios-hint-overlay" id="ios-hint-overlay">
+  <div class="ios-hint-sheet">
+    <h3>📲 Установить приложение</h3>
+    <p class="ih-sub">Safari не умеет устанавливать одной кнопкой, но это займёт 10 секунд:</p>
+    <ol>
+      <li>Нажми <b>«Поделиться»</b> — кнопка <i class="ih-icon">⬆ квадрат со стрелкой</i> внизу Safari</li>
+      <li>Пролистай список вниз и выбери <b>«На экран "Домой"»</b></li>
+      <li>Нажми <b>«Добавить»</b> в правом верхнем углу</li>
+    </ol>
+    <button class="ios-hint-close" id="ios-hint-close">Понятно</button>
+  </div>
+</div>
 
 <script>
 /* ============================================================
@@ -868,6 +892,7 @@ function installBlock(){
 function doInstall(){
   if(deferredPrompt){const dp=deferredPrompt;deferredPrompt=null;dp.prompt();
     dp.userChoice.finally(()=>{const r=parseRoute();if(r.view==='hub'||r.view==='help')render();});}
+  else if(isIOS())document.getElementById('ios-hint-overlay').classList.add('open');
   else go('#/help');
 }
 function parseRoute(){
@@ -1374,6 +1399,9 @@ document.getElementById('theme').addEventListener('click',()=>{
   try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
 });
 document.getElementById('install').addEventListener('click',()=>doInstall());
+const iosHintOv=document.getElementById('ios-hint-overlay');
+document.getElementById('ios-hint-close').addEventListener('click',()=>iosHintOv.classList.remove('open'));
+iosHintOv.addEventListener('click',e=>{if(e.target===iosHintOv)iosHintOv.classList.remove('open');});
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
