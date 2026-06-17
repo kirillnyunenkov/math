@@ -39,6 +39,7 @@
     --feature-1:#2f3b34;--feature-2:#1f2421;--feature-ink:#f4f1ea;--feature-border:transparent;
     --feature-tile:rgba(255,255,255,.08);--feature-btn:rgba(255,255,255,.12);--feature-btn-h:rgba(255,255,255,.22);
     --dot-empty:#fff;--img-filter:none;--on-dark:#fff;
+    --sk-base:#e8e4da;--sk-shine:#f5f3ed;
   }
   html[data-theme="dark"]{
     --bg:#181a17;--paper:#222420;--ink:#ece7db;--muted:#9b9e95;--line:#363a31;
@@ -51,6 +52,7 @@
     --feature-1:#2c332c;--feature-2:#222a23;--feature-ink:#ece7db;--feature-border:#3a3f36;
     --feature-tile:rgba(255,255,255,.06);--feature-btn:rgba(255,255,255,.1);--feature-btn-h:rgba(255,255,255,.2);
     --dot-empty:var(--paper);--img-filter:invert(.92) hue-rotate(180deg);--on-dark:#20231d;
+    --sk-base:#2e3229;--sk-shine:#3c4237;
   }
   *{box-sizing:border-box;} html{scroll-behavior:smooth;}
   body{margin:0;background:var(--bg);color:var(--ink);
@@ -309,6 +311,9 @@
   .btn.rnd:hover{background:var(--soft-bg);}
   @keyframes card-flash{0%{box-shadow:0 0 0 3px rgba(181,83,42,.5);}100%{box-shadow:0 0 0 3px rgba(181,83,42,0);}}
   .card.flash-card{animation:card-flash .9s ease-out;}
+  @keyframes sk-wave{0%{background-position:200% center}100%{background-position:-200% center}}
+  .sk-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow);margin-bottom:14px;}
+  .sk-line{border-radius:6px;background:linear-gradient(90deg,var(--sk-base) 25%,var(--sk-shine) 50%,var(--sk-base) 75%);background-size:200% 100%;animation:sk-wave 1.5s ease-in-out infinite;}
 
   /* история пробников */
   .vhist{margin-top:22px;}
@@ -929,7 +934,8 @@ function renderTask(n){
   if(!task||task.count===0){go('#/');return;}
   if(task.mode==='html' && !(n in (window.TASKDATA||{}))){
     backEl.style.display='inline'; statsEl.innerHTML='';
-    appEl.innerHTML='<div class="wrap"><div></div><main class="list"><p style="color:var(--muted)">Загрузка задач…</p></main></div>';
+    const skCard=()=>`<div class="sk-card"><div class="sk-line" style="height:13px;width:38%;margin-bottom:18px"></div><div class="sk-line" style="height:12px;width:100%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:88%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:72%;margin-bottom:22px"></div><div style="display:flex;gap:8px"><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div></div></div>`;
+    appEl.innerHTML=`<div class="wrap"><div></div><main class="list">${skCard()}${skCard()}${skCard()}</main></div>`;
     ensureData(n,()=>{ if(parseRoute().n===n) renderTask(n); });
     return;
   }
@@ -944,7 +950,7 @@ function renderTask(n){
   const data = task.mode==='html' ? (window.TASKDATA[n]||[]) : null;
   statsEl.innerHTML=taskStatsHTML(n);
   const condHTML=id=> task.mode==='html'
-      ? `<div class="cond"><div class="tex">${(data[id-1]||{}).c||''}</div></div>`
+      ? `<div class="cond"><div class="tex">${((data[id-1]||{}).c||'').replace(/ loading="lazy"/g,'')}</div></div>`
       : `<div class="cond"><img loading="lazy" src="${COND(n,id)}" alt="Задача ${id}"></div>`;
   const solBox=id=> task.mode==='html'
       ? `<div class="solution" id="sol-${id}" data-html="1"></div>`
