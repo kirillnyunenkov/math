@@ -1241,6 +1241,7 @@ function renderVariant(){
         <div class="vans-row"><span class="yours">Твой ответ: ${it.given?escapeHtml(it.given):'—'}</span> · <span class="right">Верный: ${d.a||'—'}</span></div>
       </div>`;}).join('')}
   </div>`;
+  typeset(appEl.querySelector('.vbox'));
 }
 
 appEl.addEventListener('click',e=>{
