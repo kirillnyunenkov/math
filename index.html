@@ -929,13 +929,14 @@ function renderHub(){
     </div></footer></section>`;
 }
 
+const skCard=()=>`<div class="sk-card"><div class="sk-line" style="height:13px;width:38%;margin-bottom:18px"></div><div class="sk-line" style="height:12px;width:100%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:88%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:72%;margin-bottom:22px"></div><div style="display:flex;gap:8px"><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div></div></div>`;
+const skHTML=`<div class="wrap"><div></div><main class="list">${skCard()}${skCard()}${skCard()}</main></div>`;
 function renderTask(n){
   const task=taskCfg(n);
   if(!task||task.count===0){go('#/');return;}
   if(task.mode==='html' && !(n in (window.TASKDATA||{}))){
     backEl.style.display='inline'; statsEl.innerHTML='';
-    const skCard=()=>`<div class="sk-card"><div class="sk-line" style="height:13px;width:38%;margin-bottom:18px"></div><div class="sk-line" style="height:12px;width:100%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:88%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:72%;margin-bottom:22px"></div><div style="display:flex;gap:8px"><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div></div></div>`;
-    appEl.innerHTML=`<div class="wrap"><div></div><main class="list">${skCard()}${skCard()}${skCard()}</main></div>`;
+    appEl.innerHTML=skHTML;
     ensureData(n,()=>{ if(parseRoute().n===n) renderTask(n); });
     return;
   }
@@ -945,16 +946,15 @@ function renderTask(n){
       Не удалось загрузить задачи.<br>Убедись, что файл <code>img/t${n}/data.js</code> загружен в репозиторий.</p></main></div>`;
     return;
   }
-  backEl.style.display='inline';
+  backEl.style.display='inline'; statsEl.innerHTML='';
   const ts=taskState(n);
-  const data = task.mode==='html' ? (window.TASKDATA[n]||[]) : null;
-  statsEl.innerHTML=taskStatsHTML(n);
-  const condHTML=id=> task.mode==='html'
-      ? `<div class="cond"><div class="tex">${((data[id-1]||{}).c||'').replace(/ loading="lazy"/g,'')}</div></div>`
-      : `<div class="cond"><img loading="lazy" src="${COND(n,id)}" alt="Задача ${id}"></div>`;
-  const solBox=id=> task.mode==='html'
-      ? `<div class="solution" id="sol-${id}" data-html="1"></div>`
-      : `<div class="solution" id="sol-${id}"><div class="sol-body"><img loading="lazy" data-src="${SOL(n,id)}" alt="Решение ${id}"></div></div>`;
+  const data=task.mode==='html'?(window.TASKDATA[n]||[]):null;
+  const condHTML=id=>task.mode==='html'
+      ?`<div class="cond"><div class="tex">${((data[id-1]||{}).c||'').replace(/ loading="lazy"/g,'')}</div></div>`
+      :`<div class="cond"><img loading="lazy" src="${COND(n,id)}" alt="Задача ${id}"></div>`;
+  const solBox=id=>task.mode==='html'
+      ?`<div class="solution" id="sol-${id}" data-html="1"></div>`
+      :`<div class="solution" id="sol-${id}"><div class="sol-body"><img loading="lazy" data-src="${SOL(n,id)}" alt="Решение ${id}"></div></div>`;
   const pl=protoList(n);
   const acHTML=id=>{const ansTxt=task.mode==='html'?plainAnswer((data[id-1]||{}).a):'';
     return ansTxt?`<div class="answer-check">
@@ -981,9 +981,9 @@ function renderTask(n){
         ${sim}
       </article>`;};
   const gridCells=pl
-    ? pl.map(grp=>{const id=grp.ids[0],st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
+    ?pl.map(grp=>{const id=grp.ids[0],st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
         return `<button class="cell ${c}" data-cell="${id}" title="Прототип ${grp.p}">${grp.p}</button>`;}).join('')
-    : Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
+    :Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
         return `<button class="cell ${c}" data-cell="${id}">${id}</button>`;}).join('');
   let listBody;
   if(pl){
@@ -992,7 +992,7 @@ function renderTask(n){
     const showHeads=distinct.size>1;
     if(showHeads){
       let html='',cur=null,buf='';
-      const flush=()=>{ if(buf!==''){ html+=`<section class="block"><h3 class="block-head">${cur}</h3>${buf}</section>`; buf=''; } };
+      const flush=()=>{if(buf!==''){html+=`<section class="block"><h3 class="block-head">${cur}</h3>${buf}</section>`;buf='';}};
       pl.forEach(grp=>{const s=subOf(grp.ids[0])||cur||'';
         if(s!==cur){flush();cur=s;}
         buf+=repCard(grp.ids[0],grp.p,grp.ids.slice(1));});
@@ -1005,7 +1005,7 @@ function renderTask(n){
     listBody=Array.from({length:task.count},(_,i)=>repCard(i+1,null,null)).join('');
   }
   const gridLabel=pl?`Задание ${n} · ${pl.length} прототипов`:`Задание ${n}`;
-  appEl.innerHTML=`<div class="wrap" data-n="${n}">
+  const fullHTML=`<div class="wrap" data-n="${n}">
     <aside class="grid-panel"><button class="back task-back" data-home>← К списку заданий</button><div class="grid-label">${gridLabel}</div>
       <div class="grid">${gridCells}</div></aside>
     <main class="list">
@@ -1017,7 +1017,22 @@ function renderTask(n){
       </div>
       <div class="filters-empty" id="filter-empty" style="display:none">В этой категории пока пусто.</div>
       ${listBody}</main></div>`;
-  typeset(appEl.querySelector('.list'));
+  appEl.innerHTML=skHTML;
+  const tmp=document.createElement('div');
+  tmp.style.cssText='position:fixed;top:-9999px;left:0;width:1px;height:1px;overflow:hidden;';
+  tmp.innerHTML=fullHTML;
+  document.body.appendChild(tmp);
+  const pending=[...tmp.querySelectorAll('img')].filter(i=>!i.complete);
+  const showReal=()=>{
+    tmp.remove();
+    if(parseRoute().n!==n)return;
+    statsEl.innerHTML=taskStatsHTML(n);
+    appEl.innerHTML=fullHTML;
+    typeset(appEl.querySelector('.list'));
+  };
+  if(!pending.length){showReal();}
+  else{Promise.all(pending.map(img=>new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});})))
+    .then(showReal);}
 }
 
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
