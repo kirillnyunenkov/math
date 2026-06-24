@@ -1400,7 +1400,7 @@ appEl.addEventListener('click',e=>{
     return;}
   const cell=e.target.closest('[data-cell]');
   if(cell){viewFilter='all';applyFilter();const tc=document.getElementById('task-'+cell.dataset.cell);
-    if(tc)tc.scrollIntoView({behavior:'smooth',block:'start'});return;}
+    if(tc)tc.scrollIntoView({block:'start'});return;}
 });
 appEl.addEventListener('input',e=>{const el=e.target;
   if(el.classList.contains('ans-input')||el.classList.contains('v-input')){
