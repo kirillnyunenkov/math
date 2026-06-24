@@ -329,6 +329,8 @@
   .vhist-card{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:20px 22px;box-shadow:var(--shadow);margin-bottom:16px;}
   .btn.sol{margin-left:auto;color:var(--accent);border-color:var(--soft-border);}
   .btn.sol:hover{background:var(--soft-bg);}
+  .btn-video{display:flex;align-items:center;gap:7px;margin-top:14px;font:inherit;font-size:13px;font-weight:500;color:#fff;background:#e00;border:none;border-radius:9px;padding:8px 14px;cursor:pointer;text-decoration:none;transition:.15s;}
+  .btn-video:hover{background:#c00;}
   .solution{margin-top:16px;padding-top:16px;border-top:1px dashed var(--line);display:none;}
   .solution.open{display:block;}
   /* html-задачи (формулы и чертежи Школково встроены в куски) */
@@ -678,6 +680,7 @@ function displayCount(n){const pl=protoList(n);return pl?pl.length:taskCfg(n).co
 /* ============================================================ ЛОГИКА — не трогай ============================================================ */
 const COND = (n,id)=>`img/t${n}/cond/${String(id).padStart(4,'0')}.png`;
 const SOL  = (n,id)=>`img/t${n}/sol/${String(id).padStart(4,'0')}.png`;
+const VIDEOS = {1:'https://www.youtube.com/watch?v=_IZcVx4715Q',2:'https://www.youtube.com/watch?v=cd8nn2c99dU',3:'https://www.youtube.com/watch?v=dPdYn3n_rL8',4:'https://www.youtube.com/watch?v=_Qs5l-41ss0',5:'https://www.youtube.com/watch?v=f_3dkUWJ7Z4',6:'https://www.youtube.com/watch?v=Ft6x-ECfH88',7:'https://www.youtube.com/watch?v=Ft6x-ECfH88',8:'https://www.youtube.com/watch?v=bmY0KXMo_Tw',9:'https://www.youtube.com/watch?v=uffcbE9n0AE',10:'https://www.youtube.com/watch?v=YLkDqydq7TI',11:'https://www.youtube.com/watch?v=XUzWJx4fvrQ',12:'https://www.youtube.com/watch?v=B_lVXxlsrpg'};
 const taskCfg = n => TASKS.find(t=>t.n===n);
 // Источник правды о количестве задач — сам data.js. После загрузки приводим
 // count в конфиге к реальной длине, чтобы рассинхрон count↔данные не давал
@@ -1005,9 +1008,10 @@ function renderTask(n){
     listBody=Array.from({length:task.count},(_,i)=>repCard(i+1,null,null)).join('');
   }
   const gridLabel=pl?`Задание ${n} · ${pl.length} прототипов`:`Задание ${n}`;
+  const videoBtn=VIDEOS[n]?`<a class="btn-video" href="${VIDEOS[n]}" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Видеоразбор</a>`:'';
   const fullHTML=`<div class="wrap" data-n="${n}">
     <aside class="grid-panel"><button class="back task-back" data-home>← К списку заданий</button><div class="grid-label">${gridLabel}</div>
-      <div class="grid">${gridCells}</div></aside>
+      <div class="grid">${gridCells}</div>${videoBtn}</aside>
     <main class="list">
       <div class="filters">
         <button class="chip on" data-filter="all">Все</button>
