@@ -85,7 +85,16 @@
 
   .hub{max-width:1180px;margin:0 auto;padding:32px 24px 80px;}
   .hub h2{font-family:'Lora',serif;font-weight:600;font-size:26px;margin:0 0 6px;}
-  .hub .sub{color:var(--muted);margin:0 0 28px;font-size:15px;}
+  .hub .sub{color:var(--muted);margin:0 0 18px;font-size:15px;}
+  .hub-prog{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 20px;margin-bottom:20px;box-shadow:var(--shadow);}
+  .hub-prog-head{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:11px;flex-wrap:wrap;}
+  .hub-prog-label{font-family:'Lora',serif;font-weight:600;font-size:15px;}
+  .hub-prog-pct{font-family:'Lora',serif;font-weight:700;font-size:22px;color:var(--green);line-height:1;}
+  .hub-prog-pct span{font-size:13.5px;color:var(--muted);font-family:'Golos Text',sans-serif;font-weight:400;margin-left:4px;}
+  .hub-prog-bar{height:18px;border-radius:99px;background:var(--bar-empty);overflow:hidden;display:flex;margin-bottom:13px;}
+  .hub-prog-bar div{transition:width .4s ease;}
+  .hub-prog-stats{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted);}
+  .hub-prog-stats b{color:var(--ink);font-weight:600;}
   .tasks{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;}
   .tcard{background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:var(--shadow);
     cursor:pointer;transition:transform .12s,border-color .15s;display:flex;flex-direction:column;gap:12px;text-align:left;font:inherit;color:var(--ink);}
@@ -907,10 +916,31 @@ function go(h){location.hash=h;}
 
 function renderHub(){
   backEl.style.display='none';
-  let allG=0,total=0; TASKS.forEach(t=>{allG+=countTask(t.n).g;total+=displayCount(t.n);});
-  statsEl.innerHTML=`<span class="stat"><i class="dot g"></i>Освоено: <b>${allG}</b> из ${total}</span>`;
+  let allG=0,allO=0,allB=0,total=0;
+  TASKS.filter(t=>!t.hidden).forEach(t=>{const c=countTask(t.n);allG+=c.g;allO+=c.o;allB+=c.b;total+=displayCount(t.n);});
+  const left=total-allG-allO-allB;
+  const gp=total?allG/total*100:0,op=total?allO/total*100:0,bp=total?allB/total*100:0;
+  statsEl.innerHTML='';
+  const progHTML=`<div class="hub-prog">
+    <div class="hub-prog-head">
+      <span class="hub-prog-label">Общий прогресс</span>
+      <span class="hub-prog-pct">${Math.round(gp)}%<span>освоено · ${allG} из ${total}</span></span>
+    </div>
+    <div class="hub-prog-bar">
+      <div style="width:${gp.toFixed(1)}%;background:var(--green)"></div>
+      <div style="width:${op.toFixed(1)}%;background:var(--orange)"></div>
+      <div style="width:${bp.toFixed(1)}%;background:var(--dark)"></div>
+    </div>
+    <div class="hub-prog-stats">
+      <span><i class="dot g"></i> Умею: <b>${allG}</b></span>
+      <span><i class="dot o"></i> Повторить: <b>${allO}</b></span>
+      <span><i class="dot b"></i> Разобраться: <b>${allB}</b></span>
+      <span><i class="dot n"></i> Осталось: <b>${left}</b></span>
+    </div>
+  </div>`;
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
+    ${progHTML}
     <button class="variant-cta" data-variant>
       <span class="vc-ico">🎯</span>
       <span><span class="vc-t">Собрать вариант</span><span class="vc-s">Выбери задания и количество — режим тренировки или экзамена</span></span>
