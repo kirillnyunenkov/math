@@ -352,7 +352,6 @@
   .cond img,.sol-body img{max-width:760px;width:100%;height:auto;display:block;border-radius:var(--r-sm);}
 
   /* кнопки действий */
-  .actions{display:flex;gap:var(--s2);margin-top:var(--s5);flex-wrap:wrap;align-items:center;}
   .btn{font:inherit;font-size:var(--fs-sm);font-weight:500;cursor:pointer;
     border-radius:var(--r-md);padding:0 var(--s4);min-height:40px;display:inline-flex;
     align-items:center;gap:6px;border:1px solid var(--line-strong);background:var(--surface);
@@ -365,9 +364,46 @@
   .btn.mk-g.on{background:var(--ok);border-color:var(--ok);color:var(--ok-on);font-weight:600;}
   .btn.mk-o.on{background:var(--warn);border-color:var(--warn);color:var(--warn-on);font-weight:600;}
   .btn.mk-b.on{background:var(--todo);border-color:var(--todo);color:var(--todo-on);font-weight:600;}
-  .btn.check,.btn.sol,.btn.rnd,.similar-toggle{color:var(--accent);border-color:var(--accent-line);}
-  .btn.check:hover,.btn.sol:hover,.btn.rnd:hover,.similar-toggle:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
-  .btn.sol{margin-left:auto;}
+
+  /* ---- отметка статуса: один сегментированный переключатель ----
+     Три отдельные кнопки с полными подписями не влезали в строку телефона
+     и разъезжались на три ряда по 44px. Вместе с проверкой ответа, решением
+     и похожими задачами хвост карточки занимал экран целиком, а условие
+     уезжало наверх. Статус взаимоисключающий — значит это один контрол:
+     подложка-желобок несёт материал, сегменты внутри только красятся.
+     Подписи укорочены до одного слова, полная формулировка — в aria-label.
+     На телефоне желобок занимает строку целиком, на широкой карточке
+     упирается в потолок: растянутый на 840px переключатель из трёх слов
+     читается как сломанная панель, а клик-зона в 280px просто нелепа. */
+  .marks{display:flex;gap:2px;max-width:380px;
+    margin-top:var(--s4);padding:3px;border-radius:var(--r-md);background:var(--track);}
+  /* Ширина по содержимому, а не по трети: «Умею» вдвое короче «Разобраться»,
+     и равные трети обрезали бы длинную подпись многоточием ради пустоты
+     в короткой. Свободный остаток делится поровну — рваного края нет. */
+  .marks .btn{flex:1 1 auto;min-width:0;min-height:36px;padding:0 var(--s1);gap:5px;
+    justify-content:center;font-size:var(--fs-xs);
+    background:transparent;border-color:transparent;box-shadow:none;}
+  .marks .btn .ic{flex:none;}
+  .marks .btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  /* на самых узких экранах подпись важнее иконки */
+  @media (max-width:359px){.marks .btn .ic{display:none;}}
+
+  /* ---- показать решение / похожие ----
+     Вспомогательные действия: рамка вокруг каждого делала из них ещё две
+     полновесные кнопки. Текстовые ссылки в одну строку весят визуально
+     ничего и не спорят с сегментами статуса. */
+  .reveal{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);
+    margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);}
+  .lnk{font:inherit;font-size:var(--fs-sm);font-weight:600;cursor:pointer;
+    background:none;border:none;padding:0;min-height:32px;color:var(--accent);
+    display:inline-flex;align-items:center;text-align:left;
+    text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;
+    text-decoration-color:var(--accent-line);-webkit-tap-highlight-color:transparent;
+    transition:color var(--dur) var(--ease),opacity var(--dur) var(--ease);}
+  .lnk:hover{color:var(--accent-hover);text-decoration-color:var(--accent);}
+  .lnk:active{opacity:.55;}
+  .btn.check,.btn.rnd{color:var(--accent);border-color:var(--accent-line);}
+  .btn.check:hover,.btn.rnd:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
   .btn.rnd{width:100%;margin-top:var(--s3);justify-content:center;font-size:var(--fs-sm);}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-on);
     font-weight:600;font-size:var(--fs-base);padding:0 var(--s6);min-height:46px;}
@@ -397,7 +433,6 @@
   .ans-msg.no{color:var(--err-text);}
 
   /* прототипы и похожие задачи */
-  .similar{margin-top:var(--s5);border-top:1px solid var(--line);padding-top:var(--s4);}
   .similar-body{display:none;margin-top:var(--s4);flex-direction:column;gap:var(--s4);}
   .similar-body.open{display:flex;}
   .subcard{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s4) var(--s5);}
@@ -597,7 +632,10 @@
     .help-step{padding:var(--s5);}
     .btn,.chip,.ghost,.back,.btn-video{min-height:44px;}
     #theme,.task-theme{width:44px;}
-    .btn.sol{margin-left:0;}
+    /* сегмент ниже 44px, но широкий — палец попадает; ссылки добирают
+       тап-таргет невидимой высотой, не утолщая строку визуально */
+    .marks .btn{min-height:40px;}
+    .lnk{min-height:44px;}
     .ans-input,.v-input{min-height:44px;flex:1;min-width:140px;width:auto;}
   }
 
@@ -759,6 +797,12 @@
   .btn,.ghost,.back,.stepper,.mode-seg{
     background:var(--glass-strong);border-color:var(--glass-line);
     box-shadow:var(--rim);}
+  /* Желобок статуса утоплен, как поле ввода: выбранный сегмент внутри —
+     единственное, что приподнято. Собственного блюра тут нет намеренно —
+     желобков на экране до 27 штук, блюр поверх стекла карточки не окупается. */
+  .marks{box-shadow:inset 0 1px 2px var(--glass-well);}
+  .marks .btn:not(.on){background:transparent;border-color:transparent;box-shadow:none;}
+  .marks .btn.on{box-shadow:var(--rim);}
   /* Поля ввода — утопленные, а не приподнятые. Стеклянная панель с бликом
      сверху читается как кнопка; в поле надо печатать. */
   .ans-input,.v-input{background:var(--input-bg);border-color:var(--line-strong);
@@ -1308,6 +1352,11 @@ function answersEqual(given,correct){const a=parseNum(given),b=parseNum(correct)
   if(a!==null&&b!==null)return Math.abs(a-b)<1e-9;
   return normAns(given)===normAns(correct);}
 function reanim(el,cls){el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);}
+/* «Показать решение» ⇄ «Скрыть решение». Развёрнутое решение — самый
+   длинный блок карточки, и свернуть его больше нечем: ссылка одна. */
+function toggleRevealLabel(btn,open){btn.textContent=open
+  ?btn.textContent.replace('Показать','Скрыть')
+  :btn.textContent.replace('Скрыть','Показать');}
 function taskStatsHTML(n){const{g,o,b}=countTask(n),tot=displayCount(n);
   return `<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
     `<span class="stat"><i class="dot o"></i>Повторить: <b>${o}</b></span>`+
@@ -1321,7 +1370,8 @@ function refreshCell(n,id){const st=(state[n]||{})[id]||'';const grid=document.q
     grid.setAttribute('aria-label',`Карта прогресса: умею ${q.g}, надо повторить ${q.o}, надо разобраться ${q.b}, не решал ${t-q.g-q.o-q.b} из ${t}`);}}
 function refreshCard(n,id){const st=(state[n]||{})[id]||'';const card=document.getElementById('task-'+id);
   if(!card)return;card.className='card'+(st?' is-'+st:'');
-  card.querySelectorAll('[data-mark]').forEach(b=>b.classList.toggle('on',b.dataset.mark===st));}
+  card.querySelectorAll('[data-mark]').forEach(b=>{const on=b.dataset.mark===st;
+    b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);});}
 function refreshStats(n){statsEl.innerHTML=taskStatsHTML(n);}
 function recordStatus(n,id,status){const ts=taskState(n);if(status)ts[id]=status;else delete ts[id];}
 function setStatus(n,id,status){recordStatus(n,id,status);save();refreshCard(n,id);refreshCell(n,id);refreshStats(n);applyFilter();}
@@ -1535,6 +1585,19 @@ function renderHub(){
     </div></footer></section>`;
 }
 
+/* Сегменты статуса. Короткая подпись — на экране, полная — в aria-label:
+   в сегментированном контроле соседи задают контекст, а голосовой доступ
+   такого контекста не даёт. Иконки те же, что в легенде на странице «как
+   пользоваться», поэтому смысл читается и без чтения подписи. */
+const MARKS=[
+  ['g','Умею','Умею решать','<path d="M4.5 12.5 9.5 17.5 19.5 6.5"/>'],
+  ['o','Повторить','Надо повторить','<path d="M20.5 5.5v5h-5"/><path d="M19.8 13a8 8 0 1 1-1.4-5.3l2.1 2.3"/>'],
+  ['b','Разобраться','Надо разобраться','<path d="M6 6l12 12M18 6 6 18"/>'],
+];
+const marksHTML=(st,mAttr,iAttr,iVal)=>`<div class="marks" role="group" aria-label="Что с этой задачей">`+
+  MARKS.map(([m,short,full,path])=>`<button class="btn mk-${m}${st===m?' on':''}" aria-pressed="${st===m}" aria-label="${full}" data-${mAttr}="${m}" data-${iAttr}="${iVal}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg><span>${short}</span></button>`).join('')+
+  `</div>`;
+
 const skCard=()=>`<div class="sk-card"><div class="sk-line" style="height:13px;width:38%;margin-bottom:18px"></div><div class="sk-line" style="height:12px;width:100%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:88%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:72%;margin-bottom:22px"></div><div style="display:flex;gap:8px"><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div></div></div>`;
 const skHTML=`<div class="wrap"><div></div><main class="list">${skCard()}${skCard()}${skCard()}</main></div>`;
 function renderTask(n){
@@ -1570,21 +1633,19 @@ function renderTask(n){
         </div>`:'';};
   const repCard=(id,protoNum,simIds)=>{const st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
     const label=protoNum!=null?`<span class="num proto-num">Прототип ${protoNum}</span>`:`<span class="num">${id}</span>`;
-    const sim=(simIds&&simIds.length)?`<div class="similar">
-          <button class="btn similar-toggle" data-similar="${id}" data-sim-ids="${simIds.join(',')}" data-sim-n="${simIds.length}">Похожие задачи (${simIds.length})</button>
-          <div class="similar-body" id="sim-${id}"></div></div>`:'';
+    const hasSim=!!(simIds&&simIds.length);
+    const simBtn=hasSim?`<button class="lnk similar-toggle" data-similar="${id}" data-sim-ids="${simIds.join(',')}" data-sim-n="${simIds.length}">Похожие задачи (${simIds.length})</button>`:'';
     return `<article class="card ${c}" id="task-${id}">
         <div class="card-top">${label}</div>
         ${condHTML(id)}
         ${acHTML(id)}
-        <div class="actions">
-          <button class="btn mk-g ${st==='g'?'on':''}" aria-pressed="${st==='g'}" data-mark="g" data-id="${id}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"/></svg> Умею решать</button>
-          <button class="btn mk-o ${st==='o'?'on':''}" aria-pressed="${st==='o'}" data-mark="o" data-id="${id}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 5.5v5h-5"/><path d="M19.8 13a8 8 0 1 1-1.4-5.3l2.1 2.3"/></svg> Надо повторить</button>
-          <button class="btn mk-b ${st==='b'?'on':''}" aria-pressed="${st==='b'}" data-mark="b" data-id="${id}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Надо разобраться</button>
-          <button class="btn sol" data-sol="${id}">Показать решение</button>
+        ${marksHTML(st,'mark','id',id)}
+        <div class="reveal">
+          <button class="lnk sol" data-sol="${id}">Показать решение</button>
+          ${simBtn}
         </div>
         ${solBox(id)}
-        ${sim}
+        ${hasSim?`<div class="similar-body" id="sim-${id}"></div>`:''}
       </article>`;};
   const gridCells=pl
     ?pl.map(grp=>{const id=grp.ids[0],st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
@@ -1654,7 +1715,7 @@ function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
     <div class="sub-num">№ ${d.art||id}</div>
     <div class="cond"><div class="tex">${d.c||''}</div></div>
     ${ac}
-    <div class="actions"><button class="btn sol" data-sol="${id}">Показать решение</button></div>
+    <div class="reveal"><button class="lnk sol" data-sol="${id}">Показать решение</button></div>
     <div class="solution" id="sol-${id}" data-html="1"></div>
   </div>`;}
 let variant=null, variantTimerId=null;
@@ -1830,7 +1891,8 @@ function renderBuilder(){
 function refreshTrainCard(i){const it=variant.items[i],st=(state[it.n]||{})[it.id]||'';
   const card=document.getElementById('tcard-'+i);if(!card)return;
   card.className='vcard'+(st?' is-'+st:'');
-  card.querySelectorAll('[data-tmark]').forEach(b=>b.classList.toggle('on',b.dataset.tmark===st));}
+  card.querySelectorAll('[data-tmark]').forEach(b=>{const on=b.dataset.tmark===st;
+    b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);});}
 function renderTraining(){
   const items=variant.items;
   appEl.innerHTML=`<div class="vbox">
@@ -1852,12 +1914,8 @@ function renderTraining(){
         <div class="vlabel">Задание ${it.n}<span class="vlabel-art"> · № ${d.art||it.id}</span></div>
         <div class="cond"><div class="tex">${d.c||''}</div></div>
         ${ac}
-        <div class="actions">
-          <button class="btn mk-g ${st==='g'?'on':''}" aria-pressed="${st==='g'}" data-tmark="g" data-ti="${i}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5 9.5 17.5 19.5 6.5"/></svg> Умею решать</button>
-          <button class="btn mk-o ${st==='o'?'on':''}" aria-pressed="${st==='o'}" data-tmark="o" data-ti="${i}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 5.5v5h-5"/><path d="M19.8 13a8 8 0 1 1-1.4-5.3l2.1 2.3"/></svg> Надо повторить</button>
-          <button class="btn mk-b ${st==='b'?'on':''}" aria-pressed="${st==='b'}" data-tmark="b" data-ti="${i}"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg> Надо разобраться</button>
-          <button class="btn sol" data-tsol="${i}">Показать ответ</button>
-        </div>
+        ${marksHTML(st,'tmark','ti',i)}
+        <div class="reveal"><button class="lnk sol" data-tsol="${i}">Показать ответ</button></div>
         <div class="solution" id="tsol-${i}"></div>
       </div>`;}).join('')}
     <div style="text-align:center;margin-top:8px"><button class="btn primary" data-home>К заданиям</button></div>
@@ -1951,7 +2009,7 @@ appEl.addEventListener('click',e=>{
     save();refreshTrainCard(i);return;}
   const tsol=e.target.closest('[data-tsol]');
   if(tsol){const i=+tsol.dataset.tsol,box=document.getElementById('tsol-'+i);if(!box)return;
-    box.classList.toggle('open');
+    toggleRevealLabel(tsol,box.classList.toggle('open'));
     if(!box.dataset.filled){const d=(window.TASKDATA[variant.items[i].n]||[])[variant.items[i].id-1]||{};
       box.innerHTML=(d.a?`<span class="answer">Ответ: ${d.a}</span>`:'')+`<div class="sol-body"><div class="tex">${d.s||''}</div></div>`;
       box.dataset.filled='1';typeset(box);}
@@ -2005,7 +2063,8 @@ appEl.addEventListener('click',e=>{
     const open=box.classList.toggle('open');
     sm.textContent=open?'Скрыть похожие':('Похожие задачи ('+sm.dataset.simN+')');return;}
   const sol=e.target.closest('[data-sol]');
-  if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id);box.classList.toggle('open');
+  if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id);
+    toggleRevealLabel(sol,box.classList.toggle('open'));
     if(box.dataset.html==='1'){
       if(!box.dataset.filled){const n=parseRoute().n,d=(window.TASKDATA[n]||[])[id-1]||{};
         box.innerHTML=(d.a?`<span class="answer">Ответ: ${d.a}</span>`:'')+`<div class="sol-body"><div class="tex">${d.s||''}</div></div>`;
