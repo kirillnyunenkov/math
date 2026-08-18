@@ -801,7 +801,11 @@
   html.lowfi .hub-prog,html.lowfi .grid-panel,html.lowfi .vbar,html.lowfi .vintro,
   html.lowfi .vhist-card,html.lowfi .nav-menu,html.lowfi .ios-hint-sheet,html.lowfi .tcard,
   html.lowfi .card,html.lowfi .vcard,html.lowfi .sk-card,html.lowfi .help-step,
-  html.lowfi .hf-card,html.lowfi .chip,html.lowfi .cell{background:var(--surface);}
+  html.lowfi .hf-card{background:var(--surface);}
+  /* только базовое состояние: активный чип и отмеченные ячейки сохраняют
+     свою цветную заливку — иначе остаётся цветная рамка на тёмном фоне */
+  html.lowfi .chip:not(.on){background:var(--surface);}
+  html.lowfi .cell:not(.g):not(.o):not(.b){background:var(--surface);}
   html.lowfi body::after{opacity:.5;}
   html.lowfi body::before{display:none;}
   html.lowfi .tcard{animation:none;}
@@ -827,8 +831,12 @@
      deviceMemory отдаёт только Chromium и округляет вниз (0.5/1/2/4/8).
      Ручной тумблер: localStorage ege_fx = 'off' | 'on'. */
   var fx=localStorage.getItem('ege_fx');
-  var weak = navigator.hardwareConcurrency>0 && navigator.hardwareConcurrency<=4
-          || navigator.deviceMemory>0 && navigator.deviceMemory<=2;
+  // Память — надёжный сигнал слабого Android (Chrome округляет вниз: <=2 ≈ <=3ГБ).
+  // iOS Safari её не отдаёт -> iPhone не попадает в lowfi и получает полное стекло.
+  // Ядра как сигнал слишком грубые (много хороших телефонов отдают 4), поэтому
+  // порог по ядрам низкий — только совсем слабые.
+  var weak = (navigator.deviceMemory>0 && navigator.deviceMemory<=2)
+          || (navigator.hardwareConcurrency>0 && navigator.hardwareConcurrency<=2);
   if(fx==='off' || (fx!=='on' && weak)) document.documentElement.classList.add('lowfi');
 }catch(e){}})();
 (function(){try{var t=localStorage.getItem('ege_theme');
