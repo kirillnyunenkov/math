@@ -304,8 +304,8 @@
      ЭКРАН ЗАДАНИЯ
      ============================================================ */
   .wrap{max-width:1180px;margin:0 auto;padding:var(--s6) var(--s6) var(--s16);
-    display:grid;grid-template-columns:176px 1fr;gap:var(--s8);align-items:start;}
-  .grid-panel{position:sticky;top:var(--s4);min-width:0;}
+    display:grid;grid-template-columns:208px 1fr;gap:var(--s8);align-items:start;}
+  .grid-panel{position:sticky;top:var(--s4);min-width:0;padding:var(--s4);border-radius:var(--r-lg);}
   .task-nav{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin-bottom:var(--s4);}
   .task-nav .task-back{white-space:nowrap;}
   .grid-label{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.07em;
@@ -559,8 +559,7 @@
      ============================================================ */
   @media (max-width:760px){
     .wrap{grid-template-columns:1fr;gap:var(--s5);padding:var(--s4) var(--s4) var(--s12);}
-    .grid-panel{position:static;background:var(--surface);border:1px solid var(--line);
-      border-radius:var(--r-lg);padding:var(--s4);}
+    .grid-panel{position:static;}
     .grid{grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;}
     .head-inner{padding:var(--s2) var(--s4);gap:var(--s2) var(--s3);min-height:56px;}
     .stats{width:100%;margin-left:0;gap:var(--s3);}
@@ -634,18 +633,22 @@
     --grain:.035;
   }
 
-  /* поле пятен живёт на html: фон body закрыл бы свой же ::before */
-  html{
-    background-color:var(--paper);
+  /* Поле пятен — на отдельном position:fixed слое, а НЕ через
+     background-attachment:fixed. Такой фон нельзя скомпоновать на GPU:
+     браузер перерисовывает его на каждом кадре скролла. Фиксированный
+     слой компоновщик двигает без перерисовки. */
+  html{background-color:var(--paper);}
+  body{background:transparent;}
+  body::after{
+    content:"";position:fixed;inset:0;z-index:-2;pointer-events:none;
     background-image:
       radial-gradient(38vw 34vw at 10% 4%,   var(--amb-1) 0%, transparent 64%),
       radial-gradient(32vw 30vw at 92% 16%,  var(--amb-2) 0%, transparent 62%),
       radial-gradient(40vw 36vw at 76% 92%,  var(--amb-3) 0%, transparent 64%),
       radial-gradient(28vw 26vw at 26% 68%,  var(--amb-2) 0%, transparent 60%),
       radial-gradient(30vw 28vw at 50% 40%,  var(--amb-3) 0%, transparent 66%);
-    background-attachment:fixed;background-repeat:no-repeat;
+    background-repeat:no-repeat;
   }
-  body{background:transparent;}
   /* зерно: снимает цифровую «пластмассовость» градиентов */
   body::before{
     content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;opacity:var(--grain);
@@ -672,9 +675,12 @@
   .install-bar{border-left:3px solid var(--accent);}
 
   /* контент задач — плотный: под формулами прозрачности нет */
+  /* Карточки контента: плотный полупрозрачный фон, но БЕЗ backdrop-filter.
+     При 90% плотности размытие за ними почти не видно, а на экране задания
+     их 27 — это 27 фильтров на каждом кадре скролла. Цвет поля они всё равно
+     подхватывают через прозрачность. */
   .card,.vcard,.sk-card,.help-step,.hf-card{
     background:var(--glass-strong);
-    -webkit-backdrop-filter:saturate(120%) blur(6px);backdrop-filter:saturate(120%) blur(6px);
     border:1px solid var(--glass-line);
     box-shadow:inset 0 1px 0 var(--glass-edge),var(--e1);}
   .card{border-left:3px solid var(--line-strong);}
@@ -777,9 +783,28 @@
      размывать там нечего, а 12 фильтров стоят кадров при скролле.
      Блок должен идти ПОСЛЕ правил .tcard/.card — иначе проиграет по порядку. */
   @media (max-width:760px){
-    .card,.vcard,.sk-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface);}
     .tcard{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-strong);}
+    /* цена размытия растёт с радиусом — на телефоне он меньше */
+    :root{--glass-blur:saturate(150%) blur(12px);}
   }
+
+  /* Слабое устройство: снимаем стекло целиком, оставляем плотные поверхности.
+     Класс ставится в <head> по числу ядер и памяти. */
+  html.lowfi header,html.lowfi .hub-prog,html.lowfi .grid-panel,html.lowfi .vbar,
+  html.lowfi .vintro,html.lowfi .vhist-card,html.lowfi .nav-menu,html.lowfi .ios-hint-sheet,
+  html.lowfi .install-bar,html.lowfi .tcard,html.lowfi .chip,html.lowfi .cell,html.lowfi .btn,
+  html.lowfi .ghost,html.lowfi .back,html.lowfi .stepper,html.lowfi .mode-seg,
+  html.lowfi .ans-input,html.lowfi .v-input,html.lowfi .card,html.lowfi .vcard,
+  html.lowfi .sk-card,html.lowfi .help-step,html.lowfi .hf-card{
+    -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
+  html.lowfi header{background:var(--header-bg);}
+  html.lowfi .hub-prog,html.lowfi .grid-panel,html.lowfi .vbar,html.lowfi .vintro,
+  html.lowfi .vhist-card,html.lowfi .nav-menu,html.lowfi .ios-hint-sheet,html.lowfi .tcard,
+  html.lowfi .card,html.lowfi .vcard,html.lowfi .sk-card,html.lowfi .help-step,
+  html.lowfi .hf-card,html.lowfi .chip,html.lowfi .cell{background:var(--surface);}
+  html.lowfi body::after{opacity:.5;}
+  html.lowfi body::before{display:none;}
+  html.lowfi .tcard{animation:none;}
 
   /* меньше прозрачности — если система просит */
   @media (prefers-reduced-transparency:reduce){
@@ -787,7 +812,7 @@
     .install-bar,.tcard,.chip,.cell,.btn,.ghost,.back,.stepper,.mode-seg,.ans-input,.v-input{
       -webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface);}
     .card,.vcard,.sk-card,.help-step,.hf-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface);}
-    body::before{display:none;}html{background-image:none;}
+    body::before,body::after{display:none;}
   }
   @media (prefers-reduced-motion:reduce){
     .hub-prog,.variant-cta,.tcard{animation:none;}
@@ -797,6 +822,15 @@
 <script defer src="katex/katex.min.js"></script>
 <script defer src="katex/auto-render.min.js"></script>
 <script>
+(function(){try{
+  /* Слабое устройство -> класс lowfi, стекло отключается до первой отрисовки.
+     deviceMemory отдаёт только Chromium и округляет вниз (0.5/1/2/4/8).
+     Ручной тумблер: localStorage ege_fx = 'off' | 'on'. */
+  var fx=localStorage.getItem('ege_fx');
+  var weak = navigator.hardwareConcurrency>0 && navigator.hardwareConcurrency<=4
+          || navigator.deviceMemory>0 && navigator.deviceMemory<=2;
+  if(fx==='off' || (fx!=='on' && weak)) document.documentElement.classList.add('lowfi');
+}catch(e){}})();
 (function(){try{var t=localStorage.getItem('ege_theme');
   if(!t)t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
   if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');
