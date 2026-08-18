@@ -77,7 +77,7 @@
   html[data-theme="dark"]{
     color-scheme:dark;
     --paper:#161713;--surface:#1f211d;--surface-2:#282a25;
-    --ink:#eae5da;--ink-2:#a8a498;--ink-3:#9a9683;
+    --ink:#eae5da;--ink-2:#a8a498;--ink-3:#a09c8b;
     --line:#33362f;--line-strong:#454940;
     --accent:#7fb2ea;--accent-hover:#9cc5f2;--accent-on:#0e1a28;
     --accent-soft:rgba(127,178,234,.14);--accent-line:rgba(127,178,234,.38);
@@ -612,25 +612,50 @@
      прозрачность режет читаемость.
      ============================================================ */
   :root{
-    --amb-1:rgba(29,78,137,.34);   /* чернильно-синий */
-    --amb-2:rgba(18,116,136,.28);  /* холодная бирюза */
-    --amb-3:rgba(198,138,64,.34);  /* тёплый песок */
-    --glass:rgba(255,254,251,.74);
-    --glass-strong:rgba(255,254,251,.90);
-    --glass-edge:rgba(255,255,255,.75);
-    --glass-line:rgba(60,52,38,.10);
+    /* Светлая тема: пятна усилены. При .34 поверх #f2efe7 сквозь стекло .74
+       не проходило ничего — панели читались как белое на белом, материала
+       не было видно вообще. Стеклу нужен цвет под собой, иначе это просто
+       полупрозрачный прямоугольник. */
+    --amb-1:rgba(29,78,137,.46);   /* чернильно-синий */
+    --amb-2:rgba(18,116,136,.38);  /* холодная бирюза */
+    --amb-3:rgba(198,138,64,.46);  /* тёплый песок */
+    --glass:rgba(255,254,251,.64);
+    --glass-strong:rgba(255,254,251,.88);
+    --glass-press:rgba(255,255,255,.90);
+    /* кромка: сверху блик, снизу отражённый свет, по бокам слабее.
+       Вместе дают рант по периметру — это и читается как стекло. */
+    --glass-edge:rgba(255,255,255,.85);
+    --glass-edge-b:rgba(255,255,255,.40);
+    --glass-edge-s:rgba(255,255,255,.28);
+    --glass-line:rgba(60,52,38,.12);
+    --glass-well:rgba(60,52,38,.14);   /* для утопленных элементов */
     --glass-blur:saturate(175%) blur(20px);
     --grain:.022;
+    /* нажатие: стекло сжимается, а не съезжает вниз на пиксель */
+    --dur-press:.13s;
+    --ease-spring:cubic-bezier(.34,1.36,.5,1);
   }
   html[data-theme="dark"]{
     --amb-1:rgba(74,134,210,.40);
     --amb-2:rgba(30,140,158,.30);
     --amb-3:rgba(200,138,58,.28);
-    --glass:rgba(22,25,21,.62);
+    --glass:rgba(22,25,21,.68);
     --glass-strong:rgba(22,25,21,.84);
-    --glass-edge:rgba(255,255,255,.13);
-    --glass-line:rgba(0,0,0,.5);
+    --glass-press:rgba(58,64,54,.78);
+    --glass-edge:rgba(255,255,255,.16);
+    --glass-edge-b:rgba(255,255,255,.055);
+    --glass-edge-s:rgba(255,255,255,.05);
+    /* было rgba(0,0,0,.5) — тёмный контур вокруг стекла читается как дырка,
+       а не как материал. Светлый рант ловит свет фона, как настоящая кромка. */
+    --glass-line:rgba(255,255,255,.10);
+    --glass-well:rgba(0,0,0,.5);
     --grain:.035;
+  }
+  /* Рант целиком, одной переменной. Подстановка ленивая, поэтому
+     значение берётся из активной темы в точке использования. */
+  :root{
+    --rim:inset 0 1px 0 var(--glass-edge),inset 0 -1px 0 var(--glass-edge-b),
+          inset 1px 0 0 var(--glass-edge-s),inset -1px 0 0 var(--glass-edge-s);
   }
 
   /* Поле пятен — на отдельном position:fixed слое, а НЕ через
@@ -660,18 +685,26 @@
     background:var(--glass);
     -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-line);
-    box-shadow:inset 0 1px 0 var(--glass-edge),var(--e2);
+    box-shadow:var(--rim),var(--e2);
   }
 
   header{background:var(--glass);border-bottom:1px solid var(--glass-line);
     -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
     box-shadow:inset 0 -1px 0 var(--glass-edge);}
+  /* Кромка прокрутки: контент не срезается о край шапки, а уходит под неё
+     размываясь и растворяясь. Полоса 26px за пределами бокса шапки —
+     один фильтр фиксированного размера, не зависит от длины страницы. */
+  header::after{content:"";position:absolute;left:0;right:0;top:100%;height:26px;
+    pointer-events:none;
+    -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);
+    -webkit-mask-image:linear-gradient(to bottom,#000,transparent);
+    mask-image:linear-gradient(to bottom,#000,transparent);}
 
   .hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.ios-hint-sheet,.install-bar{
     background:var(--glass);
     -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-line);
-    box-shadow:inset 0 1px 0 var(--glass-edge),var(--e2);}
+    box-shadow:var(--rim),var(--e2);}
   .install-bar{border-left:3px solid var(--accent);}
 
   /* контент задач — плотный: под формулами прозрачности нет */
@@ -682,7 +715,7 @@
   .card,.vcard,.sk-card,.help-step,.hf-card{
     background:var(--glass-strong);
     border:1px solid var(--glass-line);
-    box-shadow:inset 0 1px 0 var(--glass-edge),var(--e1);}
+    box-shadow:var(--rim),var(--e1);}
   .card{border-left:3px solid var(--line-strong);}
   .vcard{border-left:3px solid var(--line-strong);}
   /* длинный список карточек не получает тяжёлый фильтр на мобильном */
@@ -691,25 +724,46 @@
   .tcard{background:var(--glass);
     -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-line);
-    box-shadow:inset 0 1px 0 var(--glass-edge),var(--e1);}
+    box-shadow:var(--rim),var(--e1);}
   .tcard::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
     background:radial-gradient(120% 90% at 50% -20%,rgba(255,255,255,.35),transparent 60%);
     opacity:0;transition:opacity var(--dur) var(--ease);}
-  .tcard:hover{box-shadow:inset 0 1px 0 var(--glass-edge),var(--e3);border-color:var(--accent-line);}
+  .tcard:hover{box-shadow:var(--rim),var(--e3);border-color:var(--accent-line);}
   .tcard:hover::after{opacity:1;}
   html[data-theme="dark"] .tcard::after{
     background:radial-gradient(120% 90% at 50% -20%,rgba(255,255,255,.10),transparent 60%);}
 
-  .chip{background:var(--glass);
+  /* ---- фильтры: одна стеклянная подложка, сегменты внутри ----
+     Было четыре отдельные стеклянные пилюли, у каждой свой backdrop-filter,
+     и все они лежали на стекле .grid-panel — блюр поверх блюра. Материал
+     несёт контейнер, сегменты внутри только красятся. */
+  .filters{display:inline-flex;align-self:flex-start;max-width:100%;
+    gap:2px;padding:4px;border-radius:21px;
+    background:var(--glass);
     -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
+    border:1px solid var(--glass-line);
+    box-shadow:var(--rim),var(--e1);}
+  .filters .chip{background:transparent;border-color:transparent;box-shadow:none;
+    -webkit-backdrop-filter:none;backdrop-filter:none;min-height:34px;}
+  .filters .chip:hover:not(.on){background:var(--accent-soft);border-color:transparent;}
+
+  /* одиночные чипы (пресеты конструктора) — плотная поверхность без
+     собственного блюра: они всегда лежат на уже стеклянной панели */
+  .chip{background:var(--glass-strong);
     border-color:var(--glass-line);box-shadow:inset 0 1px 0 var(--glass-edge);}
   .chip.on{background:var(--accent);border-color:var(--accent);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 4px 14px -4px var(--accent);}
+  /* карта прогресса — 27 ячеек в сетке: рант каждой не нужен и стоит отрисовки */
   .cell{background:var(--glass-strong);border-color:var(--glass-line);}
 
-  .btn,.ghost,.back,.stepper,.mode-seg,.ans-input,.v-input{
+  .btn,.ghost,.back,.stepper,.mode-seg{
     background:var(--glass-strong);border-color:var(--glass-line);
-    box-shadow:inset 0 1px 0 var(--glass-edge);}
+    box-shadow:var(--rim);}
+  /* Поля ввода — утопленные, а не приподнятые. Стеклянная панель с бликом
+     сверху читается как кнопка; в поле надо печатать. */
+  .ans-input,.v-input{background:var(--input-bg);border-color:var(--line-strong);
+    box-shadow:inset 0 1px 2px var(--glass-well);}
+  .ans-input:focus,.v-input:focus{box-shadow:inset 0 1px 2px var(--glass-well),0 0 0 3px var(--accent-soft);}
   .btn.primary{background:var(--accent);border-color:transparent;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 6px 20px -6px var(--accent);}
   .btn.primary:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 10px 26px -8px var(--accent);}
@@ -730,7 +784,7 @@
   .hub-prog-pct span{-webkit-text-fill-color:initial;color:var(--ink-2);
     display:block;margin:var(--s2) 0 0;font-size:var(--fs-base);letter-spacing:0;}
   .hub-prog-bar{position:relative;height:14px;background:var(--track);
-    box-shadow:inset 0 1px 3px var(--glass-line);}
+    box-shadow:inset 0 1px 3px var(--glass-well);}
   .hub-prog-bar div{position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
   .hub-prog-stats span{background:var(--glass-strong);border:1px solid var(--glass-line);
     box-shadow:inset 0 1px 0 var(--glass-edge);}
@@ -768,6 +822,36 @@
   .block-head::after{content:"";position:absolute;left:0;bottom:0;width:72px;height:3px;
     border-radius:var(--r-full);background:linear-gradient(90deg,var(--accent),transparent);}
 
+  /* ---- отклик на нажатие ----
+     Аудитория сидит с телефона, где :hover не существует вообще, так что
+     нажатие — единственный канал обратной связи. Было translateY(1px):
+     кнопочный сдвиг, на тач-экране под пальцем не виден. Стекло вместо
+     этого сжимается и подсвечивается, с пружинным возвратом. */
+  .tcard,.chip,.btn,.ghost,.back,.hf-btn,.btn-video,.ib-go,.variant-cta,
+  .mode-seg .seg,.stepper button,.ios-hint-close{
+    -webkit-tap-highlight-color:transparent;
+    transition:transform var(--dur-press) var(--ease-spring),
+               box-shadow var(--dur) var(--ease),
+               background var(--dur) var(--ease),
+               border-color var(--dur) var(--ease),
+               color var(--dur) var(--ease);}
+  .tcard:active:not(:disabled),.chip:active,.btn:active:not(:disabled),
+  .ghost:active,.back:active,.hf-btn:active,.btn-video:active,.ib-go:active,
+  .variant-cta:active,.mode-seg .seg:active,.stepper button:active:not(:disabled),
+  .ios-hint-close:active{
+    transform:scale(.965);}
+  /* мелким элементам сжатие на 3.5% незаметно — им больше */
+  .chip:active,.stepper button:active:not(:disabled),.ghost:active,.back:active{
+    transform:scale(.93);}
+  /* стекло под пальцем светлеет: материал «прижимается» к фону */
+  .tcard:active:not(:disabled),.chip:not(.on):active,.btn:not(.primary):active:not(:disabled),
+  .ghost:active,.back:active{
+    background:var(--glass-press);}
+  .filters .chip:not(.on):active{background:var(--accent-soft);}
+  /* карточки задания уже приподняты на ховере — при нажатии садятся обратно */
+  .tcard:active:not(:disabled){box-shadow:var(--rim),var(--e1);}
+  .variant-cta:active{box-shadow:inset 0 1px 0 rgba(255,255,255,.14),var(--e1);}
+
   /* ---- появление: каскад по CSS, без scroll-слушателей ---- */
   @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
   .hub-prog,.variant-cta,.tcard{animation:rise .5s var(--ease) both;}
@@ -786,6 +870,15 @@
     .tcard{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--glass-strong);}
     /* цена размытия растёт с радиусом — на телефоне он меньше */
     :root{--glass-blur:saturate(150%) blur(12px);}
+    /* Сетка 2×2 вместо переноса по ширине. Полные подписи в одну строку
+       не помещаются ни при каком кегле: даже 11.5px с отступами 8px дают
+       342px против 333px доступных. Перенос флексом оставлял рваный правый
+       край, а колонки 1fr делят ширину поровну — пустого места нет,
+       подписи целые, тап-таргет остаётся 44px. */
+    .filters{display:grid;grid-template-columns:1fr 1fr;gap:2px;
+      width:100%;border-radius:var(--r-lg);}
+    .filters .chip{min-height:44px;padding:0 var(--s2);justify-content:center;
+      text-align:center;font-size:var(--fs-xs);}
   }
 
   /* Слабое устройство: снимаем стекло целиком, оставляем плотные поверхности.
@@ -795,16 +888,23 @@
   html.lowfi .install-bar,html.lowfi .tcard,html.lowfi .chip,html.lowfi .cell,html.lowfi .btn,
   html.lowfi .ghost,html.lowfi .back,html.lowfi .stepper,html.lowfi .mode-seg,
   html.lowfi .ans-input,html.lowfi .v-input,html.lowfi .card,html.lowfi .vcard,
-  html.lowfi .sk-card,html.lowfi .help-step,html.lowfi .hf-card{
+  html.lowfi .sk-card,html.lowfi .help-step,html.lowfi .hf-card,html.lowfi .filters,
+  html.lowfi header::after{
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;}
+  html.lowfi header::after{display:none;}
   html.lowfi header{background:var(--header-bg);}
   html.lowfi .hub-prog,html.lowfi .grid-panel,html.lowfi .vbar,html.lowfi .vintro,
   html.lowfi .vhist-card,html.lowfi .nav-menu,html.lowfi .ios-hint-sheet,html.lowfi .tcard,
   html.lowfi .card,html.lowfi .vcard,html.lowfi .sk-card,html.lowfi .help-step,
-  html.lowfi .hf-card{background:var(--surface);}
+  html.lowfi .hf-card,html.lowfi .filters{background:var(--surface);}
   /* только базовое состояние: активный чип и отмеченные ячейки сохраняют
      свою цветную заливку — иначе остаётся цветная рамка на тёмном фоне */
   html.lowfi .chip:not(.on){background:var(--surface);}
+  html.lowfi .filters .chip:not(.on){background:transparent;}
+  /* подсветка нажатия тоже плотная — прозрачного стекла тут нет */
+  html.lowfi .tcard:active:not(:disabled),html.lowfi .chip:not(.on):active,
+  html.lowfi .btn:not(.primary):active:not(:disabled),html.lowfi .ghost:active,
+  html.lowfi .back:active{background:var(--surface-2);}
   html.lowfi .cell:not(.g):not(.o):not(.b){background:var(--surface);}
   html.lowfi body::after{opacity:.5;}
   html.lowfi body::before{display:none;}
@@ -813,14 +913,22 @@
   /* меньше прозрачности — если система просит */
   @media (prefers-reduced-transparency:reduce){
     header,.hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.ios-hint-sheet,
-    .install-bar,.tcard,.chip,.cell,.btn,.ghost,.back,.stepper,.mode-seg,.ans-input,.v-input{
+    .install-bar,.tcard,.chip,.cell,.btn,.ghost,.back,.stepper,.mode-seg,.ans-input,.v-input,
+    .filters{
       -webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface);}
     .card,.vcard,.sk-card,.help-step,.hf-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface);}
+    .filters .chip:not(.on){background:transparent;}
+    header::after{display:none;}
     body::before,body::after{display:none;}
   }
   @media (prefers-reduced-motion:reduce){
     .hub-prog,.variant-cta,.tcard{animation:none;}
     .tcard::after{transition:none;}
+    /* сжатие при нажатии — движение; оставляем только смену фона */
+    .tcard:active:not(:disabled),.chip:active,.btn:active:not(:disabled),.ghost:active,
+    .back:active,.hf-btn:active,.btn-video:active,.ib-go:active,.variant-cta:active,
+    .mode-seg .seg:active,.stepper button:active:not(:disabled),.ios-hint-close:active{
+      transform:none;}
   }
 </style>
 <script defer src="katex/katex.min.js"></script>
