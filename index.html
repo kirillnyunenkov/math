@@ -389,19 +389,23 @@
   @media (max-width:359px){.marks .btn .ic{display:none;}}
 
   /* ---- показать решение / похожие ----
-     Вспомогательные действия: рамка вокруг каждого делала из них ещё две
-     полновесные кнопки. Текстовые ссылки в одну строку весят визуально
-     ничего и не спорят с сегментами статуса. */
-  .reveal{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s5);
+     Стекло — материал верхнего слоя: панели, тулбары, плавающие контролы.
+     Эти два действия живут внутри контента, привязаны к конкретной задаче,
+     и стеклянная пилюля вокруг каждого была бы стеклом поверх стекла
+     карточки. Значит — раскрывающая строка: акцентный текст плюс шеврон,
+     который разворачивается. Подчёркивания нет намеренно: это веб-условность,
+     а здесь нужен аффорданс раскрытия, его несёт шеврон. */
+  .reveal{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s4);
     margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);}
   .lnk{font:inherit;font-size:var(--fs-sm);font-weight:600;cursor:pointer;
     background:none;border:none;padding:0;min-height:32px;color:var(--accent);
-    display:inline-flex;align-items:center;text-align:left;
-    text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px;
-    text-decoration-color:var(--accent-line);-webkit-tap-highlight-color:transparent;
+    display:inline-flex;align-items:center;gap:5px;text-align:left;
+    -webkit-tap-highlight-color:transparent;
     transition:color var(--dur) var(--ease),opacity var(--dur) var(--ease);}
-  .lnk:hover{color:var(--accent-hover);text-decoration-color:var(--accent);}
+  .lnk:hover{color:var(--accent-hover);}
   .lnk:active{opacity:.55;}
+  .lnk .chev{flex:none;transition:transform var(--dur) var(--ease);}
+  .lnk.open .chev{transform:rotate(180deg);}
   .btn.check,.btn.rnd{color:var(--accent);border-color:var(--accent-line);}
   .btn.check:hover,.btn.rnd:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
   .btn.rnd{width:100%;margin-top:var(--s3);justify-content:center;font-size:var(--fs-sm);}
@@ -973,6 +977,8 @@
     .back:active,.hf-btn:active,.btn-video:active,.ib-go:active,.variant-cta:active,
     .mode-seg .seg:active,.stepper button:active:not(:disabled),.ios-hint-close:active{
       transform:none;}
+    /* шеврон доворачивается мгновенно: конечное состояние нужно, движение — нет */
+    .lnk .chev{transition:none;}
   }
 </style>
 <script defer src="katex/katex.min.js"></script>
@@ -1352,11 +1358,15 @@ function answersEqual(given,correct){const a=parseNum(given),b=parseNum(correct)
   if(a!==null&&b!==null)return Math.abs(a-b)<1e-9;
   return normAns(given)===normAns(correct);}
 function reanim(el,cls){el.classList.remove(cls);void el.offsetWidth;el.classList.add(cls);}
-/* «Показать решение» ⇄ «Скрыть решение». Развёрнутое решение — самый
-   длинный блок карточки, и свернуть его больше нечем: ссылка одна. */
-function toggleRevealLabel(btn,open){btn.textContent=open
-  ?btn.textContent.replace('Показать','Скрыть')
-  :btn.textContent.replace('Скрыть','Показать');}
+/* Раскрывающая строка. Подпись — существительное, состояние несёт шеврон:
+   «Показать решение» рядом с шевроном говорило бы одно и то же дважды, и
+   вдвоём с «Похожими задачами» такие подписи не влезали в строку телефона —
+   строка переносилась, и карточка отыгрывала назад сэкономленное. */
+const CHEV='<svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9.5 6 6 6-6"/></svg>';
+const revealLnk=(attr,val,label,extra)=>
+  `<button class="lnk" data-${attr}="${val}" aria-expanded="false"${extra||''}>${label}${CHEV}</button>`;
+function setReveal(btn,open){btn.classList.toggle('open',open);
+  btn.setAttribute('aria-expanded',open);}
 function taskStatsHTML(n){const{g,o,b}=countTask(n),tot=displayCount(n);
   return `<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
     `<span class="stat"><i class="dot o"></i>Повторить: <b>${o}</b></span>`+
@@ -1634,14 +1644,14 @@ function renderTask(n){
   const repCard=(id,protoNum,simIds)=>{const st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
     const label=protoNum!=null?`<span class="num proto-num">Прототип ${protoNum}</span>`:`<span class="num">${id}</span>`;
     const hasSim=!!(simIds&&simIds.length);
-    const simBtn=hasSim?`<button class="lnk similar-toggle" data-similar="${id}" data-sim-ids="${simIds.join(',')}" data-sim-n="${simIds.length}">Похожие задачи (${simIds.length})</button>`:'';
+    const simBtn=hasSim?revealLnk('similar',id,`Похожие задачи (${simIds.length})`,` data-sim-ids="${simIds.join(',')}"`):'';
     return `<article class="card ${c}" id="task-${id}">
         <div class="card-top">${label}</div>
         ${condHTML(id)}
         ${acHTML(id)}
         ${marksHTML(st,'mark','id',id)}
         <div class="reveal">
-          <button class="lnk sol" data-sol="${id}">Показать решение</button>
+          ${revealLnk('sol',id,'Решение')}
           ${simBtn}
         </div>
         ${solBox(id)}
@@ -1715,7 +1725,7 @@ function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
     <div class="sub-num">№ ${d.art||id}</div>
     <div class="cond"><div class="tex">${d.c||''}</div></div>
     ${ac}
-    <div class="reveal"><button class="lnk sol" data-sol="${id}">Показать решение</button></div>
+    <div class="reveal">${revealLnk('sol',id,'Решение')}</div>
     <div class="solution" id="sol-${id}" data-html="1"></div>
   </div>`;}
 let variant=null, variantTimerId=null;
@@ -1915,7 +1925,7 @@ function renderTraining(){
         <div class="cond"><div class="tex">${d.c||''}</div></div>
         ${ac}
         ${marksHTML(st,'tmark','ti',i)}
-        <div class="reveal"><button class="lnk sol" data-tsol="${i}">Показать ответ</button></div>
+        <div class="reveal">${revealLnk('tsol',i,'Ответ')}</div>
         <div class="solution" id="tsol-${i}"></div>
       </div>`;}).join('')}
     <div style="text-align:center;margin-top:8px"><button class="btn primary" data-home>К заданиям</button></div>
@@ -2009,7 +2019,7 @@ appEl.addEventListener('click',e=>{
     save();refreshTrainCard(i);return;}
   const tsol=e.target.closest('[data-tsol]');
   if(tsol){const i=+tsol.dataset.tsol,box=document.getElementById('tsol-'+i);if(!box)return;
-    toggleRevealLabel(tsol,box.classList.toggle('open'));
+    setReveal(tsol,box.classList.toggle('open'));
     if(!box.dataset.filled){const d=(window.TASKDATA[variant.items[i].n]||[])[variant.items[i].id-1]||{};
       box.innerHTML=(d.a?`<span class="answer">Ответ: ${d.a}</span>`:'')+`<div class="sol-body"><div class="tex">${d.s||''}</div></div>`;
       box.dataset.filled='1';typeset(box);}
@@ -2060,11 +2070,10 @@ appEl.addEventListener('click',e=>{
   if(sm){const rep=+sm.dataset.similar,box=document.getElementById('sim-'+rep);if(!box)return;
     if(!box.dataset.filled){const n=parseRoute().n,ids=sm.dataset.simIds.split(',').map(Number);
       box.innerHTML=ids.map(id=>simCardHTML(n,id)).join('');box.dataset.filled='1';typeset(box);}
-    const open=box.classList.toggle('open');
-    sm.textContent=open?'Скрыть похожие':('Похожие задачи ('+sm.dataset.simN+')');return;}
+    setReveal(sm,box.classList.toggle('open'));return;}
   const sol=e.target.closest('[data-sol]');
   if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id);
-    toggleRevealLabel(sol,box.classList.toggle('open'));
+    setReveal(sol,box.classList.toggle('open'));
     if(box.dataset.html==='1'){
       if(!box.dataset.filled){const n=parseRoute().n,d=(window.TASKDATA[n]||[])[id-1]||{};
         box.innerHTML=(d.a?`<span class="answer">Ответ: ${d.a}</span>`:'')+`<div class="sol-body"><div class="tex">${d.s||''}</div></div>`;
