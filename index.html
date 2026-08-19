@@ -1611,8 +1611,13 @@ function setBoxOpen(box,open){
   }
   /* Время по расстоянию: короткий блок разворачивается быстро, длинное
      решение — заметно медленнее. Потолок, чтобы не превращалось в ожидание. */
-  const dur=Math.round(Math.min(440,Math.max(190,190+Math.abs(to-from)*0.3)));
+  const dur=Math.round(Math.min(600,Math.max(230,230+Math.abs(to-from)*0.4)));
   box.style.transitionDuration=dur+'ms';
+  /* Проявление держим пропорциональным раскрытию. Если содержимое станет
+     полностью видимым сильно раньше, чем коробка дорастёт, хвост движения
+     снова читается как растягивание жёсткого блока. */
+  const inner=box.firstElementChild;
+  if(inner)inner.style.transitionDuration=Math.round(dur*0.7)+'ms';
   void box.offsetWidth;
   if(open){
     box.classList.add('open');
