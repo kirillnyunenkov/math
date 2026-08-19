@@ -23,11 +23,35 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Тренажёр ЕГЭ">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,400;7..72,600;7..72,700&family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/golos-text-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/literata-cyrillic.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/golos-text-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/literata-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="katex/katex.min.css">
 <style>
+  /* ============================================================
+     ШРИФТЫ — свои, не с fonts.googleapis.com
+     Внешний хост был рендер-блокирующим на каждом холодном старте, а
+     service worker кросс-доменное не кеширует: в офлайне у установленного
+     приложения типографика подменялась системной и макет плыл.
+     Оба семейства вариативные — один файл на подмножество покрывает
+     все веса 400-700, поэтому файлов всего четыре: кириллица и латиница
+     на семейство. Греческое, вьетнамское и latin-ext подмножества не
+     берём: в текстах их нет, а это лишние 88 КБ в предкеше.
+     Объявления инлайновые, а не отдельным файлом: лишний блокирующий
+     запрос ради двух десятков строк не нужен.
+     Стрелки ← → ✓ ни одно подмножество не покрывает — они и раньше
+     рисовались системным шрифтом, поведение не изменилось.
+     ============================================================ */
+  @font-face{font-family:'Golos Text';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url(fonts/golos-text-cyrillic.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+  @font-face{font-family:'Golos Text';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url(fonts/golos-text-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+  @font-face{font-family:'Literata';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url(fonts/literata-cyrillic.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+  @font-face{font-family:'Literata';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url(fonts/literata-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+
   /* ============================================================
      ТОКЕНЫ
      Радиусы (одна система): поля 8 · кнопки/подкарточки 12 ·
@@ -70,6 +94,10 @@
     --r-sm:8px;--r-md:12px;--r-lg:16px;--r-full:999px;
     /* движение */
     --dur:.18s;--ease:cubic-bezier(.2,.8,.3,1);
+    /* постоянная часть высоты карточки задачи (без чертежа) — для оценки
+       content-visibility. На телефоне больше: тот же текст занимает
+       больше строк. Замерено на заданиях 1, 4, 6, 12. */
+    --card-base:280px;
     /* легаси-псевдонимы: на них ссылается JS */
     --green:var(--ok);--orange:var(--warn);--dark:var(--todo);--muted:var(--ink-3);
     --bg:var(--paper);
@@ -136,13 +164,18 @@
   .ghost:active,.back:active{transform:translateY(1px);}
   .back{display:none;}
   .task-back{display:inline-flex;}
+  /* На широком экране кнопка темы висела одна сразу за заголовком, пока
+     остальные действия были собраны справа. order отправляет её в конец
+     ряда, к своей группе; на телефоне порядок возвращается — там она
+     стоит перед бургером и в меню не входит. */
+  #theme{order:1;}
   #theme,.task-theme{padding:0;width:38px;min-height:38px;justify-content:center;flex:none;}
   #theme .ic-sun,.task-theme .ic-sun{display:none;}
   html[data-theme="dark"] #theme .ic-moon,html[data-theme="dark"] .task-theme .ic-moon{display:none;}
   html[data-theme="dark"] #theme .ic-sun,html[data-theme="dark"] .task-theme .ic-sun{display:block;}
   .install-mobile-only{display:none!important;}
   @media(max-width:760px){.install-mobile-only{display:inline-flex!important;}}
-  .nav-only{display:none;}
+  @media(max-width:760px){:root{--card-base:330px;}}
   .burger{display:none;font:inherit;background:transparent;border:1px solid var(--line-strong);
     border-radius:var(--r-md);padding:0;cursor:pointer;width:40px;height:40px;
     flex-direction:column;align-items:center;justify-content:center;gap:4px;flex:none;
@@ -249,7 +282,9 @@
   .help-step p:last-child{margin-bottom:0;}
   .help-legend{list-style:none;display:flex;flex-direction:column;gap:var(--s2);margin:var(--s3) 0;padding:0;}
   .help-legend li{display:flex;align-items:center;gap:var(--s3);font-size:var(--fs-base);}
-  .help-legend .dot{width:12px;height:12px;border-radius:50%;flex:none;}
+  /* та же точка, что в шапке и на хабе: это легенда именно к ней,
+     и круг вместо скруглённого квадрата читался как другой элемент */
+  .help-legend .dot{width:12px;height:12px;border-radius:4px;flex:none;}
   .help-legend b{font-weight:600;}
   .help-way{background:var(--surface-2);border-radius:var(--r-md);padding:var(--s3) var(--s4);
     margin-bottom:var(--s2);font-size:var(--fs-base);line-height:1.55;}
@@ -280,25 +315,39 @@
   .install-list{list-style:none;display:flex;flex-direction:column;gap:var(--s3);margin:var(--s4) 0 0;padding:0;}
   .install-list li{font-size:var(--fs-base);line-height:1.55;}
   .install-list b{font-weight:600;}
-  .ios-hint-overlay{position:fixed;inset:0;background:rgba(20,16,10,.5);z-index:9999;
+  .sheet-ov{position:fixed;inset:0;background:rgba(20,16,10,.5);z-index:9999;
     display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;
     transition:opacity .22s var(--ease);}
-  .ios-hint-overlay.open{opacity:1;pointer-events:auto;}
-  .ios-hint-sheet{background:var(--surface);border-radius:var(--r-lg) var(--r-lg) 0 0;
+  .sheet-ov.open{opacity:1;pointer-events:auto;}
+  .sheet{background:var(--surface);border-radius:var(--r-lg) var(--r-lg) 0 0;
     padding:var(--s6) var(--s5) max(var(--s10),env(safe-area-inset-bottom));width:100%;max-width:520px;
     transform:translateY(24px);transition:transform .28s var(--ease);box-shadow:var(--e3);}
-  .ios-hint-overlay.open .ios-hint-sheet{transform:translateY(0);}
-  .ios-hint-sheet h3{font-size:var(--fs-lg);margin:0 0 var(--s3);}
-  .ios-hint-sheet .ih-sub{font-size:var(--fs-sm);color:var(--ink-2);margin:0 0 var(--s4);}
-  .ios-hint-sheet ol{margin:0 0 var(--s5);padding-left:22px;display:flex;flex-direction:column;gap:var(--s2);}
-  .ios-hint-sheet ol li{font-size:var(--fs-base);line-height:1.55;}
-  .ios-hint-sheet ol li b{font-weight:600;}
-  .ios-hint-sheet .ih-icon{font-style:normal;display:inline-block;background:var(--surface-2);
+  .sheet-ov.open .sheet{transform:translateY(0);}
+  .sheet h3{font-size:var(--fs-lg);margin:0 0 var(--s3);}
+  .sheet .ih-sub{font-size:var(--fs-sm);color:var(--ink-2);margin:0 0 var(--s4);}
+  .sheet ol{margin:0 0 var(--s5);padding-left:22px;display:flex;flex-direction:column;gap:var(--s2);}
+  .sheet ol li{font-size:var(--fs-base);line-height:1.55;}
+  .sheet ol li b{font-weight:600;}
+  .sheet .ih-icon{font-style:normal;display:inline-block;background:var(--surface-2);
     border-radius:6px;padding:1px 6px;font-size:var(--fs-xs);font-weight:600;}
-  .ios-hint-close{width:100%;font:inherit;font-size:var(--fs-base);font-weight:600;
-    background:var(--accent);color:var(--accent-on);border:none;border-radius:var(--r-md);
-    min-height:48px;cursor:pointer;transition:background var(--dur) var(--ease);}
-  .ios-hint-close:hover{background:var(--accent-hover);}
+  /* ---- кнопки листа ----
+     Подтверждения теперь здесь, а не в системном confirm(): нативный диалог
+     выпадал из интерфейса целиком — своя типографика, свои кнопки, местами
+     английские подписи. Компонент листа уже был ради подсказки про
+     установку, ему же и подтверждать. */
+  .sheet-actions{display:flex;gap:var(--s2);}
+  .sheet-actions .sheet-btn{flex:1;}
+  .sheet-btn,.sheet-go{width:100%;font:inherit;font-size:var(--fs-base);font-weight:600;
+    min-height:48px;cursor:pointer;border-radius:var(--r-md);
+    display:inline-flex;align-items:center;justify-content:center;
+    border:1px solid var(--line-strong);background:var(--glass-strong);color:var(--ink-2);
+    transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease);}
+  .sheet-btn:hover{border-color:var(--ink-3);color:var(--ink);}
+  .sheet-btn.go,.sheet-go{background:var(--accent);color:var(--accent-on);border-color:transparent;}
+  .sheet-btn.go:hover,.sheet-go:hover{background:var(--accent-hover);}
+  /* необратимое действие красится статусным красным, а не акцентом */
+  .sheet-btn.go.danger{background:var(--err);color:var(--err-on);}
+  .sheet-btn.go.danger:hover{background:var(--err-text);}
 
   /* ============================================================
      ЭКРАН ЗАДАНИЯ
@@ -308,6 +357,12 @@
   .grid-panel{position:sticky;top:var(--s4);min-width:0;padding:var(--s4);border-radius:var(--r-lg);}
   .task-nav{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin-bottom:var(--s4);}
   .task-nav .task-back{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;}
+  /* Свёртка карты нужна только на телефоне: на широком экране панель
+     стоит сбоку и ничего не отнимает у условия. */
+  .panel-toggle{display:none;}
+  /* Нейтрализует инлайновую высоту, если ширину увеличили при открытой
+     или закрытой карте — на десктопе тело панели всегда развёрнуто. */
+  @media (min-width:761px){.panel-body{height:auto!important;overflow:visible!important;}}
   .grid-label{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.07em;
     color:var(--ink-3);font-weight:600;margin-bottom:var(--s3);}
   .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s1);}
@@ -324,8 +379,30 @@
 
   .list{display:flex;flex-direction:column;gap:var(--s4);min-width:0;}
 
+  /* ============================================================
+     СЕГМЕНТИРОВАННЫЙ ПЕРЕКЛЮЧАТЕЛЬ — один паттерн на три места
+     Фильтры списка, отметка статуса и режим варианта решают одну задачу:
+     выбор одного из нескольких. Выглядели они по-разному — стеклянная
+     пилюля 21px, утопленный жёлоб 12px и рамка с разделителями внутри.
+     Оставлен жёлоб: утопленная подложка честно показывает, что выбор
+     ровно один, и не спорит со стеклом, лежащим под ней.
+     Радиус — пилюля, как у всех прочих чипов; 21px не был ни из какой
+     шкалы. Материал несёт только контейнер: у сегментов нет ни своего
+     фона, ни блюра — на экране задания таких жёлобов до 27 штук.
+     ============================================================ */
+  .filters,.marks,.mode-seg{
+    display:inline-flex;gap:2px;padding:3px;border:none;
+    border-radius:var(--r-full);background:var(--track);
+    box-shadow:inset 0 1px 2px var(--glass-well);}
+  .filters .chip,.marks .btn,.mode-seg .seg{
+    border-radius:var(--r-full);background:transparent;
+    border:1px solid transparent;box-shadow:none;
+    -webkit-backdrop-filter:none;backdrop-filter:none;}
+  /* приподнят только выбранный сегмент */
+  .filters .chip.on,.marks .btn.on,.mode-seg .seg.on{box-shadow:var(--rim);}
+
   /* фильтры */
-  .filters{display:flex;gap:var(--s2);flex-wrap:wrap;margin-bottom:var(--s5);}
+  .filters{align-self:flex-start;max-width:100%;margin-bottom:var(--s5);}
   .chip{font:inherit;font-size:var(--fs-sm);font-weight:500;cursor:pointer;
     border-radius:var(--r-full);padding:0 var(--s4);min-height:38px;display:inline-flex;
     align-items:center;gap:6px;border:1px solid var(--line-strong);background:var(--surface);
@@ -334,12 +411,23 @@
   .chip.on{background:var(--accent);border-color:var(--accent);color:var(--accent-on);}
   .chip:active{transform:translateY(1px);}
   .filters-empty{color:var(--ink-2);font-size:var(--fs-base);padding:var(--s2) 2px;}
+  /* Смена фильтра: гаснет только содержимое списка. Чипы не трогаем —
+     нажатая кнопка обязана остаться на месте и в полную силу.
+     Через :not(.filters), а не перечислением .card/.block: карточки лежат
+     то напрямую в списке, то внутри секций подтем — от структуры это
+     правило зависеть не должно. */
+  .list > *:not(.filters){transition:opacity .13s var(--ease);}
+  .list.swapping > *:not(.filters){opacity:0;}
 
   /* карточка задачи */
   .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
-    padding:var(--s5) var(--s6);scroll-margin-top:78px;
+    padding:var(--s5) var(--s6);
     border-left:3px solid var(--line-strong);transition:border-color var(--dur) var(--ease);
-    content-visibility:auto;contain-intrinsic-size:auto 360px;}
+    /* Заглушка на случай, если оценка не проставлена инлайном. Точную высоту
+       считает renderTask по каждой карточке: без чертежа они ~260px, с
+       чертежом ~600px, и одна общая цифра ошибалась вдвое. Ключевое слово
+       auto означает «после первой отрисовки помни настоящий размер». */
+    content-visibility:auto;contain-intrinsic-size:auto 420px;}
   .card.is-g{border-left-color:var(--ok);}
   .card.is-o{border-left-color:var(--warn);}
   .card.is-b{border-left-color:var(--todo);}
@@ -349,7 +437,7 @@
   .proto-num{font-family:'Golos Text',sans-serif;font-weight:600;font-size:var(--fs-2xs);
     letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);}
   .card-top .proto-num{font-size:var(--fs-2xs);}
-  .cond img,.sol-body img{max-width:760px;width:100%;height:auto;display:block;border-radius:var(--r-sm);}
+  .cond img:not(.fig),.sol-body img{max-width:760px;width:100%;height:auto;display:block;border-radius:var(--r-sm);}
 
   /* кнопки действий */
   .btn{font:inherit;font-size:var(--fs-sm);font-weight:500;cursor:pointer;
@@ -375,18 +463,24 @@
      На телефоне желобок занимает строку целиком, на широкой карточке
      упирается в потолок: растянутый на 840px переключатель из трёх слов
      читается как сломанная панель, а клик-зона в 280px просто нелепа. */
-  .marks{display:flex;gap:2px;max-width:380px;
-    margin-top:var(--s4);padding:3px;border-radius:var(--r-md);background:var(--track);}
+  /* Жёлоб тянется на ширину карточки, а не сжимается по содержимому:
+     общий паттерн переключателя даёт inline-flex, здесь это оставляло
+     полсотни пикселей неиспользованными, и подписи вплотную упирались
+     в края сегментов. Потолок 380px — чтобы на широкой карточке три
+     слова не растягивались на всю строку. */
+  .marks{display:flex;max-width:380px;margin-top:var(--s4);}
   /* Ширина по содержимому, а не по трети: «Умею» вдвое короче «Разобраться»,
      и равные трети обрезали бы длинную подпись многоточием ради пустоты
      в короткой. Свободный остаток делится поровну — рваного края нет. */
-  .marks .btn{flex:1 1 auto;min-width:0;min-height:36px;padding:0 var(--s1);gap:5px;
-    justify-content:center;font-size:var(--fs-xs);
-    background:transparent;border-color:transparent;box-shadow:none;}
+  /* Ширина по содержимому, а не по трети: «Умею» вдвое короче
+     «Разобраться», равные трети обрезали бы длинную подпись ради пустоты
+     в короткой. Свободный остаток делится поровну — рваного края нет.
+     padding здесь — гарантированный минимум на самый узкий экран;
+     на обычном телефоне к нему добавляется поровну поделённый остаток. */
+  .marks .btn{flex:1 1 auto;min-width:0;min-height:36px;padding:0 var(--s3);gap:6px;
+    justify-content:center;font-size:var(--fs-xs);}
   .marks .btn .ic{flex:none;}
   .marks .btn span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  /* на самых узких экранах подпись важнее иконки */
-  @media (max-width:359px){.marks .btn .ic{display:none;}}
 
   /* ---- показать решение / похожие ----
      Стекло — материал верхнего слоя: панели, тулбары, плавающие контролы.
@@ -406,9 +500,8 @@
   .lnk:active{opacity:.55;}
   .lnk .chev{flex:none;transition:transform var(--dur) var(--ease);}
   .lnk.open .chev{transform:rotate(180deg);}
-  .btn.check,.btn.rnd{color:var(--accent);border-color:var(--accent-line);}
-  .btn.check:hover,.btn.rnd:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
-  .btn.rnd{width:100%;margin-top:var(--s3);justify-content:center;font-size:var(--fs-sm);}
+  .btn.check{color:var(--accent);border-color:var(--accent-line);}
+  .btn.check:hover{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);}
   .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-on);
     font-weight:600;font-size:var(--fs-base);padding:0 var(--s6);min-height:46px;}
   .btn.primary:hover{background:var(--accent-hover);border-color:var(--accent-hover);color:var(--accent-on);}
@@ -437,8 +530,15 @@
   .ans-msg.no{color:var(--err-text);}
 
   /* прототипы и похожие задачи */
-  .similar-body{display:none;margin-top:var(--s4);flex-direction:column;gap:var(--s4);}
-  .similar-body.open{display:flex;}
+  /* ---- раскрытие: высота меняется только переходом ----
+     Пустой блок не открывается, чтобы потом налиться контентом. Порядок
+     жёсткий: заполнить скрытым -> KaTeX -> дождаться декодирования картинок
+     -> и только теперь анимировать высоту. Скачков не остаётся ни в одном
+     сценарии, включая «скелетон -> готовое решение»: это тот же переход.
+     overflow снимается по окончании — широкая формула не должна обрезаться. */
+  .similar-body,.solution{height:0;overflow:hidden;transition:height .26s var(--ease);}
+  .sim-inner{display:flex;flex-direction:column;gap:var(--s4);margin-top:var(--s4);}
+  .sol-inner{margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line);}
   .subcard{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s4) var(--s5);}
   .sub-num{font-size:var(--fs-2xs);font-weight:600;color:var(--ink-3);margin-bottom:var(--s3);
     text-transform:uppercase;letter-spacing:.06em;}
@@ -450,8 +550,10 @@
   .block-head{font-family:'Literata',Georgia,serif;font-size:var(--fs-2xl);font-weight:700;
     color:var(--ink);line-height:1.15;letter-spacing:-.02em;margin:var(--s2) 2px 0;
     padding-bottom:var(--s3);border-bottom:2px solid var(--accent);}
-  .solution{margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line);display:none;}
-  .solution.open{display:block;}
+  /* скелетон решения: показывается, только если sol.js не успел приехать
+     до клика — при обычном сценарии префетч в простое его опережает */
+  .sk-sol{margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line);
+    display:flex;flex-direction:column;gap:10px;}
 
   /* ============================================================
      МАТЕМАТИКА
@@ -460,15 +562,37 @@
     line-height:normal;overflow-wrap:break-word;}
   .tex .katex{font-size:1.06em;}
   .tex .katex-display{margin:.5em 0;}
-  .tex img{max-width:100%;height:auto;width:auto;filter:var(--img-filter);}
+  .tex img{max-width:100%;height:auto;filter:var(--img-filter);}
+  .tex img:not(.fig){width:auto;}
   html[data-theme="dark"] .tex,html[data-theme="dark"] .tex *{color:var(--ink)!important;}
   .tex img.math{display:inline;vertical-align:middle;width:auto;}
   .tex img:not(.math){display:block;max-width:100%;margin:.5em auto;}
   .tex .center,.tex .math-display{text-align:center;}
   .tex p{margin:0 0 .5em;}
-  .cond .figwrap img.fig{display:block;width:auto;height:auto;max-width:280px;max-height:300px;
+  /* ---- размер рисунка задаётся атрибутами width/height ----
+     В data.js записан ОТОБРАЖАЕМЫЙ размер (уже с ограничениями 280x300),
+     а не натуральный. Здесь намеренно нет ни width, ни max-width в пикселях:
+     любое авторское width перебило бы значение из атрибута, и у незагруженной
+     картинки не осталось бы ни одного определённого измерения — коробка
+     схлопывалась бы в 0x0 и место под рисунок не резервировалось вовсе.
+     Так width берётся из атрибута, height считается по aspect-ratio, а
+     max-width:100% ужимает рисунок на узких экранах вместе с высотой. */
+  .cond .figwrap img.fig{display:block;max-width:100%;height:auto;
     margin:0 auto;border-radius:0;}
-  [data-n="8"] .cond .figwrap img.fig{width:100%;max-width:520px;max-height:none;}
+  /* ---- проявление рисунка ----
+     У всех тегов проставлены width/height, поэтому место под рисунок занято
+     ещё до загрузки и вёрстка не дёргается. Но «пустая рамка, в которой резко
+     возник чертёж» — это та же резкая прогрузка, только без сдвига. Поэтому
+     не долетевший рисунок проявляется, а не возникает.
+     Класс ставится ТОЛЬКО на реально незагруженные: у пришедшего из кеша
+     рисунка перехода нет вообще, иначе он мигал бы на каждой отрисовке.
+     Значение по умолчанию — видимый: если JS почему-то не отработал,
+     рисунки останутся на месте, а не пропадут. */
+  .cond .figwrap img.fig.pending{opacity:0;}
+  .cond .figwrap img.fig{transition:opacity .3s var(--ease);}
+  /* графики производной шире прочих чертежей; width:100% определён,
+     поэтому резервирование работает и здесь */
+  [data-n="8"] .cond .figwrap img.fig{width:100%;max-width:520px;}
   .answer{display:inline-block;background:var(--ok-soft);color:var(--ok-text);font-weight:600;
     padding:5px var(--s3);border-radius:var(--r-sm);margin-bottom:var(--s3);
     font-size:var(--fs-base);font-family:'Golos Text',sans-serif;}
@@ -484,7 +608,7 @@
     border-left:3px solid var(--warn);border-radius:var(--r-md);padding:var(--s3) var(--s4);
     font-size:var(--fs-sm);color:var(--warn-text);margin-bottom:var(--s5);line-height:1.5;}
   .vwarn b{color:var(--warn-text);font-weight:600;}
-  .vbar{position:sticky;top:64px;z-index:20;display:flex;align-items:center;gap:var(--s4);
+  .vbar{position:sticky;top:var(--header-h,64px);z-index:20;display:flex;align-items:center;gap:var(--s4);
     flex-wrap:wrap;background:var(--vbar-bg);backdrop-filter:saturate(180%) blur(10px);
     -webkit-backdrop-filter:saturate(180%) blur(10px);border:1px solid var(--line);
     border-radius:var(--r-lg);padding:var(--s3) var(--s4);margin-bottom:var(--s5);box-shadow:var(--e2);}
@@ -522,12 +646,10 @@
   .vans-row .right{color:var(--ok-text);font-weight:600;}
 
   /* конструктор варианта */
-  .mode-seg{display:inline-flex;border:1px solid var(--line-strong);border-radius:var(--r-md);
-    overflow:hidden;margin:2px 0 var(--s2);background:var(--surface);}
+  .mode-seg{margin:2px 0 var(--s2);}
   .mode-seg .seg{font:inherit;font-size:var(--fs-base);padding:0 var(--s5);min-height:44px;
-    background:transparent;color:var(--ink-2);border:none;cursor:pointer;display:inline-flex;
+    color:var(--ink-2);cursor:pointer;display:inline-flex;
     align-items:center;gap:7px;transition:all var(--dur) var(--ease);}
-  .mode-seg .seg+.seg{border-left:1px solid var(--line-strong);}
   .mode-seg .seg:hover{color:var(--accent);background:var(--accent-soft);}
   .mode-seg .seg.on{background:var(--accent);color:var(--accent-on);font-weight:600;}
   .mode-hint{color:var(--ink-2);font-size:var(--fs-sm);line-height:1.5;margin:0 0 var(--s5);max-width:62ch;}
@@ -553,10 +675,15 @@
   .vhist{margin-top:var(--s6);}
   .vhist-head{display:flex;align-items:center;justify-content:space-between;
     font-family:'Literata',Georgia,serif;font-weight:600;font-size:var(--fs-md);margin-bottom:var(--s3);}
+  /* Подчёркивания в этом интерфейсе нет нигде (см. комментарий к .lnk).
+     К тому же это удаление истории — самому слабому аффордансу тут не
+     место, поэтому обведённая кнопка, а не текстовая ссылка. */
   .vhist-clear{font:inherit;font-family:'Golos Text',sans-serif;font-size:var(--fs-xs);
-    color:var(--ink-3);background:none;border:none;cursor:pointer;text-decoration:underline;
-    text-underline-offset:2px;padding:var(--s1) var(--s2);border-radius:var(--r-sm);}
-  .vhist-clear:hover{color:var(--accent);}
+    font-weight:600;color:var(--ink-2);background:transparent;cursor:pointer;
+    border:1px solid var(--line-strong);border-radius:var(--r-full);
+    padding:0 var(--s3);min-height:30px;display:inline-flex;align-items:center;
+    transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),background var(--dur) var(--ease);}
+  .vhist-clear:hover{color:var(--err-text);border-color:var(--err);background:var(--err-soft);}
   .spark{display:block;width:100%;height:48px;margin-bottom:var(--s4);overflow:visible;}
   .vhist-list{display:flex;flex-direction:column;gap:var(--s1);max-height:260px;overflow:auto;}
   .vhist-row{display:grid;grid-template-columns:1fr auto auto auto;gap:var(--s4);
@@ -575,12 +702,10 @@
     30%{transform:translateX(5px)}45%{transform:translateX(-3px)}60%{transform:translateX(3px)}80%{transform:translateX(-1px)}}
   @keyframes ans-pop{0%{transform:scale(1)}40%{transform:scale(1.05)}100%{transform:scale(1)}}
   @keyframes ans-flash{0%{opacity:0;transform:translateY(3px)}100%{opacity:1;transform:translateY(0)}}
-  @keyframes card-flash{0%{box-shadow:0 0 0 3px var(--accent);}100%{box-shadow:0 0 0 3px transparent;}}
   @keyframes sk-wave{0%{background-position:200% center}100%{background-position:-200% center}}
   .ans-input.shake{animation:ans-shake .42s var(--ease);}
   .ans-input.pop{animation:ans-pop .35s var(--ease);}
   .ans-msg.flash{animation:ans-flash .28s var(--ease);}
-  .card.flash-card{animation:card-flash .9s ease-out;}
   .sk-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
     padding:var(--s5) var(--s6);margin-bottom:var(--s4);}
   .sk-line{border-radius:6px;background:linear-gradient(90deg,var(--sk-base) 25%,var(--sk-shine) 50%,var(--sk-base) 75%);
@@ -598,13 +723,36 @@
      ============================================================ */
   @media (max-width:760px){
     .wrap{grid-template-columns:1fr;gap:var(--s5);padding:var(--s4) var(--s4) var(--s12);}
-    .grid-panel{position:static;}
+    /* ---- панель задания на телефоне ----
+       Была статичной и занимала 440px: карта из 27 клеток + «Видеоразбор»
+       отодвигали первую задачу на y=681 из 812, то есть 84% первого экрана
+       уходило под сводку, которая по своему же назначению «только
+       показывает состояние, не навигация».
+       Теперь панель — липкая строка в 56px: возврат, полоска прогресса,
+       переключатель темы. Карта и видео уезжают под раскрытие.
+       Липкость заодно чинит второе: шапки на экране задания нет, и с
+       двадцатого прототипа выйти можно было только домотав список назад. */
+    .grid-panel{position:sticky;top:0;z-index:30;padding:var(--s2) var(--s3);
+      border-radius:0 0 var(--r-lg) var(--r-lg);}
+    .task-nav{margin-bottom:0;}
+    .panel-toggle{display:inline-flex;align-items:center;gap:var(--s3);
+      flex:1;min-width:0;font:inherit;color:var(--ink-2);cursor:pointer;
+      background:none;border:none;padding:0 var(--s2);min-height:44px;
+      -webkit-tap-highlight-color:transparent;}
+    .panel-toggle .bar{flex:1;min-width:40px;}
+    .panel-toggle .chev{flex:none;transition:transform var(--dur) var(--ease);}
+    .panel-toggle[aria-expanded="true"] .chev{transform:rotate(180deg);}
+    .panel-body{height:0;overflow:hidden;transition:height .26s var(--ease);}
+    .panel-body .grid-label{margin-top:var(--s4);}
     .grid{grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px;}
     .head-inner{padding:var(--s2) var(--s4);gap:var(--s2) var(--s3);min-height:56px;}
     .stats{width:100%;margin-left:0;gap:var(--s3);}
     .title{font-size:var(--fs-md);}
     .burger{display:flex;}
-    #theme{margin-left:auto;}
+    /* есть возврат — заголовок уходит: оба ведут на хаб, а вместе
+       они не влезают в строку */
+    header.has-back .title{display:none;}
+    #theme{order:0;margin-left:auto;}
     .nav-menu{display:none;position:absolute;top:calc(100% + 6px);right:var(--s4);
       background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
       padding:6px;box-shadow:var(--e3);flex-direction:column;gap:2px;min-width:230px;z-index:200;}
@@ -612,7 +760,6 @@
     .nav-menu .ghost{text-align:left;width:100%;border:none;border-radius:var(--r-sm);
       padding:0 var(--s3);min-height:44px;justify-content:flex-start;}
     .nav-menu .ghost:hover{background:var(--accent-soft);}
-    .nav-only{display:inline;}
     .hub{padding:var(--s6) var(--s4) var(--s12);}
     .hub h2{font-size:var(--fs-2xl);}
     .hub-prog,.hf-card,.vintro{padding:var(--s5);}
@@ -626,7 +773,12 @@
     .hub-prog-stats{gap:6px;}
     .hub-prog-stats span{font-size:var(--fs-xs);padding:4px var(--s2);}
     .vbox{padding:var(--s5) var(--s4) var(--s12);}
-    .vbar{position:static;}
+    /* Таймер обязан оставаться на виду: в режиме экзамена на 12 задач он
+       уезжал после первого же свайпа. Липнет под шапку — её высоту
+       считает syncHeaderH. */
+    .vbar{top:var(--header-h,60px);gap:var(--s3);
+      border-radius:var(--r-md);padding:var(--s2) var(--s3);}
+    .vbar .vtimer{font-size:var(--fs-lg);}
     .vhist-row{gap:var(--s2);font-size:var(--fs-xs);padding:var(--s2);}
     .vresult{padding:var(--s5);}
     .variant-cta{padding:var(--s4);gap:var(--s3);}
@@ -638,7 +790,17 @@
     #theme,.task-theme{width:44px;}
     /* сегмент ниже 44px, но широкий — палец попадает; ссылки добирают
        тап-таргет невидимой высотой, не утолщая строку визуально */
-    .marks .btn{min-height:40px;}
+    /* ---- на телефоне жёлоб статуса без иконок ----
+       Замерено при 375px: на три сегмента приходится 289px, из них
+       179px забирают сами подписи. Иконки с зазорами стоят ещё 66px —
+       после них на отступы остаётся меньше 4px с каждой стороны, и текст
+       упирается в края. Подписи здесь прямые («Умею», «Повторить»,
+       «Разобраться»), состояние несут заливка и цвет, так что иконка
+       ничего не добавляет — а место освобождает под нормальные отступы. */
+    .marks .btn .ic{display:none;}
+    .marks .btn{min-height:40px;padding:0 var(--s3);}
+    /* 320px: доступно 238px, на отступы по 12px их уже не хватает */
+    @media (max-width:359px){.marks .btn{padding:0 var(--s2);}}
     .lnk{min-height:44px;}
     .ans-input,.v-input{min-height:44px;flex:1;min-width:140px;width:auto;}
   }
@@ -742,7 +904,7 @@
     -webkit-mask-image:linear-gradient(to bottom,#000,transparent);
     mask-image:linear-gradient(to bottom,#000,transparent);}
 
-  .hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.ios-hint-sheet,.install-bar{
+  .hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.sheet,.install-bar{
     background:var(--glass);
     -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-line);
@@ -775,18 +937,9 @@
   html[data-theme="dark"] .tcard::after{
     background:radial-gradient(120% 90% at 50% -20%,rgba(255,255,255,.10),transparent 60%);}
 
-  /* ---- фильтры: одна стеклянная подложка, сегменты внутри ----
-     Было четыре отдельные стеклянные пилюли, у каждой свой backdrop-filter,
-     и все они лежали на стекле .grid-panel — блюр поверх блюра. Материал
-     несёт контейнер, сегменты внутри только красятся. */
-  .filters{display:inline-flex;align-self:flex-start;max-width:100%;
-    gap:2px;padding:4px;border-radius:21px;
-    background:var(--glass);
-    -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
-    border:1px solid var(--glass-line);
-    box-shadow:var(--rim),var(--e1);}
-  .filters .chip{background:transparent;border-color:transparent;box-shadow:none;
-    -webkit-backdrop-filter:none;backdrop-filter:none;min-height:34px;}
+  /* Геометрия и материал жёлоба заданы общим правилом выше — здесь только
+     то, что специфично для фильтров. */
+  .filters .chip{min-height:34px;}
   .filters .chip:hover:not(.on){background:var(--accent-soft);border-color:transparent;}
 
   /* одиночные чипы (пресеты конструктора) — плотная поверхность без
@@ -798,15 +951,11 @@
   /* карта прогресса — 27 ячеек в сетке: рант каждой не нужен и стоит отрисовки */
   .cell{background:var(--glass-strong);border-color:var(--glass-line);}
 
-  .btn,.ghost,.back,.stepper,.mode-seg{
+  /* .mode-seg отсюда убран: он теперь жёлоб, а не приподнятая поверхность */
+  .btn,.ghost,.back,.stepper{
     background:var(--glass-strong);border-color:var(--glass-line);
     box-shadow:var(--rim);}
-  /* Желобок статуса утоплен, как поле ввода: выбранный сегмент внутри —
-     единственное, что приподнято. Собственного блюра тут нет намеренно —
-     желобков на экране до 27 штук, блюр поверх стекла карточки не окупается. */
-  .marks{box-shadow:inset 0 1px 2px var(--glass-well);}
-  .marks .btn:not(.on){background:transparent;border-color:transparent;box-shadow:none;}
-  .marks .btn.on{box-shadow:var(--rim);}
+  /* жёлоб и приподнятый сегмент — в общем правиле переключателя выше */
   /* Поля ввода — утопленные, а не приподнятые. Стеклянная панель с бликом
      сверху читается как кнопка; в поле надо печатать. */
   .ans-input,.v-input{background:var(--input-bg);border-color:var(--line-strong);
@@ -815,7 +964,7 @@
   .btn.primary{background:var(--accent);border-color:transparent;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 6px 20px -6px var(--accent);}
   .btn.primary:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 10px 26px -8px var(--accent);}
-  .hf-btn,.btn-video,.ib-go,.ios-hint-close{
+  .hf-btn,.btn-video,.ib-go,.sheet-go{
     box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 6px 20px -6px var(--accent);}
 
   /* ---- герой прогресса: главный визуальный акцент хаба ---- */
@@ -876,7 +1025,7 @@
      кнопочный сдвиг, на тач-экране под пальцем не виден. Стекло вместо
      этого сжимается и подсвечивается, с пружинным возвратом. */
   .tcard,.chip,.btn,.ghost,.back,.hf-btn,.btn-video,.ib-go,.variant-cta,
-  .mode-seg .seg,.stepper button,.ios-hint-close{
+  .mode-seg .seg,.stepper button,.sheet-go{
     -webkit-tap-highlight-color:transparent;
     transition:transform var(--dur-press) var(--ease-spring),
                box-shadow var(--dur) var(--ease),
@@ -886,7 +1035,7 @@
   .tcard:active:not(:disabled),.chip:active,.btn:active:not(:disabled),
   .ghost:active,.back:active,.hf-btn:active,.btn-video:active,.ib-go:active,
   .variant-cta:active,.mode-seg .seg:active,.stepper button:active:not(:disabled),
-  .ios-hint-close:active{
+  .sheet-go:active{
     transform:scale(.965);}
   /* мелким элементам сжатие на 3.5% незаметно — им больше */
   .chip:active,.stepper button:active:not(:disabled),.ghost:active,.back:active{
@@ -923,6 +1072,8 @@
        342px против 333px доступных. Перенос флексом оставлял рваный правый
        край, а колонки 1fr делят ширину поровну — пустого места нет,
        подписи целые, тап-таргет остаётся 44px. */
+    /* Пилюля уместна на одном ряду; на сетке 2×2 форма меняется вместе
+       с раскладкой — иначе получился бы гигантский овал в две строки. */
     .filters{display:grid;grid-template-columns:1fr 1fr;gap:2px;
       width:100%;border-radius:var(--r-lg);}
     .filters .chip{min-height:44px;padding:0 var(--s2);justify-content:center;
@@ -932,7 +1083,7 @@
   /* Слабое устройство: снимаем стекло целиком, оставляем плотные поверхности.
      Класс ставится в <head> по числу ядер и памяти. */
   html.lowfi header,html.lowfi .hub-prog,html.lowfi .grid-panel,html.lowfi .vbar,
-  html.lowfi .vintro,html.lowfi .vhist-card,html.lowfi .nav-menu,html.lowfi .ios-hint-sheet,
+  html.lowfi .vintro,html.lowfi .vhist-card,html.lowfi .nav-menu,html.lowfi .sheet,
   html.lowfi .install-bar,html.lowfi .tcard,html.lowfi .chip,html.lowfi .cell,html.lowfi .btn,
   html.lowfi .ghost,html.lowfi .back,html.lowfi .stepper,html.lowfi .mode-seg,
   html.lowfi .ans-input,html.lowfi .v-input,html.lowfi .card,html.lowfi .vcard,
@@ -942,9 +1093,12 @@
   html.lowfi header::after{display:none;}
   html.lowfi header{background:var(--header-bg);}
   html.lowfi .hub-prog,html.lowfi .grid-panel,html.lowfi .vbar,html.lowfi .vintro,
-  html.lowfi .vhist-card,html.lowfi .nav-menu,html.lowfi .ios-hint-sheet,html.lowfi .tcard,
+  html.lowfi .vhist-card,html.lowfi .nav-menu,html.lowfi .sheet,html.lowfi .tcard,
   html.lowfi .card,html.lowfi .vcard,html.lowfi .sk-card,html.lowfi .help-step,
-  html.lowfi .hf-card,html.lowfi .filters{background:var(--surface);}
+  html.lowfi .hf-card{background:var(--surface);}
+  /* переключатели остаются утопленными: без этого жёлоб превращается
+     в сплошную плашку и выбранный сегмент перестаёт читаться */
+  html.lowfi .filters,html.lowfi .marks,html.lowfi .mode-seg{background:var(--track);}
   /* только базовое состояние: активный чип и отмеченные ячейки сохраняют
      свою цветную заливку — иначе остаётся цветная рамка на тёмном фоне */
   html.lowfi .chip:not(.on){background:var(--surface);}
@@ -960,10 +1114,10 @@
 
   /* меньше прозрачности — если система просит */
   @media (prefers-reduced-transparency:reduce){
-    header,.hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.ios-hint-sheet,
-    .install-bar,.tcard,.chip,.cell,.btn,.ghost,.back,.stepper,.mode-seg,.ans-input,.v-input,
-    .filters{
+    header,.hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.sheet,
+    .install-bar,.tcard,.chip,.cell,.btn,.ghost,.back,.stepper,.ans-input,.v-input{
       -webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface);}
+    .filters,.marks,.mode-seg{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--track);}
     .card,.vcard,.sk-card,.help-step,.hf-card{-webkit-backdrop-filter:none;backdrop-filter:none;background:var(--surface);}
     .filters .chip:not(.on){background:transparent;}
     header::after{display:none;}
@@ -975,7 +1129,7 @@
     /* сжатие при нажатии — движение; оставляем только смену фона */
     .tcard:active:not(:disabled),.chip:active,.btn:active:not(:disabled),.ghost:active,
     .back:active,.hf-btn:active,.btn-video:active,.ib-go:active,.variant-cta:active,
-    .mode-seg .seg:active,.stepper button:active:not(:disabled),.ios-hint-close:active{
+    .mode-seg .seg:active,.stepper button:active:not(:disabled),.sheet-go:active{
       transform:none;}
     /* шеврон доворачивается мгновенно: конечное состояние нужно, движение — нет */
     .lnk .chev{transition:none;}
@@ -997,10 +1151,16 @@
           || (navigator.hardwareConcurrency>0 && navigator.hardwareConcurrency<=2);
   if(fx==='off' || (fx!=='on' && weak)) document.documentElement.classList.add('lowfi');
 }catch(e){}})();
+/* Цвет системной строки строго равен --paper в обеих темах. Раньше на три
+   места приходилось четыре разных значения, и переключатель писал третьи,
+   ни с чем не совпадающие: в установленном приложении на iOS это давало
+   видимый шов между статус-баром и шапкой после каждого переключения. */
+var THEME_COLOR={light:'#f2efe7',dark:'#161713'};
 (function(){try{var t=localStorage.getItem('ege_theme');
   if(!t)t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
   if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');
-    var m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content','#161713');}}catch(e){}})();
+    var m=document.querySelector('meta[name="theme-color"]');
+    if(m)m.setAttribute('content',THEME_COLOR.dark);}}catch(e){}})();
 </script>
 </head>
 <body>
@@ -1025,8 +1185,8 @@
   </div>
 </header>
 <div id="app"></div>
-<div class="ios-hint-overlay" id="hint-overlay">
-  <div class="ios-hint-sheet" id="hint-sheet"></div>
+<div class="sheet-ov" id="sheet-ov">
+  <div class="sheet" id="sheet-body"></div>
 </div>
 
 <script>
@@ -1337,6 +1497,37 @@ function ensureData(n, cb){
   };
   document.head.appendChild(s);
 }
+/* Решения лежат отдельно от условий: они весят ~99% данных задания
+   (инлайновые SVG формул в base64), а открывает их далеко не каждый.
+   img/tN/data.js — условия и ответы, 1-6 КБ. img/tN/sol.js — решения.
+   Ключи в SOLDATA — те же 1-based id, что в TASKDATA и PROTOTYPES. */
+window.SOLDATA = window.SOLDATA || {};
+const solLoading = {};
+function ensureSol(n, cb){
+  if(n in window.SOLDATA){cb();return;}
+  if(solLoading[n]){solLoading[n].push(cb);return;}
+  solLoading[n]=[cb];
+  const s=document.createElement('script');
+  s.src=`img/t${n}/sol.js`;
+  const done=()=>{(solLoading[n]||[]).forEach(f=>f());solLoading[n]=null;};
+  s.onload=done;
+  s.onerror=()=>{window.SOLDATA[n]='error';done();};
+  document.head.appendChild(s);
+}
+function solOf(n,id){const d=window.SOLDATA[n];
+  return (d&&d!=='error')?(d[id]||d[String(id)]||''):'';}
+/* Префетч в простое: к моменту, когда ученик дойдёт до «Решения», файл
+   обычно уже в памяти и в кеше service worker'а — то есть и офлайн тоже.
+   Но файл решений весит сотни килобайт, а открывают их не всегда. Поэтому
+   на экономном или медленном соединении не тянем заранее: там решение
+   грузится по клику, со скелетоном — это честнее, чем съесть трафик. */
+const onIdle = window.requestIdleCallback || (f=>setTimeout(f,1500));
+function thriftyNet(){const c=navigator.connection;
+  return !!c && (c.saveData===true || /^(slow-)?2g$/.test(c.effectiveType||''));}
+function prefetchSol(ns){
+  if(thriftyNet())return;
+  onIdle(()=>{ns.forEach(n=>ensureSol(n,()=>{}));},{timeout:5000});}
+
 const STORAGE_KEY='ege_hub_v1';
 let state={};
 try{state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){state={};}
@@ -1367,14 +1558,105 @@ const revealLnk=(attr,val,label,extra)=>
   `<button class="lnk" data-${attr}="${val}" aria-expanded="false"${extra||''}>${label}${CHEV}</button>`;
 function setReveal(btn,open){btn.classList.toggle('open',open);
   btn.setAttribute('aria-expanded',open);}
-function taskStatsHTML(n){const{g,o,b}=countTask(n),tot=displayCount(n);
-  return `<span class="stat"><i class="dot g"></i>Умею: <b>${g}</b></span>`+
-    `<span class="stat"><i class="dot o"></i>Повторить: <b>${o}</b></span>`+
-    `<span class="stat"><i class="dot b"></i>Разобраться: <b>${b}</b></span>`+
-    `<span class="stat"><i class="dot n"></i>Осталось: <b>${tot-g-o-b}</b></span>`;}
+
+/* ---- проявление рисунков ----
+   Класс вешаем только на те, что реально ещё не пришли: у загруженного
+   рисунка перехода быть не должно. Дефолт в CSS — видимый, так что
+   пропущенный вызов не спрячет рисунок, а лишь отменит проявление. */
+function armImages(root){
+  (root||document).querySelectorAll('img.fig').forEach(img=>{
+    if(img.complete && img.naturalWidth) return;
+    img.classList.add('pending');
+    const show=()=>img.classList.remove('pending');
+    img.addEventListener('load',show,{once:true});
+    img.addEventListener('error',show,{once:true});
+  });
+}
+/* Ждём декодирования, но не дольше срока: у решений все картинки —
+   data:-URI, это миллисекунды; у «похожих» рисунки идут по сети, и там
+   важнее открыть вовремя — место под них уже зарезервировано. */
+function imagesSettled(root,ms){
+  const imgs=[...root.querySelectorAll('img')];
+  const all=Promise.all(imgs.map(i=>(i.decode?i.decode():Promise.resolve()).catch(()=>{})));
+  return Promise.race([all,new Promise(r=>setTimeout(r,ms||350))]);
+}
+/* Высота меняется только переходом — 0 -> контент, скелетон -> контент,
+   контент -> 0. Поэтому «дёрнуться» здесь нечему в принципе. */
+function setBoxOpen(box,open){
+  const from=box.getBoundingClientRect().height;
+  box.style.overflow='hidden';
+  if(open){
+    box.style.height='auto';
+    const to=box.getBoundingClientRect().height;
+    box.style.height=from+'px';
+    void box.offsetWidth;
+    box.classList.add('open');
+    box.style.height=to+'px';
+    onceHeightDone(box,()=>{
+      if(box.dataset.want==='1'){box.style.height='auto';box.style.overflow='visible';}});
+  }else{
+    box.style.height=from+'px';
+    void box.offsetWidth;
+    box.classList.remove('open');
+    box.style.height='0px';
+  }
+}
+/* transitionend может не прийти (нулевая длительность при reduced-motion,
+   совпавшие значения) — поэтому всегда есть запасной таймер. */
+function onceHeightDone(box,fn){
+  let done=false;
+  const fire=()=>{if(done)return;done=true;box.removeEventListener('transitionend',h);fn();};
+  const h=e=>{if(e.target===box&&e.propertyName==='height')fire();};
+  box.addEventListener('transitionend',h);
+  setTimeout(fire,400);
+}
+/* Единый путь для всех раскрывающих строк: «Решение», «Похожие задачи»
+   и «Ответ» в тренировке. Раньше это были три независимые копии логики,
+   и вели они себя по-разному. */
+function revealToggle(btn,box,build,ensureFn){
+  const want=box.dataset.want!=='1';
+  box.dataset.want=want?'1':'0';
+  setReveal(btn,want);
+  if(!want){setBoxOpen(box,false);return;}
+  if(box.dataset.filled){setBoxOpen(box,true);return;}
+  const paint=()=>{
+    if(box.dataset.want!=='1')return;
+    box.style.height=box.getBoundingClientRect().height+'px'; // заморозить старт
+    box.innerHTML=build();
+    box.dataset.filled='1';
+    typeset(box);
+    armImages(box);
+    imagesSettled(box).then(()=>{if(box.dataset.want==='1')setBoxOpen(box,true);});
+  };
+  if(!ensureFn){paint();return;}
+  /* Если файл решений не успел приехать — открываем скелетон, чтобы тап
+     не остался без ответа. Переход скелетон -> решение такой же плавный. */
+  const slow=setTimeout(()=>{
+    if(box.dataset.want==='1'&&!box.dataset.filled){
+      box.innerHTML='<div class="sk-sol"><div class="sk-line" style="height:12px;width:34%"></div>'+
+        '<div class="sk-line" style="height:12px;width:92%"></div>'+
+        '<div class="sk-line" style="height:12px;width:78%"></div></div>';
+      setBoxOpen(box,true);}
+  },260);
+  ensureFn(()=>{clearTimeout(slow);paint();});
+}
+const solInner=(ans,html)=>`<div class="sol-inner">`+
+  (ans?`<span class="answer">Ответ: ${ans}</span>`:'')+
+  `<div class="sol-body"><div class="tex">${html||''}</div></div></div>`;
+/* Та же полоска, что на карточках хаба: на телефоне она заменяет собой
+   карту из 27 клеток, а карта уезжает под раскрытие. */
+function barHTML(c,tot){const p=x=>tot?(x/tot*100).toFixed(1):0;
+  return `<span class="bar"><span class="bg" style="width:${p(c.g)}%"></span>`+
+    `<span class="bo" style="width:${p(c.o)}%"></span>`+
+    `<span class="bb" style="width:${p(c.b)}%"></span></span>`;}
+function refreshPanelBar(n){const bar=document.querySelector('.panel-toggle .bar');
+  if(!bar)return;const c=countTask(n),t=displayCount(n),p=x=>t?(x/t*100).toFixed(1):0;
+  const w=[p(c.g),p(c.o),p(c.b)];
+  [...bar.children].forEach((el,i)=>{el.style.width=w[i]+'%';});}
 function refreshCell(n,id){const st=(state[n]||{})[id]||'';const grid=document.querySelector('.grid');
   const c=grid&&grid.querySelector('[data-cell="'+id+'"]');
   if(c)c.className='cell'+(st?' '+st:'');
+  refreshPanelBar(n);
   /* сетка озвучивается одной сводкой, поэтому её надо пересчитывать после отметки */
   if(grid&&grid.getAttribute('role')==='img'){const q=countTask(n),t=displayCount(n);
     grid.setAttribute('aria-label',`Карта прогресса: умею ${q.g}, надо повторить ${q.o}, надо разобраться ${q.b}, не решал ${t-q.g-q.o-q.b} из ${t}`);}}
@@ -1382,12 +1664,22 @@ function refreshCard(n,id){const st=(state[n]||{})[id]||'';const card=document.g
   if(!card)return;card.className='card'+(st?' is-'+st:'');
   card.querySelectorAll('[data-mark]').forEach(b=>{const on=b.dataset.mark===st;
     b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);});}
-function refreshStats(n){statsEl.innerHTML=taskStatsHTML(n);}
 function recordStatus(n,id,status){const ts=taskState(n);if(status)ts[id]=status;else delete ts[id];}
-function setStatus(n,id,status){recordStatus(n,id,status);save();refreshCard(n,id);refreshCell(n,id);refreshStats(n);applyFilter();}
+function setStatus(n,id,status){
+  /* Карточка, которую только что отметили, остаётся на месте до следующего
+     переключения фильтра. Раньше applyFilter прятал её сразу: при фильтре
+     «Не решал» нажатие «Умею» убирало карточку из-под пальца, а всё, что
+     ниже, прыгало вверх на пол-экрана. При проверке ответа было хуже —
+     карточка исчезала раньше, чем ученик успевал прочитать «Правильно».
+     Отметка и так видна: сегмент подсвечен, левый кант карточки сменил цвет. */
+  filterKeep.add(id);
+  recordStatus(n,id,status);save();refreshCard(n,id);refreshCell(n,id);applyFilter();}
 
 // --- фильтр по статусу внутри задания ---
 let viewFilter='all';
+/* id карточек, отмеченных при активном фильтре: они не подпадают под
+   скрытие, пока ученик сам не переключит фильтр. */
+let filterKeep=new Set();
 function applyFilter(){
   if(parseRoute().view!=='task')return;
   const ts=state[parseRoute().n]||{};
@@ -1398,6 +1690,7 @@ function applyFilter(){
     if(viewFilter==='o')ok=st==='o';
     else if(viewFilter==='b')ok=st==='b';
     else if(viewFilter==='none')ok=!st;
+    if(!ok&&filterKeep.has(id))ok=true;
     card.style.display=ok?'':'none';if(ok)shown++;
   });
   const empty=document.getElementById('filter-empty');
@@ -1407,6 +1700,17 @@ function applyFilter(){
     b.style.display=any?'':'none';
   });
   document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.filter===viewFilter));
+}
+
+/* Смена фильтра пересобирает список целиком. Мгновенная подмена читается
+   как сбой отрисовки, поэтому список гаснет, меняется и проявляется.
+   Переход короткий: это не эффект, а способ показать, что список тот же,
+   просто в нём стало другое содержимое. */
+function switchFilter(){
+  const list=document.querySelector('.list');
+  if(!list||!matchMedia('(prefers-reduced-motion: no-preference)').matches){applyFilter();return;}
+  list.classList.add('swapping');
+  setTimeout(()=>{applyFilter();list.classList.remove('swapping');},130);
 }
 
 // --- перевод первичного балла в тестовый (профиль; 0..12 задач = 0..12 баллов) ---
@@ -1530,9 +1834,34 @@ function installBlock(){
   </ul>`;
   return quick+steps;
 }
-const HINT_IOS=`<h3>Установить приложение</h3><p class="ih-sub">Safari не умеет устанавливать одной кнопкой, но это займёт 10 секунд:</p><ol><li>Нажми <b>«Поделиться»</b> — кнопка <i class="ih-icon">⬆ квадрат со стрелкой</i> внизу Safari</li><li>Пролистай список вниз и выбери <b>«На экран "Домой"»</b></li><li>Нажми <b>«Добавить»</b> в правом верхнем углу</li></ol><button class="ios-hint-close">Понятно</button>`;
-const HINT_INSTALLED=`<h3>Уже установлено</h3><p class="ih-sub">Тренажёр уже добавлен на экран домой. Открывай его оттуда — работает без интернета и без адресной строки.</p><button class="ios-hint-close">Понятно</button>`;
-function showHint(html){document.getElementById('hint-sheet').innerHTML=html;document.getElementById('hint-overlay').classList.add('open');}
+const HINT_IOS=`<h3>Установить приложение</h3><p class="ih-sub">Safari не умеет устанавливать одной кнопкой, но это займёт 10 секунд:</p><ol><li>Нажми <b>«Поделиться»</b> — кнопка <i class="ih-icon">⬆ квадрат со стрелкой</i> внизу Safari</li><li>Пролистай список вниз и выбери <b>«На экран "Домой"»</b></li><li>Нажми <b>«Добавить»</b> в правом верхнем углу</li></ol><button class="sheet-go">Понятно</button>`;
+const HINT_INSTALLED=`<h3>Уже установлено</h3><p class="ih-sub">Тренажёр уже добавлен на экран домой. Открывай его оттуда — работает без интернета и без адресной строки.</p><button class="sheet-go">Понятно</button>`;
+/* Лист возвращает обещание: вызывающий код читается так же, как раньше
+   с confirm(), только не блокирует поток и не выпадает из интерфейса. */
+let sheetResolve=null;
+function showSheet(html){
+  document.getElementById('sheet-body').innerHTML=html;
+  document.getElementById('sheet-ov').classList.add('open');
+}
+function closeSheet(v){
+  document.getElementById('sheet-ov').classList.remove('open');
+  const r=sheetResolve;sheetResolve=null;
+  if(r)r(v);
+}
+function showHint(html){sheetResolve=null;showSheet(html);}
+function ask(o){
+  return new Promise(res=>{sheetResolve=res;
+    showSheet(`<h3>${o.title}</h3>`+(o.text?`<p class="ih-sub">${o.text}</p>`:'')+
+      `<div class="sheet-actions">`+
+        `<button class="sheet-btn" data-sheet="0">${o.cancel||'Отмена'}</button>`+
+        `<button class="sheet-btn go${o.danger?' danger':''}" data-sheet="1">${o.ok||'Продолжить'}</button>`+
+      `</div>`);});
+}
+function note(title,text){
+  return new Promise(res=>{sheetResolve=res;
+    showSheet(`<h3>${title}</h3><p class="ih-sub">${text}</p>`+
+      `<button class="sheet-go" data-sheet="1">Понятно</button>`);});
+}
 function doInstall(){
   if(isStandalone()){showHint(HINT_INSTALLED);}
   else if(deferredPrompt){const dp=deferredPrompt;deferredPrompt=null;dp.prompt();
@@ -1546,13 +1875,60 @@ function parseRoute(){
   const m=location.hash.match(/#\/t\/(\d+)/);return m?{view:'task',n:+m[1]}:{view:'hub'};
 }
 function go(h){location.hash=h;}
+/* Кнопка возврата и заголовок ведут в одно и то же место — на хаб.
+   На телефоне вдвоём они в строку не помещаются, и шапка разъезжалась
+   на два ряда высотой 116px вместо 56. Показываем что-то одно.
+   Заодно единственное место, где выставляется display: раньше пять
+   вызовов писали inline, перебивая inline-flex из таблицы стилей. */
+function setBack(on){
+  backEl.style.display=on?'inline-flex':'none';
+  headerEl.classList.toggle('has-back',on);
+}
+/* Переход между экранами всегда начинается сверху. Раньше позиция
+   переносилась: возврат с середины задания открывал хаб на футере
+   «Напишите мне в Telegram», а не на заголовке.
+   Мгновенно, а не плавно: html{scroll-behavior:smooth} иначе проиграл бы
+   прокрутку по старому содержимому перед самой подменой экрана. */
+/* Панель варианта липнет под шапку, а её высота зависит от ширины экрана
+   и от того, показана ли кнопка возврата. Меряем после монтирования,
+   а не подбираем константу: раньше стоял top:64px, и на телефоне это
+   было мимо. */
+function syncHeaderH(){
+  const h=(headerEl.style.display==='none')?0:Math.round(headerEl.getBoundingClientRect().height);
+  document.documentElement.style.setProperty('--header-h',h+'px');
+}
+/* Наблюдатель, а не событие resize: высота шапки меняется не только от
+   ширины окна — ещё от того, показана ли кнопка возврата, и от раскрытия
+   меню. По resize значение отставало, и панель варианта липла с зазором. */
+if(window.ResizeObserver)new ResizeObserver(syncHeaderH).observe(headerEl);
+else addEventListener('resize',syncHeaderH);
+function scrollTop(){
+  try{window.scrollTo({top:0,left:0,behavior:'instant'});}
+  catch(e){window.scrollTo(0,0);}
+}
+/* Ключ экрана: прокрутку сбрасываем при смене экрана, а не при каждой
+   перерисовке — иначе шаг в конструкторе или отметка статуса дёргали бы
+   страницу наверх. */
+let lastRouteKey=null;
 
+/* Доли полосы прогресса на момент прошлой отрисовки хаба.
+   Полоса — единственное место, где анимация несёт смысл: она показывает,
+   что прогресс вырос. Но transition в CSS никогда не играл, потому что
+   renderHub пересоздаёт разметку и элемент рождается сразу с конечной
+   шириной — переходить не от чего. Поэтому рисуем полосу с прошлыми
+   долями и подставляем новые отдельным шагом. */
+let lastHubShare=null;
 function renderHub(){
-  backEl.style.display='none';
+  setBack(false);
   let allG=0,allO=0,allB=0,total=0;
   TASKS.filter(t=>!t.hidden).forEach(t=>{const c=countTask(t.n);allG+=c.g;allO+=c.o;allB+=c.b;total+=displayCount(t.n);});
   const left=total-allG-allO-allB;
   const gp=total?allG/total*100:0,op=total?allO/total*100:0,bp=total?allB/total*100:0;
+  /* Первый заход за сессию — сразу конечные доли: анимировать нечего,
+     и «рост с нуля» на пустом месте был бы декорацией, а не сообщением. */
+  const to=[gp,op,bp], from=lastHubShare||to;
+  const grew=lastHubShare&&to.some((v,i)=>Math.abs(v-from[i])>0.05);
+  lastHubShare=to;
   statsEl.innerHTML='';
   const progHTML=`<div class="hub-prog">
     <div class="hub-prog-head">
@@ -1560,9 +1936,9 @@ function renderHub(){
       <span class="hub-prog-pct">${Math.round(gp)}%<span>освоено · ${allG} из ${total}</span></span>
     </div>
     <div class="hub-prog-bar">
-      <div style="width:${gp.toFixed(1)}%;background:var(--green)"></div>
-      <div style="width:${op.toFixed(1)}%;background:var(--orange)"></div>
-      <div style="width:${bp.toFixed(1)}%;background:var(--dark)"></div>
+      <div style="width:${from[0].toFixed(1)}%;background:var(--green)"></div>
+      <div style="width:${from[1].toFixed(1)}%;background:var(--orange)"></div>
+      <div style="width:${from[2].toFixed(1)}%;background:var(--dark)"></div>
     </div>
     <div class="hub-prog-stats">
       <span><i class="dot g"></i> Умею: <b>${allG}</b></span>
@@ -1593,6 +1969,15 @@ function renderHub(){
       </div>
       <a class="hf-btn" href="https://t.me/kirill_math_tutor" target="_blank" rel="noopener">Написать · @kirill_math_tutor</a>
     </div></footer></section>`;
+  /* Ждём, пока панель закончит своё появление (rise, .5s): полоса, растущая
+     под ещё проявляющимся блоком, просто не будет замечена.
+     Идемпотентно и с проверкой на месте — если ученик успел уйти в задание,
+     разметки уже нет и подставлять некуда. */
+  if(grew)setTimeout(()=>{
+    const bar=document.querySelector('.hub-prog-bar');
+    if(!bar||parseRoute().view!=='hub')return;
+    [...bar.children].forEach((el,i)=>{el.style.width=to[i].toFixed(1)+'%';});
+  },480);
 }
 
 /* Сегменты статуса. Короткая подпись — на экране, полная — в aria-label:
@@ -1610,27 +1995,76 @@ const marksHTML=(st,mAttr,iAttr,iVal)=>`<div class="marks" role="group" aria-lab
 
 const skCard=()=>`<div class="sk-card"><div class="sk-line" style="height:13px;width:38%;margin-bottom:18px"></div><div class="sk-line" style="height:12px;width:100%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:88%;margin-bottom:9px"></div><div class="sk-line" style="height:12px;width:72%;margin-bottom:22px"></div><div style="display:flex;gap:8px"><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div><div class="sk-line" style="height:34px;width:130px;border-radius:9px"></div></div></div>`;
 const skHTML=`<div class="wrap"><div></div><main class="list">${skCard()}${skCard()}${skCard()}</main></div>`;
+
+/* ---- единый шлюз отрисовки ----
+   Экран собирается за пределами вида, KaTeX отрабатывает там же, и в
+   документ переезжает уже готовый результат. Поэтому состояния «текст
+   задачи стоит, а формулы ещё догружаются» не бывает в принципе.
+   Раньше так делал только экран задания; вариант и тренировка ставили
+   innerHTML и звали typeset после — и там формулы схлопывались на место
+   поверх уже показанного текста.
+   Ждём шрифты и рисунки первых двух карточек — то, что попадёт в первый
+   экран. Остальные рисунки приезжают в уже размеченные места (width/height
+   проставлены у всех) и проявляются, а не возникают.
+   Потолок ожидания обязателен: ни один сетевой сбой не должен оставить
+   ученика со скелетоном навсегда. */
+function stageAndMount(html,guard,after){
+  const tmp=document.createElement('div');
+  tmp.style.cssText='position:fixed;top:-9999px;left:0;visibility:hidden;pointer-events:none;width:'
+    +(appEl.clientWidth||375)+'px';
+  tmp.innerHTML=html;
+  document.body.appendChild(tmp);
+  typeset(tmp);                                   // запускает и загрузку шрифтов KaTeX
+  const first=[...tmp.querySelectorAll('.card,.vcard')].slice(0,2);
+  const imgs=first.flatMap(c=>[...c.querySelectorAll('img')]).filter(i=>!i.complete);
+  const waits=imgs.map(i=>new Promise(r=>{
+    i.addEventListener('load',r,{once:true});i.addEventListener('error',r,{once:true});}));
+  Promise.race([Promise.all([...waits,document.fonts.ready]),
+                new Promise(r=>setTimeout(r,2500))]).then(()=>{
+    if(guard&&!guard()){tmp.remove();return;}
+    /* Переносим собранные узлы, а не пересобираем разметку заново: второй
+       прогон KaTeX по 27 карточкам стоил столько же, сколько первый. */
+    appEl.replaceChildren(...tmp.childNodes);
+    tmp.remove();
+    armImages(appEl);
+    syncHeaderH();
+    if(after)after();
+  });
+}
 function renderTask(n){
   const task=taskCfg(n);
   if(!task||task.count===0){go('#/');return;}
   if(task.mode==='html' && !(n in (window.TASKDATA||{}))){
-    backEl.style.display='inline'; statsEl.innerHTML='';
+    setBack(true); statsEl.innerHTML='';
     appEl.innerHTML=skHTML;
     ensureData(n,()=>{ if(parseRoute().n===n) renderTask(n); });
     return;
   }
   if(task.mode==='html' && window.TASKDATA[n]==='error'){
-    backEl.style.display='inline'; statsEl.innerHTML='';
+    setBack(true); statsEl.innerHTML='';
     appEl.innerHTML=`<div class="wrap"><div></div><main class="list"><p style="color:var(--accent)">
       Не удалось загрузить задачи.<br>Убедись, что файл <code>img/t${n}/data.js</code> загружен в репозиторий.</p></main></div>`;
     return;
   }
-  backEl.style.display='inline'; statsEl.innerHTML='';
+  setBack(true); statsEl.innerHTML='';
   const ts=taskState(n);
   const data=task.mode==='html'?(window.TASKDATA[n]||[]):null;
-  const condHTML=id=>task.mode==='html'
-      ?`<div class="cond"><div class="tex">${((data[id-1]||{}).c||'').replace(/ loading="lazy"/g,'')}</div></div>`
-      :`<div class="cond"><img loading="lazy" src="${COND(n,id)}" alt="Задача ${id}"></div>`;
+  /* Три полосы загрузки рисунков.
+     0-1  — высокий приоритет: их и ждём перед показом экрана, поэтому
+            никто не должен отбирать у них канал;
+     2-7  — обычный приоритет, но грузятся сразу: это ближайшая прокрутка;
+     8+   — lazy. Браузер начинает тянуть их за один-два экрана до появления,
+            так что к прокрутке они обычно уже на месте, а трафик не уходит
+            на 27 рисунков, если ученик открыл три задачи. */
+  const WAIT_CARDS=2, EAGER_CARDS=8;
+  const condHTML=(id,ord)=>{
+    if(task.mode!=='html')
+      return `<div class="cond"><img loading="lazy" src="${COND(n,id)}" alt="Задача ${id}"></div>`;
+    let c=(data[id-1]||{}).c||'';
+    if(ord<WAIT_CARDS)      c=c.replace(/ loading="lazy"/g,' fetchpriority="high"');
+    else if(ord<EAGER_CARDS)c=c.replace(/ loading="lazy"/g,'');
+    return `<div class="cond"><div class="tex">${c}</div></div>`;
+  };
   const solBox=id=>task.mode==='html'
       ?`<div class="solution" id="sol-${id}" data-html="1"></div>`
       :`<div class="solution" id="sol-${id}"><div class="sol-body"><img loading="lazy" data-src="${SOL(n,id)}" alt="Решение ${id}"></div></div>`;
@@ -1641,13 +2075,18 @@ function renderTask(n){
           <button class="btn check" data-check="${id}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span>
         </div>`:'';};
-  const repCard=(id,protoNum,simIds)=>{const st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
+  /* Оценка высоты для content-visibility: постоянная часть карточки плюс
+     зарезервированная высота чертежа. Промах здесь означает прыжки полосы
+     прокрутки, пока ученик листает вниз первый раз. */
+  const figH=id=>{const m=/<img[^>]*class="fig"[^>]*height="(\d+)"/.exec((data&&data[id-1]||{}).c||'');
+    return m?+m[1]:0;};
+  const repCard=(id,protoNum,simIds,ord)=>{const st=ts[id],c=st==='g'?'is-g':st==='o'?'is-o':st==='b'?'is-b':'';
     const label=protoNum!=null?`<span class="num proto-num">Прототип ${protoNum}</span>`:`<span class="num">${id}</span>`;
     const hasSim=!!(simIds&&simIds.length);
     const simBtn=hasSim?revealLnk('similar',id,`Похожие задачи (${simIds.length})`,` data-sim-ids="${simIds.join(',')}"`):'';
-    return `<article class="card ${c}" id="task-${id}">
+    return `<article class="card ${c}" id="task-${id}" style="contain-intrinsic-size:auto calc(var(--card-base) + ${figH(id)}px)">
         <div class="card-top">${label}</div>
-        ${condHTML(id)}
+        ${condHTML(id,ord)}
         ${acHTML(id)}
         ${marksHTML(st,'mark','id',id)}
         <div class="reveal">
@@ -1670,24 +2109,34 @@ function renderTask(n){
     if(showHeads){
       let html='',cur=null,buf='';
       const flush=()=>{if(buf!==''){html+=`<section class="block"><h3 class="block-head">${cur}</h3>${buf}</section>`;buf='';}};
-      pl.forEach(grp=>{const s=subOf(grp.ids[0])||cur||'';
+      pl.forEach((grp,gi)=>{const s=subOf(grp.ids[0])||cur||'';
         if(s!==cur){flush();cur=s;}
-        buf+=repCard(grp.ids[0],grp.p,grp.ids.slice(1));});
+        buf+=repCard(grp.ids[0],grp.p,grp.ids.slice(1),gi);});
       flush();
       listBody=html;
     } else {
-      listBody=pl.map(grp=>repCard(grp.ids[0],grp.p,grp.ids.slice(1))).join('');
+      listBody=pl.map((grp,gi)=>repCard(grp.ids[0],grp.p,grp.ids.slice(1),gi)).join('');
     }
   } else {
-    listBody=Array.from({length:task.count},(_,i)=>repCard(i+1,null,null)).join('');
+    listBody=Array.from({length:task.count},(_,i)=>repCard(i+1,null,null,i)).join('');
   }
   const gridLabel=pl?`Задание ${n} · ${pl.length} прототипов`:`Задание ${n}`;
   const gc=countTask(n),gTot=displayCount(n);
   const gridSummary=`Карта прогресса: умею ${gc.g}, надо повторить ${gc.o}, надо разобраться ${gc.b}, не решал ${gTot-gc.g-gc.o-gc.b} из ${gTot}`;
   const videoBtn=VIDEOS[n]?`<a class="btn-video" href="${VIDEOS[n]}" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Видеоразбор</a>`:'';
   const fullHTML=`<div class="wrap" data-n="${n}">
-    <aside class="grid-panel"><div class="task-nav"><button class="back task-back" data-home>← К заданиям</button><button class="ghost task-theme" data-task-theme title="Сменить тему" aria-label="Сменить тему"><svg class="ic-moon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="ic-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg></button></div><div class="grid-label">${gridLabel}</div>
-      <div class="grid" role="img" aria-label="${gridSummary}">${gridCells}</div>${videoBtn}</aside>
+    <aside class="grid-panel">
+      <div class="task-nav">
+        <button class="back task-back" data-home>← К заданиям</button>
+        <button class="panel-toggle" data-panel aria-expanded="false" aria-controls="panel-body"
+          aria-label="Карта прогресса">${barHTML(gc,gTot)}${CHEV}</button>
+        <button class="ghost task-theme" data-task-theme title="Сменить тему" aria-label="Сменить тему"><svg class="ic-moon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="ic-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg></button>
+      </div>
+      <div class="panel-body" id="panel-body">
+        <div class="grid-label">${gridLabel}</div>
+        <div class="grid" role="img" aria-label="${gridSummary}">${gridCells}</div>${videoBtn}
+      </div>
+    </aside>
     <main class="list">
       <div class="filters">
         <button class="chip on" data-filter="all">Все</button>
@@ -1698,21 +2147,10 @@ function renderTask(n){
       <div class="filters-empty" id="filter-empty" style="display:none">В этой категории пока пусто.</div>
       ${listBody}</main></div>`;
   appEl.innerHTML=skHTML;
-  const tmp=document.createElement('div');
-  tmp.style.cssText='position:fixed;top:-9999px;left:0;width:375px;visibility:hidden;pointer-events:none;';
-  tmp.innerHTML=fullHTML;
-  document.body.appendChild(tmp);
-  typeset(tmp.querySelector('.list'));  // запускает загрузку шрифтов KaTeX
-  const pending=[...tmp.querySelectorAll('img')].filter(i=>!i.complete);
-  const imgPromises=pending.map(img=>new Promise(r=>{img.addEventListener('load',r,{once:true});img.addEventListener('error',r,{once:true});}));
-  const showReal=()=>{
-    tmp.remove();
-    if(parseRoute().n!==n)return;
-    statsEl.innerHTML=taskStatsHTML(n);
-    appEl.innerHTML=fullHTML;
-    typeset(appEl.querySelector('.list'));
-  };
-  Promise.all([...imgPromises, document.fonts.ready]).then(showReal);
+  /* Сводку в шапку тут не пишем: на экране задания шапка скрыта, и эти
+     цифры уходили в никуда. Состояние показывает карта прогресса слева,
+     её aria-label несёт те же числа для голосового доступа. */
+  stageAndMount(fullHTML,()=>parseRoute().n===n,()=>prefetchSol([n]));
 }
 
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
@@ -1731,9 +2169,14 @@ function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
 let variant=null, variantTimerId=null;
 function render(){
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
-  viewFilter='all';
+  viewFilter='all';filterKeep.clear();
   const r=parseRoute();
+  const key=r.view+(r.n||'');
+  if(key!==lastRouteKey){lastRouteKey=key;scrollTop();}
   headerEl.style.display=r.view==='task'?'none':'';
+  /* Считаем сразу, не дожидаясь наблюдателя: он догоняет изменения
+     размера, но на первой отрисовке экрана значение нужно уже сейчас. */
+  syncHeaderH();
   const progCtrls=(r.view==='hub'||r.view==='task');
   shareEl.style.display=progCtrls?'':'none';
   resetEl.style.display=progCtrls?'':'none';
@@ -1747,7 +2190,7 @@ function render(){
 
 function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function renderHelp(){
-  backEl.style.display='inline';statsEl.innerHTML='';
+  setBack(true);statsEl.innerHTML='';
   appEl.innerHTML=`<div class="help">
     <h2>Как пользоваться</h2>
     <p class="help-lead">Три вещи, которые стоит знать. Минута на чтение.</p>
@@ -1849,7 +2292,7 @@ function buildVariant(){
       ids.forEach(id=>items.push({n,id}));});
     if(!items.length)return;
     variant={items,mode,started:true,finished:false,startAt:Date.now(),elapsed:0};
-    renderVariant();
+    scrollTop();renderVariant();
   });
 }
 function finishVariant(){
@@ -1866,7 +2309,8 @@ function finishVariant(){
   save();variant.finished=true;
   pushHistory({t:Date.now(),p:correct,s:secondaryScore(correct),ms:variant.elapsed,total:variant.items.length});
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
-  renderVariant();
+  /* «Завершить» нажимают внизу списка — итоги должны открыться сверху */
+  scrollTop();renderVariant();
 }
 function renderBuilder(){
   if(!builder)builder=loadBuilder();
@@ -1905,7 +2349,7 @@ function refreshTrainCard(i){const it=variant.items[i],st=(state[it.n]||{})[it.i
     b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);});}
 function renderTraining(){
   const items=variant.items;
-  appEl.innerHTML=`<div class="vbox">
+  const html=`<div class="vbox">
     <div class="vbar">
       <span class="vtimer" style="font-size:var(--fs-md);display:inline-flex;align-items:center;gap:7px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.2 21 8.6l-9 4.4-9-4.4 9-4.4Z"/><path d="M6.5 10.6v4.6c0 1.5 2.5 2.8 5.5 2.8s5.5-1.3 5.5-2.8v-4.6"/></svg> Тренировка</span>
       <span class="vprog">${items.length} ${items.length===1?'задача':'задач'}</span>
@@ -1930,15 +2374,15 @@ function renderTraining(){
       </div>`;}).join('')}
     <div style="text-align:center;margin-top:8px"><button class="btn primary" data-home>К заданиям</button></div>
   </div>`;
-  typeset(appEl.querySelector('.vbox'));
+  stageAndMount(html,null,()=>prefetchSol([...new Set(items.map(x=>x.n))]));
 }
 function renderVariant(){
-  backEl.style.display='inline';statsEl.innerHTML='';
+  setBack(true);statsEl.innerHTML='';
   if(!variant||!variant.started){renderBuilder();return;}
   if(variant.mode==='train'){renderTraining();return;}
   if(!variant.finished){
     const items=variant.items;
-    appEl.innerHTML=`<div class="vbox">
+    const html=`<div class="vbox">
       <div class="vbar">
         <span class="vtimer" id="v-timer">00:00</span>
         <span class="vprog">${items.length} заданий</span>
@@ -1953,10 +2397,12 @@ function renderVariant(){
         </div>`;}).join('')}
       <div style="text-align:center;margin-top:8px"><button class="btn primary" data-vfinish>Завершить вариант</button></div>
     </div>`;
-    startVariantTimer();typeset(appEl.querySelector('.vbox'));return;
+    /* Таймер заводится после монтирования — элемента #v-timer до него нет.
+       Отсчёт идёт от variant.startAt, поэтому время сборки не теряется. */
+    stageAndMount(html,null,startVariantTimer);return;
   }
   const items=variant.items,correct=items.filter(x=>x.ok).length,primary=correct,sec=secondaryScore(primary);
-  appEl.innerHTML=`<div class="vbox">
+  const html=`<div class="vbox">
     <div class="vresult">
       <h2>Вариант завершён</h2>
       <div class="vscores">
@@ -1978,25 +2424,22 @@ function renderVariant(){
         <div class="vans-row"><span class="yours">Твой ответ: ${it.given?escapeHtml(it.given):'—'}</span> · <span class="right">Верный: ${d.a||'—'}</span></div>
       </div>`;}).join('')}
   </div>`;
-  typeset(appEl.querySelector('.vbox'));
+  stageAndMount(html);
 }
 
 appEl.addEventListener('click',e=>{
-  const tt=e.target.closest('[data-task-theme]');
-  if(tt){const dark=document.documentElement.getAttribute('data-theme')==='dark';
-    if(dark)document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','dark');
-    const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#f4f1ea':'#181a17');
-    try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}return;}
+  const tt=e.target.closest('[data-task-theme]'); if(tt){toggleTheme();return;}
   const inst=e.target.closest('[data-install]'); if(inst){doInstall();return;}
   const dv=e.target.closest('[data-variant]');
-  if(dv){variant=null;if(/#\/v\b/.test(location.hash))renderVariant();else go('#/v');return;}
+  if(dv){variant=null;
+    if(/#\/v\b/.test(location.hash)){scrollTop();renderVariant();}else go('#/v');return;}
   // --- конструктор ---
   const md=e.target.closest('[data-mode]'); if(md){setBuilderMode(md.dataset.mode);return;}
   const inc=e.target.closest('[data-inc]'); if(inc){bumpBuilder(+inc.dataset.inc,1);return;}
   const dec=e.target.closest('[data-dec]'); if(dec){bumpBuilder(+dec.dataset.dec,-1);return;}
   const pr=e.target.closest('[data-preset]'); if(pr){applyPreset(pr.dataset.preset);return;}
   const bd=e.target.closest('[data-build]'); if(bd){buildVariant();return;}
-  const nb=e.target.closest('[data-newbuild]'); if(nb){variant=null;renderVariant();return;}
+  const nb=e.target.closest('[data-newbuild]'); if(nb){variant=null;scrollTop();renderVariant();return;}
   // --- тренировка: отметка статуса, проверка ответа, показать ответ ---
   const tm=e.target.closest('[data-tmark]');
   if(tm){const i=+tm.dataset.ti,it=variant.items[i],cur=(state[it.n]||{})[it.id],m=tm.dataset.tmark;
@@ -2019,24 +2462,26 @@ appEl.addEventListener('click',e=>{
     save();refreshTrainCard(i);return;}
   const tsol=e.target.closest('[data-tsol]');
   if(tsol){const i=+tsol.dataset.tsol,box=document.getElementById('tsol-'+i);if(!box)return;
-    setReveal(tsol,box.classList.toggle('open'));
-    if(!box.dataset.filled){const d=(window.TASKDATA[variant.items[i].n]||[])[variant.items[i].id-1]||{};
-      box.innerHTML=(d.a?`<span class="answer">Ответ: ${d.a}</span>`:'')+`<div class="sol-body"><div class="tex">${d.s||''}</div></div>`;
-      box.dataset.filled='1';typeset(box);}
+    const it=variant.items[i],d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
+    revealToggle(tsol,box,()=>solInner(d.a,solOf(it.n,it.id)),cb=>ensureSol(it.n,cb));
     return;}
-  const vf=e.target.closest('[data-vfinish]'); if(vf){if(confirm('Завершить вариант? Ответы повлияют на прогресс.'))finishVariant();return;}
+  const vf=e.target.closest('[data-vfinish]');
+  if(vf){ask({title:'Завершить вариант?',
+    text:'Ответы будут проверены, результат повлияет на прогресс по заданиям.',
+    ok:'Завершить'}).then(y=>{if(y)finishVariant();});return;}
+  const pt=e.target.closest('[data-panel]');
+  if(pt){const body=document.getElementById('panel-body');if(!body)return;
+    const open=body.dataset.want!=='1';
+    body.dataset.want=open?'1':'0';
+    pt.setAttribute('aria-expanded',open);
+    setBoxOpen(body,open);return;}
   const hm=e.target.closest('[data-home]'); if(hm){go('#/');return;}
-  const ch=e.target.closest('[data-filter]'); if(ch){viewFilter=ch.dataset.filter;applyFilter();return;}
-  const rnd=e.target.closest('[data-random]');
-  if(rnd){const r=parseRoute();if(r.view!=='task')return;const pl=protoList(r.n);
-    const id=pl?pl[Math.floor(Math.random()*pl.length)].ids[0]:1+Math.floor(Math.random()*taskCfg(r.n).count);
-    viewFilter='all';applyFilter();
-    const card=document.getElementById('task-'+id);
-    if(card){card.scrollIntoView({behavior:'smooth',block:'center'});
-      reanim(card,'flash-card');const inp=card.querySelector('.ans-input');if(inp)setTimeout(()=>inp.focus(),320);}
-    return;}
+  const ch=e.target.closest('[data-filter]');
+  if(ch){viewFilter=ch.dataset.filter;filterKeep.clear();switchFilter();return;}
   const vhc=e.target.closest('[data-vhclear]');
-  if(vhc){if(confirm('Очистить историю пробников?')){saveHistory([]);renderVariant();}return;}
+  if(vhc){ask({title:'Очистить историю пробников?',
+    text:'Список попыток и график будут удалены. Прогресс по заданиям останется.',
+    ok:'Очистить',danger:true}).then(y=>{if(y){saveHistory([]);renderVariant();}});return;}
   const t=e.target.closest('[data-go]'); if(t){go('#/t/'+t.dataset.go);return;}
   const mk=e.target.closest('[data-mark]');
   if(mk){const r=parseRoute();if(r.view!=='task')return;const ts=taskState(r.n),id=+mk.dataset.id,m=mk.dataset.mark;
@@ -2067,18 +2512,14 @@ appEl.addEventListener('click',e=>{
     }
     return;}
   const sm=e.target.closest('[data-similar]');
-  if(sm){const rep=+sm.dataset.similar,box=document.getElementById('sim-'+rep);if(!box)return;
-    if(!box.dataset.filled){const n=parseRoute().n,ids=sm.dataset.simIds.split(',').map(Number);
-      box.innerHTML=ids.map(id=>simCardHTML(n,id)).join('');box.dataset.filled='1';typeset(box);}
-    setReveal(sm,box.classList.toggle('open'));return;}
+  if(sm){const r0=+sm.dataset.similar,box=document.getElementById('sim-'+r0);if(!box)return;
+    const n=parseRoute().n,ids=sm.dataset.simIds.split(',').map(Number);
+    revealToggle(sm,box,()=>`<div class="sim-inner">${ids.map(id=>simCardHTML(n,id)).join('')}</div>`);
+    return;}
   const sol=e.target.closest('[data-sol]');
-  if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id);
-    setReveal(sol,box.classList.toggle('open'));
-    if(box.dataset.html==='1'){
-      if(!box.dataset.filled){const n=parseRoute().n,d=(window.TASKDATA[n]||[])[id-1]||{};
-        box.innerHTML=(d.a?`<span class="answer">Ответ: ${d.a}</span>`:'')+`<div class="sol-body"><div class="tex">${d.s||''}</div></div>`;
-        box.dataset.filled='1';typeset(box);}
-    } else {const img=box.querySelector('img');if(img&&!img.src&&img.dataset.src)img.src=img.dataset.src;}
+  if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id),n=parseRoute().n;
+    const d=(window.TASKDATA[n]||[])[id-1]||{};
+    revealToggle(sol,box,()=>solInner(d.a,solOf(n,id)),cb=>ensureSol(n,cb));
     return;}
 });
 appEl.addEventListener('input',e=>{const el=e.target;
@@ -2086,16 +2527,27 @@ appEl.addEventListener('input',e=>{const el=e.target;
     const cleaned=el.value.replace(/\./g,',').replace(/[^0-9,\-]/g,'');
     if(cleaned!==el.value){const p=el.selectionStart-(el.value.length-cleaned.length);el.value=cleaned;try{el.setSelectionRange(p,p);}catch(_){}}}
 });
-document.getElementById('theme').addEventListener('click',()=>{
+/* Один переключатель на обе кнопки — в шапке и в панели задания.
+   Были две копии, и они успели разойтись: писали разные theme-color. */
+function toggleTheme(){
   const dark=document.documentElement.getAttribute('data-theme')==='dark';
   if(dark)document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme','dark');
-  const m=document.querySelector('meta[name="theme-color"]');if(m)m.setAttribute('content',dark?'#f4f1ea':'#181a17');
+  const m=document.querySelector('meta[name="theme-color"]');
+  if(m)m.setAttribute('content',dark?THEME_COLOR.light:THEME_COLOR.dark);
   try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
-});
+}
+document.getElementById('theme').addEventListener('click',toggleTheme);
 document.getElementById('install').addEventListener('click',()=>doInstall());
-const hintOv=document.getElementById('hint-overlay');
-hintOv.addEventListener('click',e=>{if(e.target===hintOv||e.target.classList.contains('ios-hint-close'))hintOv.classList.remove('open');});
+const hintOv=document.getElementById('sheet-ov');
+hintOv.addEventListener('click',e=>{
+  const b=e.target.closest('[data-sheet]');
+  if(b){closeSheet(b.dataset.sheet==='1');return;}
+  /* клик по затемнению и по «Понятно» у подсказок без data-sheet */
+  if(e.target===hintOv||e.target.classList.contains('sheet-go'))closeSheet(false);
+});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape'&&hintOv.classList.contains('open'))closeSheet(false);});
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
@@ -2104,8 +2556,14 @@ backEl.addEventListener('click',()=>go('#/'));
 document.getElementById('share').addEventListener('click',shareLink);
 document.getElementById('reset').addEventListener('click',()=>{const r=parseRoute();
   if(r.view==='variant'||r.view==='help'){return;}
-  if(r.view==='task'){if(confirm('Сбросить прогресс по заданию '+r.n+'?')){state[r.n]={};save();renderTask(r.n);}}
-  else{if(confirm('Сбросить ВЕСЬ прогресс?')){state={};save();renderHub();}}});
+  if(r.view==='task')
+    ask({title:'Сбросить прогресс по заданию '+r.n+'?',
+      text:'Отметки по всем прототипам этого задания будут сняты. Остальные задания не тронутся.',
+      ok:'Сбросить',danger:true}).then(y=>{if(y){state[r.n]={};save();renderTask(r.n);}});
+  else
+    ask({title:'Сбросить весь прогресс?',
+      text:'Отметки по всем заданиям будут сняты. История пробников останется.',
+      ok:'Сбросить всё',danger:true}).then(y=>{if(y){state={};save();renderHub();}});});
 const burgerEl=document.getElementById('burger'),navMenuEl=document.getElementById('nav-menu');
 burgerEl.addEventListener('click',e=>{e.stopPropagation();navMenuEl.classList.toggle('open');});
 navMenuEl.addEventListener('click',()=>navMenuEl.classList.remove('open'));
@@ -2121,15 +2579,24 @@ window.addEventListener('DOMContentLoaded',()=>{
   const sp=params.get('p'),hp=params.get('h');
   if(sp||hp){
     const inc=sp?decodeState(sp):null, incH=hp?histDecode(hp):null;
-    if(sp&&!inc) alert('Не удалось прочитать прогресс из ссылки — возможно, она создана в другой версии тренажёра. Прогресс не загружен.');
     const hasProgress=Object.values(state).some(o=>Object.keys(o||{}).length>0);
-    let proceed=true;
-    if(inc&&hasProgress) proceed=confirm('Загрузить данные из ссылки? Прогресс на этом устройстве будет заменён, история пробников — объединена.');
-    if(proceed){
-      if(inc){state=inc;save();}
-      if(incH){mergeHistory(incH);}
-    }
-    history.replaceState(null,'',location.pathname);
+    const apply=proceed=>{
+      if(proceed){
+        if(inc){state=inc;save();}
+        if(incH){mergeHistory(incH);}
+      }
+      history.replaceState(null,'',location.pathname);
+      render();
+    };
+    if(sp&&!inc)
+      note('Не удалось прочитать ссылку',
+        'Возможно, она создана в другой версии тренажёра. Прогресс не загружен.').then(()=>apply(true));
+    else if(inc&&hasProgress)
+      ask({title:'Загрузить прогресс из ссылки?',
+        text:'Прогресс на этом устройстве будет заменён, история пробников — объединена.',
+        ok:'Загрузить'}).then(apply);
+    else apply(true);
+    return;
   }
   render();
 });

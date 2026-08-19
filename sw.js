@@ -2,11 +2,14 @@
    При выкладке новой версии сайта поднимай VERSION (любое изменение этого файла
    заставит браузер установить новый SW и удалить старый кеш). HTML грузится
    network-first, поэтому онлайн-пользователи всегда получают свежую версию. */
-const VERSION = 'v36';
+const VERSION = 'v45';
 const CACHE = 'ege-' + VERSION;
 const SHELL = ['./', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
-  './katex/katex.min.css', './katex/katex.min.js', './katex/auto-render.min.js'];
+  './katex/katex.min.css', './katex/katex.min.js', './katex/auto-render.min.js',
+  // шрифты теперь свои: без них офлайн-приложение подменяло типографику системной
+  './fonts/golos-text-cyrillic.woff2', './fonts/golos-text-latin.woff2',
+  './fonts/literata-cyrillic.woff2', './fonts/literata-latin.woff2'];
 
 self.addEventListener('install', e => {
   self.skipWaiting();
