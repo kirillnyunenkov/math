@@ -94,6 +94,10 @@
     --r-sm:8px;--r-md:12px;--r-lg:16px;--r-full:999px;
     /* движение */
     --dur:.18s;--ease:cubic-bezier(.2,.8,.3,1);
+    /* Отдельная кривая для раскрытия. Основная --ease очень резкая на
+       старте: 62% пути за первые 20% времени. Для кнопки это бодро, для
+       панели в 650px — рывок. Здесь спокойное замедление. */
+    --ease-reveal:cubic-bezier(.22,.61,.36,1);
     /* постоянная часть высоты карточки задачи (без чертежа) — для оценки
        content-visibility. На телефоне больше: тот же текст занимает
        больше строк. Замерено на заданиях 1, 4, 6, 12. */
@@ -536,9 +540,18 @@
      -> и только теперь анимировать высоту. Скачков не остаётся ни в одном
      сценарии, включая «скелетон -> готовое решение»: это тот же переход.
      overflow снимается по окончании — широкая формула не должна обрезаться. */
-  .similar-body,.solution{height:0;overflow:hidden;transition:height .26s var(--ease);}
+  /* Длительность назначается в JS по расстоянию: фиксированные 260мс
+     одинаково отрабатывали и для строки в 80px, и для решения в 650px,
+     а это разные движения. */
+  .similar-body,.solution{height:0;overflow:hidden;transition:height .26s var(--ease-reveal);}
   .sim-inner{display:flex;flex-direction:column;gap:var(--s4);margin-top:var(--s4);}
   .sol-inner{margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line);}
+  /* Содержимое проявляется вместе с раскрытием: коробка, растущая с уже
+     полностью видимым содержимым, читается как рывок, даже когда кадры
+     не теряются. Заодно маскирует подтормаживание на тяжёлых решениях —
+     в самых больших до 43 инлайновых SVG. */
+  .sol-inner,.sim-inner{opacity:0;transition:opacity .22s var(--ease) 40ms;}
+  .solution.open .sol-inner,.similar-body.open .sim-inner{opacity:1;}
   .subcard{background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s4) var(--s5);}
   .sub-num{font-size:var(--fs-2xs);font-weight:600;color:var(--ink-3);margin-bottom:var(--s3);
     text-transform:uppercase;letter-spacing:.06em;}
@@ -1577,38 +1590,49 @@ function armImages(root){
    важнее открыть вовремя — место под них уже зарезервировано. */
 function imagesSettled(root,ms){
   const imgs=[...root.querySelectorAll('img')];
+  /* Срок по числу картинок: в лёгком решении их пять, в самом тяжёлом — 43.
+     Если открыть, пока они ещё декодируются, декодирование конкурирует за
+     процессор с первыми кадрами анимации — отсюда и подтормаживание.
+     Тап при этом не остаётся без ответа: шеврон поворачивается сразу. */
+  const cap=ms||Math.min(520,260+imgs.length*7);
   const all=Promise.all(imgs.map(i=>(i.decode?i.decode():Promise.resolve()).catch(()=>{})));
-  return Promise.race([all,new Promise(r=>setTimeout(r,ms||350))]);
+  return Promise.race([all,new Promise(r=>setTimeout(r,cap))]);
 }
 /* Высота меняется только переходом — 0 -> контент, скелетон -> контент,
    контент -> 0. Поэтому «дёрнуться» здесь нечему в принципе. */
 function setBoxOpen(box,open){
   const from=box.getBoundingClientRect().height;
   box.style.overflow='hidden';
+  let to=0;
   if(open){
     box.style.height='auto';
-    const to=box.getBoundingClientRect().height;
+    to=box.getBoundingClientRect().height;
     box.style.height=from+'px';
-    void box.offsetWidth;
+  }
+  /* Время по расстоянию: короткий блок разворачивается быстро, длинное
+     решение — заметно медленнее. Потолок, чтобы не превращалось в ожидание. */
+  const dur=Math.round(Math.min(440,Math.max(190,190+Math.abs(to-from)*0.3)));
+  box.style.transitionDuration=dur+'ms';
+  void box.offsetWidth;
+  if(open){
     box.classList.add('open');
     box.style.height=to+'px';
     onceHeightDone(box,()=>{
-      if(box.dataset.want==='1'){box.style.height='auto';box.style.overflow='visible';}});
+      if(box.dataset.want==='1'){box.style.height='auto';box.style.overflow='visible';}},dur);
   }else{
-    box.style.height=from+'px';
-    void box.offsetWidth;
     box.classList.remove('open');
     box.style.height='0px';
+    onceHeightDone(box,()=>{},dur);
   }
 }
 /* transitionend может не прийти (нулевая длительность при reduced-motion,
    совпавшие значения) — поэтому всегда есть запасной таймер. */
-function onceHeightDone(box,fn){
+function onceHeightDone(box,fn,dur){
   let done=false;
   const fire=()=>{if(done)return;done=true;box.removeEventListener('transitionend',h);fn();};
   const h=e=>{if(e.target===box&&e.propertyName==='height')fire();};
   box.addEventListener('transitionend',h);
-  setTimeout(fire,400);
+  setTimeout(fire,(dur||260)+120);
 }
 /* Единый путь для всех раскрывающих строк: «Решение», «Похожие задачи»
    и «Ответ» в тренировке. Раньше это были три независимые копии логики,
