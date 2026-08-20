@@ -1315,7 +1315,7 @@ var THEME_COLOR={light:'#f2efe7',dark:'#161713'};
     <nav class="nav-menu" id="nav-menu">
       <button class="ghost" id="guide"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.9 2.9 0 0 1 5.6 1c0 1.9-2.8 2.4-2.8 4"/><path d="M12 17.6h.01"/></svg> Как пользоваться</button>
       <button class="ghost install-mobile-only" id="install"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 6.5v6m0 0 2.2-2.2M12 12.5l-2.2-2.2"/><path d="M10.5 18.5h3"/></svg> Установить приложение</button>
-      <button class="ghost" id="share"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.6-1.6"/></svg> Поделиться прогрессом</button>
+      <button class="ghost" id="share"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.6-1.6"/></svg> <span class="share-label">Поделиться прогрессом</span></button>
       <button class="ghost" id="reset"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 5.5v5h5"/><path d="M4.2 13a8 8 0 1 0 1.4-5.3L3.5 10"/></svg> Сбросить</button>
     </nav>
   </div>
@@ -2241,8 +2241,13 @@ function decodeState(str){
 function shareLink(){
   let q='?p='+encodeState();const h=histEncode();if(h)q+='&h='+h;
   const url=location.origin+location.pathname+q;
-  navigator.clipboard.writeText(url).then(()=>{const b=document.getElementById('share'),o=b.textContent;
-    b.textContent='✓ Скопировано';setTimeout(()=>b.textContent=o,1800);},()=>prompt('Ссылка с прогрессом:',url));
+  navigator.clipboard.writeText(url).then(()=>{
+    /* Меняем только подпись, не весь button.textContent: тот стирал SVG-
+       иконку вместе с текстом, и после первого «Поделиться» она пропадала
+       из меню навсегда — b.textContent=o восстанавливал только текст. */
+    const lbl=document.querySelector('#share .share-label'),o=lbl.textContent;
+    lbl.textContent='✓ Скопировано';setTimeout(()=>lbl.textContent=o,1800);
+  },()=>prompt('Ссылка с прогрессом:',url));
 }
 
 // ---- PWA: установка как приложение ----
@@ -3043,7 +3048,17 @@ document.getElementById('home').addEventListener('click',e=>{if(e.target.closest
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
   if(inp){e.preventDefault();const b=appEl.querySelector('[data-check="'+inp.dataset.id+'"]');if(b)b.click();}});
 backEl.addEventListener('click',()=>go('#/'));
-document.getElementById('share').addEventListener('click',shareLink);
+document.getElementById('share').addEventListener('click',e=>{
+  /* Клик по обычному пункту меню (справка, сброс) уводит на другой экран
+     или открывает диалог — меню закрывается по делу. У «Поделиться»
+     результат — надпись «Скопировано» на месте того же пункта: если меню
+     в тот же клик спрячет бургер, ученик эту надпись просто не увидит и
+     решит, что ничего не произошло (увидит её только при следующем
+     открытии меню, что и путало). stopPropagation не даёт клику дойти
+     ни до обработчика на nav-menu, ни до общего на document — оба закрывают
+     меню на любой клик. */
+  e.stopPropagation();shareLink();
+});
 document.getElementById('reset').addEventListener('click',()=>{const r=parseRoute();
   if(r.view==='variant'||r.view==='help'){return;}
   if(r.view==='task')
