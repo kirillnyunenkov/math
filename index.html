@@ -70,7 +70,7 @@
     --line:#e2ddd0;--line-strong:#cdc6b5;
     /* accent — чернильно-синий */
     --accent:#1d4e89;--accent-hover:#163f70;--accent-on:#ffffff;
-    --accent-soft:#e7eef7;--accent-line:#bccfe6;
+    --accent-soft:#e7eef7;--accent-line:#bccfe6;--accent-tile:rgba(255,255,255,.18);
     --focus:#1d4e89;
     /* статусы */
     --ok:#2f7d54;--ok-text:#1f5b3a;--ok-soft:#e3efe8;--ok-on:#ffffff;
@@ -115,7 +115,7 @@
     --ink:#eae5da;--ink-2:#a8a498;--ink-3:#a09c8b;
     --line:#33362f;--line-strong:#454940;
     --accent:#7fb2ea;--accent-hover:#9cc5f2;--accent-on:#0e1a28;
-    --accent-soft:rgba(127,178,234,.14);--accent-line:rgba(127,178,234,.38);
+    --accent-soft:rgba(127,178,234,.14);--accent-line:rgba(127,178,234,.38);--accent-tile:rgba(14,26,40,.12);
     --focus:#9cc5f2;
     --ok:#4caf7d;--ok-text:#6cc396;--ok-soft:rgba(76,175,125,.16);--ok-on:#0c1f16;
     --warn:#d9932f;--warn-text:#e0a955;--warn-soft:rgba(217,147,47,.15);--warn-on:#241704;
@@ -246,6 +246,30 @@
   .bar .bg{background:var(--ok);}.bar .bo{background:var(--warn);}.bar .bb{background:var(--todo);}
   .tmeta{display:flex;justify-content:space-between;gap:var(--s2);
     font-size:var(--fs-xs);color:var(--ink-3);font-variant-numeric:tabular-nums;}
+
+  /* «Продолжить» — единственное главное действие хаба.
+     Сплошная заливка акцентом, а не подложка: на экране должно быть ровно
+     одно место, куда очевидно нажать после захода. Тёмный баннер варианта
+     ниже — второй по важности, и отличается он материалом, а не яркостью,
+     поэтому два блока подряд не спорят. */
+  .resume-cta{display:flex;align-items:center;gap:var(--s4);width:100%;text-align:left;
+    font:inherit;cursor:pointer;background:var(--accent);color:var(--accent-on);
+    border:1px solid var(--accent);border-radius:var(--r-lg);
+    padding:var(--s5) var(--s6);margin-bottom:var(--s6);box-shadow:var(--e2);
+    transition:transform var(--dur) var(--ease),box-shadow var(--dur) var(--ease),
+      background var(--dur) var(--ease),border-color var(--dur) var(--ease);}
+  .resume-cta:hover{background:var(--accent-hover);border-color:var(--accent-hover);
+    transform:translateY(-2px);box-shadow:var(--e3);}
+  .resume-cta:active{transform:translateY(0);box-shadow:var(--e1);}
+  .resume-cta .rc-ico{display:flex;align-items:center;justify-content:center;flex:none;
+    width:40px;height:40px;border-radius:var(--r-md);background:var(--accent-tile);}
+  .resume-cta .rc-body{min-width:0;}
+  .resume-cta .rc-t{display:block;font-family:'Literata',Georgia,serif;font-weight:600;
+    font-size:var(--fs-lg);letter-spacing:-.01em;margin:0 0 2px;}
+  .resume-cta .rc-s{display:block;font-size:var(--fs-sm);opacity:.85;line-height:1.45;}
+  .resume-cta .rc-go{margin-left:auto;flex:none;display:inline-flex;align-items:center;
+    justify-content:center;width:32px;height:32px;border-radius:var(--r-full);
+    background:var(--accent-tile);}
 
   /* баннер «Собрать вариант» — единственный намеренно тёмный блок */
   .variant-cta{display:flex;align-items:center;gap:var(--s4);width:100%;text-align:left;
@@ -441,6 +465,27 @@
   .card.is-g{border-left-color:var(--ok);}
   .card.is-o{border-left-color:var(--warn);}
   .card.is-b{border-left-color:var(--todo);}
+  /* Карточка, к которой тренажёр перевёл сам. Без пометки такой переход
+     читается как случайный скачок прокрутки: экран сменился, а почему —
+     непонятно. Кольцо гаснет само; при отключённом движении остаётся
+     статичным, потому что подсказка «ты здесь» нужна и без анимации. */
+  .card.just-here{animation:cardPing 1.5s var(--ease-reveal) forwards;}
+  @keyframes cardPing{
+    0%,55%{box-shadow:0 0 0 3px var(--accent-soft),0 0 0 4px var(--accent-line);}
+    100%{box-shadow:0 0 0 3px rgba(0,0,0,0),0 0 0 4px rgba(0,0,0,0);}
+  }
+
+  /* Финал задания. Раньше список просто обрывался: последняя отметка не
+     приводила никуда, и «задание пройдено» приходилось вычислять по карте
+     слева. Блок один на экран, показывается только при фильтре «Все». */
+  .task-done{display:none;margin-top:var(--s6);background:var(--surface);
+    border:1px solid var(--line);border-left:3px solid var(--ok);
+    border-radius:var(--r-lg);padding:var(--s6);}
+  .task-done.on{display:block;}
+  .td-t{font-family:'Literata',Georgia,serif;font-weight:600;font-size:var(--fs-xl);
+    letter-spacing:-.01em;margin-bottom:var(--s2);}
+  .td-s{color:var(--ink-2);font-size:var(--fs-base);line-height:1.5;margin-bottom:var(--s5);}
+  .td-acts{display:flex;flex-wrap:wrap;gap:var(--s2);}
   .card-top{display:flex;align-items:baseline;gap:var(--s3);margin-bottom:var(--s3);}
   .num{font-family:'Literata',Georgia,serif;font-weight:700;font-size:var(--fs-xl);
     color:var(--ink);line-height:1;letter-spacing:-.01em;}
@@ -734,7 +779,7 @@
     html{scroll-behavior:auto;}
     *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
       transition-duration:.001ms!important;scroll-behavior:auto!important;}
-    .tcard:hover,.variant-cta:hover{transform:none;}
+    .tcard:hover,.variant-cta:hover,.resume-cta:hover{transform:none;}
   }
 
   /* ============================================================
@@ -801,7 +846,7 @@
     .vbar .vtimer{font-size:var(--fs-lg);}
     .vhist-row{gap:var(--s2);font-size:var(--fs-xs);padding:var(--s2);}
     .vresult{padding:var(--s5);}
-    .variant-cta{padding:var(--s4);gap:var(--s3);}
+    .variant-cta,.resume-cta{padding:var(--s4);gap:var(--s3);}
     .variant-cta .vc-go{display:none;}
     .help{padding:var(--s6) var(--s4) var(--s12);}
     .help h2{font-size:var(--fs-2xl);}
@@ -1144,11 +1189,14 @@
     body::before,body::after{display:none;}
   }
   @media (prefers-reduced-motion:reduce){
-    .hub-prog,.variant-cta,.tcard{animation:none;}
+    .hub-prog,.variant-cta,.resume-cta,.tcard,.card.just-here{animation:none;}
+    /* Кольцо не мигает, а просто стоит: без него после автоперехода
+       непонятно, какая карточка теперь текущая. */
+    .card.just-here{box-shadow:0 0 0 3px var(--accent-soft),0 0 0 4px var(--accent-line);}
     .tcard::after{transition:none;}
     /* сжатие при нажатии — движение; оставляем только смену фона */
     .tcard:active:not(:disabled),.chip:active,.btn:active:not(:disabled),.ghost:active,
-    .back:active,.hf-btn:active,.btn-video:active,.ib-go:active,.variant-cta:active,
+    .back:active,.hf-btn:active,.btn-video:active,.ib-go:active,.variant-cta:active,.resume-cta:active,
     .mode-seg .seg:active,.stepper button:active:not(:disabled),.sheet-go:active{
       transform:none;}
     /* шеврон доворачивается мгновенно: конечное состояние нужно, движение — нет */
@@ -1590,11 +1638,72 @@ if(!localStorage.getItem(STORAGE_KEY)){
 const appEl=document.getElementById('app'), statsEl=document.getElementById('stats'), backEl=document.getElementById('back'), headerEl=document.querySelector('header');
 const shareEl=document.getElementById('share'), resetEl=document.getElementById('reset'), guideEl=document.getElementById('guide'), installEl=document.getElementById('install');
 function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
+/* Где ученик остановился в прошлый раз. Отдельный ключ, а не поле в state:
+   state целиком уезжает в ссылку «поделиться прогрессом», и чужая закладка
+   на чужом прототипе там не нужна. Хранится только последнее место — не
+   история: тренажёру достаточно знать, откуда продолжать. */
+const LAST_KEY='ege_last_v1';
+let lastPos=null;
+try{lastPos=JSON.parse(localStorage.getItem(LAST_KEY))||null;}catch(e){lastPos=null;}
+/* id опускают, когда задание только открыли: номер задания уже известен,
+   а конкретный прототип — ещё нет, и затирать прошлый им нельзя. */
+function saveLast(n,id){
+  if(!taskCfg(n))return;
+  /* saveLast(n) — «номер тот же, прототип пока неизвестен, не затирай».
+     saveLast(n,null) — «забудь прототип»: так делает сброс задания. */
+  const keep=(id===undefined&&lastPos&&lastPos.n===n)?lastPos.id:(id||null);
+  lastPos={n:n,id:keep};
+  try{localStorage.setItem(LAST_KEY,JSON.stringify(lastPos));}catch(e){}
+}
+function clearLast(){lastPos=null;try{localStorage.removeItem(LAST_KEY);}catch(e){}}
 function taskState(n){return state[n]||(state[n]={});}
 function countTask(n){const ts=state[n]||{},pl=protoList(n);
   if(pl){let g=0,o=0,b=0;pl.forEach(grp=>{const s=ts[grp.ids[0]];if(s==='g')g++;else if(s==='o')o++;else if(s==='b')b++;});return{g,o,b};}
   const v=Object.values(ts);return{
   g:v.filter(x=>x==='g').length,o:v.filter(x=>x==='o').length,b:v.filter(x=>x==='b').length};}
+
+/* ---- куда вести ученика дальше ----
+   Порядок прототипов — тот же, в каком они лежат на экране: карточка на
+   задании строится по protoList, поэтому и обход идёт по нему. */
+function protoIds(n){const pl=protoList(n);
+  return pl?pl.map(g=>g.ids[0]):Array.from({length:(taskCfg(n)||{}).count||0},(_,i)=>i+1);}
+function protoNumOf(n,id){const pl=protoList(n);if(!pl)return id;
+  const g=pl.find(x=>x.ids[0]===id);return g?g.p:id;}
+/* Сначала ищем ниже последней позиции, потом с начала: ученик мог
+   отработать середину задания и вернуться — пропущенное в начале всё
+   равно надо предложить, а не считать пройденным. */
+function nextUnsolved(n,fromId){
+  const ids=protoIds(n),ts=state[n]||{};
+  const start=fromId?ids.indexOf(fromId):-1;
+  for(let i=start+1;i<ids.length;i++)if(!ts[ids[i]])return ids[i];
+  for(let i=0;i<=start;i++)if(!ts[ids[i]])return ids[i];
+  return null;
+}
+/* Цель кнопки на хабе: сначала туда, где ученик остановился; если то
+   задание добито — в первое, где работа ещё осталась. null значит, что
+   отмечено всё, и кнопку показывать не из чего. */
+function resumeTarget(){
+  if(lastPos&&taskCfg(lastPos.n)&&displayCount(lastPos.n)>0){
+    const id=nextUnsolved(lastPos.n,lastPos.id);
+    if(id)return{n:lastPos.n,id:id};
+  }
+  for(const t of TASKS){
+    if(t.hidden||displayCount(t.n)===0)continue;
+    const id=nextUnsolved(t.n,null);
+    if(id)return{n:t.n,id:id};
+  }
+  return null;
+}
+function anyProgress(){return TASKS.some(t=>Object.keys(state[t.n]||{}).length>0);}
+/* Следующее задание, где ещё есть работа. По кругу: если добивают
+   последнее, вести некуда, кроме как в начало. */
+function nextTaskWithWork(n){
+  const act=TASKS.filter(t=>!t.hidden&&displayCount(t.n)>0);
+  const i=act.findIndex(t=>t.n===n);
+  for(let k=1;k<=act.length;k++){const t=act[(i+k+act.length)%act.length];
+    if(t.n!==n&&nextUnsolved(t.n,null))return t;}
+  return null;
+}
 
 // ответы нигде не сохраняются — в прогресс/ссылку попадает только итоговый статус
 function plainAnswer(html){if(!html)return'';const t=document.createElement('div');t.innerHTML=html;return(t.textContent||'').trim();}
@@ -1745,7 +1854,8 @@ function setStatus(n,id,status){
      карточка исчезала раньше, чем ученик успевал прочитать «Правильно».
      Отметка и так видна: сегмент подсвечен, левый кант карточки сменил цвет. */
   filterKeep.add(id);
-  recordStatus(n,id,status);save();refreshCard(n,id);refreshCell(n,id);applyFilter();}
+  recordStatus(n,id,status);save();refreshCard(n,id);refreshCell(n,id);
+  syncTaskDone(n);applyFilter();}
 
 // --- фильтр по статусу внутри задания ---
 let viewFilter='all';
@@ -1772,6 +1882,10 @@ function applyFilter(){
     b.style.display=any?'':'none';
   });
   document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c.dataset.filter===viewFilter));
+  /* Итог задания — про весь список целиком, поэтому под отбором его нет:
+     «задание пройдено» под фильтром «надо повторить» противоречит экрану. */
+  const done=document.querySelector('.task-done');
+  if(done)done.style.display=(viewFilter==='all')?'':'none';
 }
 
 /* Смена фильтра пересобирает список целиком. Мгновенная подмена читается
@@ -1783,6 +1897,148 @@ function switchFilter(){
   if(!list||!matchMedia('(prefers-reduced-motion: no-preference)').matches){applyFilter();return;}
   list.classList.add('swapping');
   setTimeout(()=>{applyFilter();list.classList.remove('swapping');},130);
+}
+
+/* ============================================================
+   Автопереход к следующему прототипу.
+   Раньше верный ответ и отметка не приводили никуда: список продолжался,
+   а ученик сам искал, где остановился, — от этого тренажёр читался как
+   каталог задач, а не как занятие. Теперь после каждого решения экран
+   сам подводит к следующей неразобранной задаче.
+   Переход отложенный и отменяемый: любое своё действие ученика — прокрутка,
+   клик, клавиша — важнее нашего намерения и отменяет его.
+   ============================================================ */
+let pendingFocus=null;      // куда прокрутить, когда экран задания соберётся
+let advanceTimer=null,advanceGen=0;
+
+/* На телефоне панель задания — липкая строка поверх списка, на десктопе
+   колонка сбоку. Меряем, а не подбираем константу: высота строки зависит
+   и от кегля, и от того, влезла ли подпись у кнопки возврата. */
+function cardOffset(){
+  const p=document.querySelector('.grid-panel');
+  if(!p)return 12;
+  const r=p.getBoundingClientRect();
+  return r.width>innerWidth*0.7?r.height+12:12;
+}
+function scrollToEl(el,smooth){
+  const aim=()=>Math.max(0,Math.min(el.getBoundingClientRect().top+scrollY-cardOffset(),
+    document.documentElement.scrollHeight-innerHeight));
+  const jump=b=>{const y=aim();try{scrollTo({top:y,left:0,behavior:b});}catch(e){scrollTo(0,y);}};
+  jump(smooth?'smooth':'instant');
+  /* Доводка. Высоты ещё не показанных карточек — только оценка
+     (content-visibility), поэтому после первого прыжка список
+     дораскладывается и цель уезжает на сотни пикселей.
+     Плавную прокрутку не перебиваем, а проверяем, когда она уже должна
+     была закончиться. Это заодно страховка на случай, когда браузер её не
+     проиграл вовсе: в фоновой вкладке анимации прокрутки не идут, и без
+     проверки переход просто не состоялся бы. */
+  const fix=()=>{if(Math.abs(scrollY-aim())>4)jump('instant');};
+  if(!smooth){requestAnimationFrame(()=>requestAnimationFrame(fix));setTimeout(fix,180);return;}
+  /* Если ученик за это время начал листать сам — доводить не надо: его
+     прокрутка важнее нашей. */
+  let off=false;
+  const stop=()=>{off=true;removeEventListener('wheel',stop);removeEventListener('touchmove',stop);};
+  addEventListener('wheel',stop,{passive:true});
+  addEventListener('touchmove',stop,{passive:true});
+  setTimeout(()=>{if(!off)fix();stop();},600);
+}
+function focusCard(id,smooth){
+  const card=document.getElementById('task-'+id);
+  if(!card)return false;
+  document.querySelectorAll('.card.just-here').forEach(c=>c.classList.remove('just-here'));
+  scrollToEl(card,smooth);
+  reanim(card,'just-here');
+  /* Курсор в поле — только на мыши: на телефоне это подняло бы клавиатуру
+     поверх условия, которое ученик ещё не прочитал. preventScroll и задержка
+     нужны, чтобы фокус не перебил идущую плавную прокрутку. */
+  if(matchMedia('(hover:hover) and (pointer:fine)').matches)
+    setTimeout(()=>{const inp=card.querySelector('.ans-input');
+      if(inp&&document.getElementById('task-'+id))
+        try{inp.focus({preventScroll:true});}catch(e){}},smooth?420:60);
+  return true;
+}
+function cancelAdvance(){
+  advanceGen++;
+  if(advanceTimer){clearTimeout(advanceTimer);advanceTimer=null;}
+  removeEventListener('wheel',cancelAdvance);
+  removeEventListener('touchmove',cancelAdvance);
+  removeEventListener('keydown',cancelAdvance);
+}
+/* Слушатели отмены вешаются не сразу, а следующим тиком, и только если
+   переход всё ещё в силе. Иначе они ловили бы то же самое событие, которое
+   переход и назначило: Enter в поле ответа доходит до окна уже после
+   обработчика клика, а тап по кнопке отметки успевает дать touchmove. */
+function armAdvanceCancel(gen){
+  if(gen!==advanceGen||!advanceTimer)return;
+  addEventListener('wheel',cancelAdvance,{passive:true});
+  addEventListener('touchmove',cancelAdvance,{passive:true});
+  addEventListener('keydown',cancelAdvance);
+}
+/* Что считать «ещё не разобранным», зависит от фильтра: в «Все» и «Не решал»
+   это задачи без отметки, в «Надо повторить»/«Надо разобраться» — те из
+   отобранных, до которых ученик в этом проходе ещё не дошёл (filterKeep
+   держит как раз те, что он только что отметил). */
+function nextPendingCard(fromId){
+  const r=parseRoute();if(r.view!=='task')return null;
+  const ts=state[r.n]||{};
+  const pending=id=>(viewFilter==='o'||viewFilter==='b')
+    ?(ts[id]===viewFilter&&!filterKeep.has(id))
+    :!ts[id];
+  const cards=[...document.querySelectorAll('.list .card')];
+  const i=cards.findIndex(c=>c.id==='task-'+fromId);
+  if(i<0)return null;
+  for(let k=i+1;k<cards.length;k++){
+    if(cards[k].style.display==='none')continue;
+    if(pending(+cards[k].id.replace('task-','')))return cards[k];
+  }
+  return null;
+}
+function scheduleAdvance(n,fromId,delay){
+  cancelAdvance();
+  const gen=advanceGen;
+  advanceTimer=setTimeout(()=>{
+    cancelAdvance();
+    const r=parseRoute();if(r.view!=='task'||r.n!==n)return;
+    const next=nextPendingCard(fromId);
+    if(next){focusCard(+next.id.replace('task-',''),true);return;}
+    /* Ниже пусто — значит это была последняя. Ведём к итогу задания,
+       если он появился; иначе просто оставляем ученика на месте. */
+    const done=document.querySelector('.task-done.on');
+    if(done&&done.style.display!=='none')scrollToEl(done,true);
+  },delay);
+  setTimeout(()=>armAdvanceCancel(gen),0);
+}
+
+/* ---- итог задания ----
+   Появляется в конце списка, когда у всех прототипов есть отметка. Блок
+   один и переиспользуется: пересобирать его на каждую отметку незачем,
+   а лишний узел в списке ломал бы оценки высот у content-visibility. */
+function taskDoneEl(){
+  let el=document.querySelector('.task-done');
+  if(el)return el;
+  const list=document.querySelector('.list');
+  if(!list)return null;
+  el=document.createElement('div');el.className='task-done';
+  list.appendChild(el);
+  return el;
+}
+function syncTaskDone(n){
+  if(parseRoute().view!=='task')return;
+  const el=taskDoneEl();if(!el)return;
+  const c=countTask(n),tot=displayCount(n),left=tot-c.g-c.o-c.b;
+  if(!tot||left>0){el.classList.remove('on');el.innerHTML='';return;}
+  const weak=[c.o?c.o+' повторить':'',c.b?c.b+' разобраться':''].filter(Boolean).join(', ');
+  const nt=nextTaskWithWork(n);
+  const acts=[];
+  if(c.o)acts.push(`<button class="btn" data-filter="o">Повторить (${c.o})</button>`);
+  if(c.b)acts.push(`<button class="btn" data-filter="b">Разобраться (${c.b})</button>`);
+  acts.push(nt
+    ?`<button class="btn primary" data-resume="${nt.n}" data-resume-id="${nextUnsolved(nt.n,null)}">Задание ${nt.n} · ${nt.title}</button>`
+    :`<button class="btn primary" data-home>К заданиям</button>`);
+  el.innerHTML=`<div class="td-t">Задание ${n} пройдено</div>
+    <div class="td-s">${c.g} из ${tot} — умею решать${weak?`. Осталось слабых мест: ${weak}`:'. Ни одного слабого места'}</div>
+    <div class="td-acts">${acts.join('')}</div>`;
+  el.classList.add('on');
 }
 
 // --- перевод первичного балла в тестовый (профиль; 0..12 задач = 0..12 баллов) ---
@@ -2024,8 +2280,24 @@ function renderHub(){
       <span><i class="dot n"></i> Осталось: <b>${left}</b></span>
     </div>
   </div>`;
+  /* Главное действие хаба стоит выше сводки: сводка отвечает «где я», а
+     первым вопросом при заходе стоит «что делать сейчас». Пока ничего не
+     начато, та же кнопка называется «Начать» — «продолжить» нечего. */
+  const rt=resumeTarget();
+  const resumeHTML=rt?(()=>{
+    const tt=taskCfg(rt.n),tot=displayCount(rt.n);
+    const started=!!lastPos||anyProgress();
+    return `<button class="resume-cta" data-resume="${rt.n}" data-resume-id="${rt.id}">
+      <span class="rc-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
+      <span class="rc-body">
+        <span class="rc-t">${started?'Продолжить':'Начать'}</span>
+        <span class="rc-s">Задание ${rt.n} · ${tt.title} — прототип ${protoNumOf(rt.n,rt.id)} из ${tot}</span>
+      </span>
+      <span class="rc-go"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5 18.5 12 13 17.5"/></svg></span>
+    </button>`;})():'';
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
+    ${resumeHTML}
     ${progHTML}
     <button class="variant-cta" data-variant>
       <span class="vc-ico"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>
@@ -2124,6 +2396,7 @@ function renderTask(n){
     return;
   }
   setBack(true); statsEl.innerHTML='';
+  saveLast(n);
   const ts=taskState(n);
   const data=task.mode==='html'?(window.TASKDATA[n]||[]):null;
   /* Три полосы загрузки рисунков.
@@ -2227,7 +2500,15 @@ function renderTask(n){
   /* Сводку в шапку тут не пишем: на экране задания шапка скрыта, и эти
      цифры уходили в никуда. Состояние показывает карта прогресса слева,
      её aria-label несёт те же числа для голосового доступа. */
-  stageAndMount(fullHTML,()=>parseRoute().n===n,()=>prefetchSol([n]));
+  stageAndMount(fullHTML,()=>parseRoute().n===n,()=>{
+    prefetchSol([n]);
+    syncTaskDone(n);
+    /* Прокрутка к нужному прототипу — только после сборки экрана: до неё
+       карточки ещё нет, а координаты пустого списка ничего не значат. */
+    const want=pendingFocus&&pendingFocus.n===n?pendingFocus.id:null;
+    pendingFocus=null;
+    if(want)focusCard(want,false);
+  });
 }
 
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
@@ -2505,8 +2786,17 @@ function renderVariant(){
 }
 
 appEl.addEventListener('click',e=>{
+  /* Первым делом снимаем отложенный автопереход: раз ученик куда-то нажал,
+     он уже занят своим делом, и уезжающий из-под пальца экран — помеха.
+     Обработчики отметки и проверки ставят переход заново, ниже. */
+  cancelAdvance();
   const tt=e.target.closest('[data-task-theme]'); if(tt){toggleTheme();return;}
   const inst=e.target.closest('[data-install]'); if(inst){doInstall();return;}
+  const rs=e.target.closest('[data-resume]');
+  if(rs){const n=+rs.dataset.resume,id=+rs.dataset.resumeId;
+    pendingFocus={n:n,id:id};
+    if(parseRoute().n===n)focusCard(id,false); else go('#/t/'+n);
+    return;}
   const dv=e.target.closest('[data-variant]');
   if(dv){variant=null;
     if(/#\/v\b/.test(location.hash)){scrollTop();renderVariant();}else go('#/v');return;}
@@ -2554,7 +2844,11 @@ appEl.addEventListener('click',e=>{
     setBoxOpen(body,open);return;}
   const hm=e.target.closest('[data-home]'); if(hm){go('#/');return;}
   const ch=e.target.closest('[data-filter]');
-  if(ch){viewFilter=ch.dataset.filter;filterKeep.clear();switchFilter();return;}
+  if(ch){viewFilter=ch.dataset.filter;filterKeep.clear();switchFilter();
+    /* Из итога задания фильтр включают, стоя в самом низу списка. Оставить
+       там — значит показать пустоту под последней карточкой отбора. */
+    if(ch.closest('.task-done')){const f=document.querySelector('.filters');if(f)scrollToEl(f,false);}
+    return;}
   const vhc=e.target.closest('[data-vhclear]');
   if(vhc){ask({title:'Очистить историю пробников?',
     text:'Список попыток и график будут удалены. Прогресс по заданиям останется.',
@@ -2562,7 +2856,13 @@ appEl.addEventListener('click',e=>{
   const t=e.target.closest('[data-go]'); if(t){go('#/t/'+t.dataset.go);return;}
   const mk=e.target.closest('[data-mark]');
   if(mk){const r=parseRoute();if(r.view!=='task')return;const ts=taskState(r.n),id=+mk.dataset.id,m=mk.dataset.mark;
-    setStatus(r.n,id, ts[id]===m?null:m);return;}
+    const off=ts[id]===m;
+    setStatus(r.n,id, off?null:m);
+    saveLast(r.n,id);
+    /* Снятие отметки — это исправление, а не «решил»: вести дальше не с чего.
+       Пауза перед переходом нужна, чтобы ученик увидел, что отметка встала. */
+    if(!off)scheduleAdvance(r.n,id,700);
+    return;}
   const chk=e.target.closest('[data-check]');
   if(chk){const r=parseRoute();if(r.view!=='task')return;const id=+chk.dataset.check,n=r.n;
     const noStatus=chk.dataset.nostatus==='1';
@@ -2581,11 +2881,15 @@ appEl.addEventListener('click',e=>{
         if(!noStatus)setStatus(n,id,'g');
       }
       reanim(msg,'flash');
+      /* Пауза длиннее, чем у отметки: «Правильно» надо успеть прочитать.
+         В похожих задачах (nostatus) переходить некуда — они живут внутри
+         своей карточки и в порядок прототипов не входят. */
+      if(!noStatus){saveLast(n,id);scheduleAdvance(n,id,1200);}
     }else{
       input.classList.remove('correct');input.classList.add('wrong');
       msg.textContent='Неправильно';msg.className='ans-msg no';
       reanim(input,'shake');reanim(msg,'flash');
-      if(!noStatus)setStatus(n,id,'b');
+      if(!noStatus){setStatus(n,id,'b');saveLast(n,id);}
     }
     return;}
   const sm=e.target.closest('[data-similar]');
@@ -2636,11 +2940,11 @@ document.getElementById('reset').addEventListener('click',()=>{const r=parseRout
   if(r.view==='task')
     ask({title:'Сбросить прогресс по заданию '+r.n+'?',
       text:'Отметки по всем прототипам этого задания будут сняты. Остальные задания не тронутся.',
-      ok:'Сбросить',danger:true}).then(y=>{if(y){state[r.n]={};save();renderTask(r.n);}});
+      ok:'Сбросить',danger:true}).then(y=>{if(y){state[r.n]={};save();saveLast(r.n,null);renderTask(r.n);}});
   else
     ask({title:'Сбросить весь прогресс?',
       text:'Отметки по всем заданиям будут сняты. История пробников останется.',
-      ok:'Сбросить всё',danger:true}).then(y=>{if(y){state={};save();renderHub();}});});
+      ok:'Сбросить всё',danger:true}).then(y=>{if(y){state={};save();clearLast();renderHub();}});});
 const burgerEl=document.getElementById('burger'),navMenuEl=document.getElementById('nav-menu');
 burgerEl.addEventListener('click',e=>{e.stopPropagation();navMenuEl.classList.toggle('open');});
 navMenuEl.addEventListener('click',()=>navMenuEl.classList.remove('open'));
