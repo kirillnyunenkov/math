@@ -2,10 +2,11 @@
    При выкладке новой версии сайта поднимай VERSION (любое изменение этого файла
    заставит браузер установить новый SW и удалить старый кеш). HTML грузится
    network-first, поэтому онлайн-пользователи всегда получают свежую версию. */
-const VERSION = 'v48';
+const VERSION = 'v49';
 const CACHE = 'ege-' + VERSION;
 const SHELL = ['./', './index.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
+  './logo.svg', './favicon.ico', './favicon-32.png',
   './katex/katex.min.css', './katex/katex.min.js', './katex/auto-render.min.js',
   // шрифты теперь свои: без них офлайн-приложение подменяло типографику системной
   './fonts/golos-text-cyrillic.woff2', './fonts/golos-text-latin.woff2',
