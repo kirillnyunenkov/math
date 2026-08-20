@@ -70,7 +70,7 @@
     --line:#e2ddd0;--line-strong:#cdc6b5;
     /* accent — чернильно-синий */
     --accent:#1d4e89;--accent-hover:#163f70;--accent-on:#ffffff;
-    --accent-soft:#e7eef7;--accent-line:#bccfe6;--accent-tile:rgba(255,255,255,.18);
+    --accent-soft:#e7eef7;--accent-line:#bccfe6;
     --focus:#1d4e89;
     /* статусы */
     --ok:#2f7d54;--ok-text:#1f5b3a;--ok-soft:#e3efe8;--ok-on:#ffffff;
@@ -115,7 +115,7 @@
     --ink:#eae5da;--ink-2:#a8a498;--ink-3:#a09c8b;
     --line:#33362f;--line-strong:#454940;
     --accent:#7fb2ea;--accent-hover:#9cc5f2;--accent-on:#0e1a28;
-    --accent-soft:rgba(127,178,234,.14);--accent-line:rgba(127,178,234,.38);--accent-tile:rgba(14,26,40,.12);
+    --accent-soft:rgba(127,178,234,.14);--accent-line:rgba(127,178,234,.38);
     --focus:#9cc5f2;
     --ok:#4caf7d;--ok-text:#6cc396;--ok-soft:rgba(76,175,125,.16);--ok-on:#0c1f16;
     --warn:#d9932f;--warn-text:#e0a955;--warn-soft:rgba(217,147,47,.15);--warn-on:#241704;
@@ -227,6 +227,34 @@
     background:var(--surface-2);border-radius:var(--r-full);padding:5px var(--s3);}
   .hub-prog-stats b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;}
 
+  /* «Что дальше» — строка внутри сводки, а не отдельная плашка.
+     Плашкой это был третий полноширинный слой подряд: на 375×812 первая
+     карточка задания начиналась на 773-м пикселе из 812, то есть сетка
+     заданий уезжала за сгиб целиком. И своей заливкой плашка спорила с
+     баннером варианта — та же высота, та же раскладка, они читались как
+     близнецы, а не как главное и второстепенное.
+     Здесь «где я» и «что дальше» стоят в одном блоке, как один вопрос,
+     а акцент остаётся ровно на кнопке.
+     Сильная строка — тема задания, номер ушёл в слабую: рядом с кнопкой
+     колонка текста узкая, и «Задание 1 · Планиметрия» ломалось после
+     разделителя, оставляя висячую точку в конце строки. */
+  .hub-go{position:relative;display:flex;align-items:center;gap:var(--s4);width:100%;
+    text-align:left;font:inherit;color:inherit;cursor:pointer;background:none;border:none;
+    border-top:1px solid var(--line);margin-top:var(--s5);padding:var(--s5) 0 0;}
+  .hub-go .hg-body{min-width:0;}
+  .hub-go .hg-t{display:block;font-weight:600;font-size:var(--fs-base);color:var(--ink);line-height:1.35;}
+  .hub-go .hg-s{display:block;font-size:var(--fs-sm);color:var(--ink-2);margin-top:2px;
+    font-variant-numeric:tabular-nums;}
+  .hub-go .hg-word{font-style:normal;}
+  .hub-go .hg-act{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:var(--s2);
+    background:var(--accent);color:var(--accent-on);font-weight:600;font-size:var(--fs-sm);
+    border-radius:var(--r-md);padding:0 var(--s4);min-height:44px;white-space:nowrap;
+    transition:background var(--dur) var(--ease),transform var(--dur) var(--ease);}
+  .hub-go:hover .hg-act{background:var(--accent-hover);}
+  .hub-go:active .hg-act{transform:translateY(1px);}
+  .hub-go .hg-act .ic{transition:transform var(--dur) var(--ease);}
+  .hub-go:hover .hg-act .ic{transform:translateX(2px);}
+
   /* сетка заданий */
   .tasks{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:var(--s3);}
   .tcard{position:relative;background:var(--surface);border:1px solid var(--line);
@@ -246,30 +274,6 @@
   .bar .bg{background:var(--ok);}.bar .bo{background:var(--warn);}.bar .bb{background:var(--todo);}
   .tmeta{display:flex;justify-content:space-between;gap:var(--s2);
     font-size:var(--fs-xs);color:var(--ink-3);font-variant-numeric:tabular-nums;}
-
-  /* «Продолжить» — единственное главное действие хаба.
-     Сплошная заливка акцентом, а не подложка: на экране должно быть ровно
-     одно место, куда очевидно нажать после захода. Тёмный баннер варианта
-     ниже — второй по важности, и отличается он материалом, а не яркостью,
-     поэтому два блока подряд не спорят. */
-  .resume-cta{display:flex;align-items:center;gap:var(--s4);width:100%;text-align:left;
-    font:inherit;cursor:pointer;background:var(--accent);color:var(--accent-on);
-    border:1px solid var(--accent);border-radius:var(--r-lg);
-    padding:var(--s5) var(--s6);margin-bottom:var(--s6);box-shadow:var(--e2);
-    transition:transform var(--dur) var(--ease),box-shadow var(--dur) var(--ease),
-      background var(--dur) var(--ease),border-color var(--dur) var(--ease);}
-  .resume-cta:hover{background:var(--accent-hover);border-color:var(--accent-hover);
-    transform:translateY(-2px);box-shadow:var(--e3);}
-  .resume-cta:active{transform:translateY(0);box-shadow:var(--e1);}
-  .resume-cta .rc-ico{display:flex;align-items:center;justify-content:center;flex:none;
-    width:40px;height:40px;border-radius:var(--r-md);background:var(--accent-tile);}
-  .resume-cta .rc-body{min-width:0;}
-  .resume-cta .rc-t{display:block;font-family:'Literata',Georgia,serif;font-weight:600;
-    font-size:var(--fs-lg);letter-spacing:-.01em;margin:0 0 2px;}
-  .resume-cta .rc-s{display:block;font-size:var(--fs-sm);opacity:.85;line-height:1.45;}
-  .resume-cta .rc-go{margin-left:auto;flex:none;display:inline-flex;align-items:center;
-    justify-content:center;width:32px;height:32px;border-radius:var(--r-full);
-    background:var(--accent-tile);}
 
   /* баннер «Собрать вариант» — единственный намеренно тёмный блок */
   .variant-cta{display:flex;align-items:center;gap:var(--s4);width:100%;text-align:left;
@@ -779,7 +783,7 @@
     html{scroll-behavior:auto;}
     *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
       transition-duration:.001ms!important;scroll-behavior:auto!important;}
-    .tcard:hover,.variant-cta:hover,.resume-cta:hover{transform:none;}
+    .tcard:hover,.variant-cta:hover{transform:none;}
   }
 
   /* ============================================================
@@ -846,7 +850,17 @@
     .vbar .vtimer{font-size:var(--fs-lg);}
     .vhist-row{gap:var(--s2);font-size:var(--fs-xs);padding:var(--s2);}
     .vresult{padding:var(--s5);}
-    .variant-cta,.resume-cta{padding:var(--s4);gap:var(--s3);}
+    .variant-cta{padding:var(--s4);gap:var(--s3);}
+    /* Кнопка остаётся в строке, а не разворачивается во всю ширину.
+       Полноширинной она добавляла панели целый ряд в 56px, и сетка заданий
+       уезжала за сгиб — ровно то, ради чего строку сюда и переносили.
+       44px в высоту и ~140 в ширину — палец попадает и так. */
+    .hub-go{gap:var(--s3);margin-top:var(--s4);padding-top:var(--s4);}
+    .hub-go .hg-t{font-size:var(--fs-sm);}
+    /* Колонка текста рядом с кнопкой — 180px, и слово «прототип» роняло
+       счётчик отдельной строкой. Тема названа строкой выше, кнопка рядом:
+       «Задание 1 · 1/27» читается без него. */
+    .hub-go .hg-word{display:none;}
     .variant-cta .vc-go{display:none;}
     .help{padding:var(--s6) var(--s4) var(--s12);}
     .help h2{font-size:var(--fs-2xl);}
@@ -1029,7 +1043,7 @@
   .btn.primary{background:var(--accent);border-color:transparent;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 6px 20px -6px var(--accent);}
   .btn.primary:hover{box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 10px 26px -8px var(--accent);}
-  .hf-btn,.btn-video,.ib-go,.sheet-go{
+  .hf-btn,.btn-video,.ib-go,.sheet-go,.hub-go .hg-act{
     box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 6px 20px -6px var(--accent);}
 
   /* ---- герой прогресса: главный визуальный акцент хаба ---- */
@@ -1050,6 +1064,20 @@
   .hub-prog-bar div{position:relative;box-shadow:inset 0 1px 0 rgba(255,255,255,.3);}
   .hub-prog-stats span{background:var(--glass-strong);border:1px solid var(--glass-line);
     box-shadow:inset 0 1px 0 var(--glass-edge);}
+  .hub-go{border-top-color:var(--glass-line);}
+  /* Шире телефона действие уезжает в верхний правый угол панели: там
+     пусто, и пусто не случайно — место держит высокая цифра процента
+     слева. Панель от строки не растёт ни на пиксель.
+     Абсолютом, а не второй колонкой во flex: на телефоне тот же элемент
+     должен стоять внизу под чипами, а перенести его между контейнерами
+     через order нельзя — bar и stats ему не братья по строке. */
+  @media (min-width:761px){
+    .hub-go{position:absolute;top:var(--s8);right:var(--s8);z-index:1;
+      width:auto;max-width:44%;flex-direction:column;align-items:flex-end;
+      gap:var(--s3);border-top:none;margin-top:0;padding-top:0;}
+    .hub-go .hg-body{text-align:right;}
+    .hub-go .hg-act{margin-left:0;}
+  }
 
   /* ---- баннер варианта: тёмное стекло с подсветкой ---- */
   .variant-cta{position:relative;overflow:hidden;
@@ -1189,18 +1217,19 @@
     body::before,body::after{display:none;}
   }
   @media (prefers-reduced-motion:reduce){
-    .hub-prog,.variant-cta,.resume-cta,.tcard,.card.just-here{animation:none;}
+    .hub-prog,.variant-cta,.tcard,.card.just-here{animation:none;}
     /* Кольцо не мигает, а просто стоит: без него после автоперехода
        непонятно, какая карточка теперь текущая. */
     .card.just-here{box-shadow:0 0 0 3px var(--accent-soft),0 0 0 4px var(--accent-line);}
     .tcard::after{transition:none;}
     /* сжатие при нажатии — движение; оставляем только смену фона */
     .tcard:active:not(:disabled),.chip:active,.btn:active:not(:disabled),.ghost:active,
-    .back:active,.hf-btn:active,.btn-video:active,.ib-go:active,.variant-cta:active,.resume-cta:active,
+    .back:active,.hf-btn:active,.btn-video:active,.ib-go:active,.variant-cta:active,
     .mode-seg .seg:active,.stepper button:active:not(:disabled),.sheet-go:active{
       transform:none;}
     /* шеврон доворачивается мгновенно: конечное состояние нужно, движение — нет */
     .lnk .chev{transition:none;}
+    .hub-go:hover .hg-act .ic{transform:none;}
   }
 </style>
 <script defer src="katex/katex.min.js"></script>
@@ -2263,6 +2292,22 @@ function renderHub(){
   const grew=lastHubShare&&to.some((v,i)=>Math.abs(v-from[i])>0.05);
   lastHubShare=to;
   statsEl.innerHTML='';
+  /* «Где я» и «что дальше» — для ученика один вопрос, поэтому и блок один.
+     Пока ничего не начато, действие называется «Начать»: продолжать нечего.
+     Сильная строка — куда попадёшь, слабая — насколько далеко ты в задании,
+     глагол вынесен в кнопку, чтобы он не повторялся дважды. */
+  const rt=resumeTarget();
+  const goHTML=rt?(()=>{
+    const tt=taskCfg(rt.n),tot=displayCount(rt.n);
+    const verb=(lastPos||anyProgress())?'Продолжить':'Начать';
+    return `<button class="hub-go" data-resume="${rt.n}" data-resume-id="${rt.id}"
+        aria-label="${verb}: задание ${rt.n}, ${tt.title}, прототип ${protoNumOf(rt.n,rt.id)} из ${tot}">
+      <span class="hg-body">
+        <span class="hg-t">${tt.title}</span>
+        <span class="hg-s">Задание ${rt.n} · <i class="hg-word">прототип </i>${protoNumOf(rt.n,rt.id)}/${tot}</span>
+      </span>
+      <span class="hg-act">${verb} <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5 18.5 12 13 17.5"/></svg></span>
+    </button>`;})():'';
   const progHTML=`<div class="hub-prog">
     <div class="hub-prog-head">
       <span class="hub-prog-label">Общий прогресс</span>
@@ -2279,25 +2324,10 @@ function renderHub(){
       <span><i class="dot b"></i> Разобраться: <b>${allB}</b></span>
       <span><i class="dot n"></i> Осталось: <b>${left}</b></span>
     </div>
+    ${goHTML}
   </div>`;
-  /* Главное действие хаба стоит выше сводки: сводка отвечает «где я», а
-     первым вопросом при заходе стоит «что делать сейчас». Пока ничего не
-     начато, та же кнопка называется «Начать» — «продолжить» нечего. */
-  const rt=resumeTarget();
-  const resumeHTML=rt?(()=>{
-    const tt=taskCfg(rt.n),tot=displayCount(rt.n);
-    const started=!!lastPos||anyProgress();
-    return `<button class="resume-cta" data-resume="${rt.n}" data-resume-id="${rt.id}">
-      <span class="rc-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></span>
-      <span class="rc-body">
-        <span class="rc-t">${started?'Продолжить':'Начать'}</span>
-        <span class="rc-s">Задание ${rt.n} · ${tt.title} — прототип ${protoNumOf(rt.n,rt.id)} из ${tot}</span>
-      </span>
-      <span class="rc-go"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5 18.5 12 13 17.5"/></svg></span>
-    </button>`;})():'';
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
-    ${resumeHTML}
     ${progHTML}
     <button class="variant-cta" data-variant>
       <span class="vc-ico"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>
