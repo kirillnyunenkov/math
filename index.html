@@ -222,10 +222,24 @@
   .hub-prog-bar{height:10px;border-radius:var(--r-full);background:var(--track);
     overflow:hidden;display:flex;margin-bottom:var(--s4);}
   .hub-prog-bar div{transition:width .5s var(--ease);}
-  .hub-prog-stats{display:flex;gap:var(--s2);flex-wrap:wrap;font-size:var(--fs-sm);color:var(--ink-2);}
-  .hub-prog-stats span{display:inline-flex;align-items:center;gap:var(--s2);
+  /* Четыре чипа статуса — сетка, а не перенос по содержимому.
+     Во flex-wrap ширина каждого зависела от длины подписи и от того,
+     двузначное число внутри или трёхзначное, поэтому ряд рвался то на
+     2+2, то на 3+1, правый край гулял, и одинаковые по смыслу элементы
+     выглядели случайной россыпью. В сетке колонки равны, ряды сходятся
+     по обеим кромкам, а число прижато вправо — четыре значения читаются
+     в столбик, как и положено сводке. */
+  .hub-prog-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:var(--s2);font-size:var(--fs-sm);color:var(--ink-2);
+    /* Ряд уже полосы: это её легенда, а не второй такой же блок. Без
+       предела чипы растягивались на всю ширину панели, и между подписью
+       и числом зияло полтораста пустых пикселей. */
+    max-width:760px;}
+  .hub-prog-stats span{display:flex;align-items:center;gap:var(--s2);min-width:0;
     background:var(--surface-2);border-radius:var(--r-full);padding:5px var(--s3);}
-  .hub-prog-stats b{color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;}
+  /* Двоеточие убрано: разделяет теперь выключка, а не знак. */
+  .hub-prog-stats b{margin-left:auto;padding-left:var(--s2);
+    color:var(--ink);font-weight:600;font-variant-numeric:tabular-nums;}
 
   /* «Что дальше» — строка внутри сводки, а не отдельная плашка.
      Плашкой это был третий полноширинный слой подряд: на 375×812 первая
@@ -390,8 +404,12 @@
   /* ============================================================
      ЭКРАН ЗАДАНИЯ
      ============================================================ */
-  .wrap{max-width:1180px;margin:0 auto;padding:var(--s6) var(--s6) var(--s16);
+  .wrap{position:relative;max-width:1180px;margin:0 auto;padding:var(--s6) var(--s6) var(--s16);
     display:grid;grid-template-columns:208px 1fr;gap:var(--s8);align-items:start;}
+  /* Метка положения панели: стоит там, где панель лежит в покое, и уезжает
+     вверх ровно тогда, когда панель начинает липнуть. Абсолютом — иначе
+     стала бы ячейкой сетки и раздвинула колонки. */
+  .stick-mark{position:absolute;top:var(--s6);left:0;width:1px;height:1px;pointer-events:none;}
   .grid-panel{position:sticky;top:var(--s4);min-width:0;padding:var(--s4);border-radius:var(--r-lg);}
   .task-nav{display:flex;align-items:center;justify-content:space-between;gap:var(--s2);margin-bottom:var(--s4);}
   .task-nav .task-back{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:0 1 auto;}
@@ -490,6 +508,16 @@
     letter-spacing:-.01em;margin-bottom:var(--s2);}
   .td-s{color:var(--ink-2);font-size:var(--fs-base);line-height:1.5;margin-bottom:var(--s5);}
   .td-acts{display:flex;flex-wrap:wrap;gap:var(--s2);}
+
+  /* Сбой загрузки. Та же форма, что у итога задания: это тоже сообщение
+     на месте списка, только красная кромка вместо зелёной. */
+  .load-fail{background:var(--surface);border:1px solid var(--line);
+    border-left:3px solid var(--err);border-radius:var(--r-lg);padding:var(--s6);}
+  .lf-t{font-family:'Literata',Georgia,serif;font-weight:600;font-size:var(--fs-xl);
+    letter-spacing:-.01em;margin-bottom:var(--s2);}
+  .lf-s{color:var(--ink-2);font-size:var(--fs-base);line-height:1.5;margin-bottom:var(--s5);}
+  .lf-acts{display:flex;flex-wrap:wrap;gap:var(--s2);}
+  .sol-fail{color:var(--ink-2);font-size:var(--fs-base);line-height:1.5;margin:var(--s3) 0 0;}
   .card-top{display:flex;align-items:baseline;gap:var(--s3);margin-bottom:var(--s3);}
   .num{font-family:'Literata',Georgia,serif;font-weight:700;font-size:var(--fs-xl);
     color:var(--ink);line-height:1;letter-spacing:-.01em;}
@@ -800,7 +828,18 @@
        переключатель темы. Карта и видео уезжают под раскрытие.
        Липкость заодно чинит второе: шапки на экране задания нет, и с
        двадцатого прототипа выйти можно было только домотав список назад. */
+    .stick-mark{top:var(--s4);}
+    /* Форма зависит от того, где панель сейчас. В покое это карточка:
+       отступ от краёв и скругления со всех сторон. Прилипнув — доезжает
+       до краёв экрана, и верхние углы уходят, потому что там уже не край
+       карточки, а край экрана.
+       Раньше углы были срезаны всегда: в покое панель висела с обрубленной
+       макушкой посреди фона, а прилипнув пропускала прокрутку в щели по
+       16px с боков — снизу лист ехал, а сверху торчал из-под панели. */
     .grid-panel{position:sticky;top:0;z-index:30;padding:var(--s2) var(--s3);
+      border-radius:var(--r-lg);
+      transition:border-radius var(--dur) var(--ease),margin var(--dur) var(--ease);}
+    .grid-panel.docked{margin-left:calc(var(--s4) * -1);margin-right:calc(var(--s4) * -1);
       border-radius:0 0 var(--r-lg) var(--r-lg);}
     .task-nav{margin-bottom:0;}
     .panel-toggle{display:inline-flex;align-items:center;gap:var(--s3);
@@ -839,7 +878,7 @@
     /* на узкой карточке полоса уже показывает повтор/разбор — не дублируем текстом */
     .tmeta span+span{display:none;}
     .tmeta{justify-content:flex-start;}
-    .hub-prog-stats{gap:6px;}
+    .hub-prog-stats{grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;}
     .hub-prog-stats span{font-size:var(--fs-xs);padding:4px var(--s2);}
     .vbox{padding:var(--s5) var(--s4) var(--s12);}
     /* Таймер обязан оставаться на виду: в режиме экзамена на 12 задач он
@@ -1850,9 +1889,17 @@ function revealToggle(btn,box,build,ensureFn){
   },260);
   ensureFn(()=>{clearTimeout(slow);paint();});
 }
-const solInner=(ans,html)=>`<div class="sol-inner">`+
+/* Если файл разборов не доехал, solOf возвращает пустую строку, и раньше
+   коробка раскрывалась пустой: ученик жал «Решение» и получал ничего,
+   без единого слова о том, что случилось. Ответ при этом уже загружен
+   вместе с условием, поэтому его показываем в любом случае. */
+const solInner=(ans,html,failed)=>`<div class="sol-inner">`+
   (ans?`<span class="answer">Ответ: ${ans}</span>`:'')+
-  `<div class="sol-body"><div class="tex">${html||''}</div></div></div>`;
+  (failed
+    ?`<p class="sol-fail">Разбор не загрузился — похоже, пропала связь. Ответ выше верный, а решение откроется, когда сеть вернётся.</p>`
+    :`<div class="sol-body"><div class="tex">${html||''}</div></div>`)+
+  `</div>`;
+const solFailed=n=>window.SOLDATA[n]==='error';
 /* Та же полоска, что на карточках хаба: на телефоне она заменяет собой
    карту из 27 клеток, а карта уезжает под раскрытие. */
 function barHTML(c,tot){const p=x=>tot?(x/tot*100).toFixed(1):0;
@@ -2036,6 +2083,24 @@ function scheduleAdvance(n,fromId,delay){
     if(done&&done.style.display!=='none')scrollToEl(done,true);
   },delay);
   setTimeout(()=>armAdvanceCancel(gen),0);
+}
+
+/* Панель задания на телефоне прилипает к верху экрана, и в этот момент
+   она меняет форму. Селектора «прилип» в CSS нет, поэтому ловим момент
+   наблюдателем по метке, которая стоит на месте панели в покое: ушла
+   метка за верх экрана — панель доехала до края.
+   Наблюдатель, а не слушатель scroll: тот срабатывает на каждый кадр
+   прокрутки списка из 27 задач, и ради двух углов это дорого. */
+let dockObs=null;
+function watchPanelDock(){
+  if(dockObs){dockObs.disconnect();dockObs=null;}
+  const mark=document.querySelector('.stick-mark'),panel=document.querySelector('.grid-panel');
+  if(!mark||!panel)return;
+  if(!window.IntersectionObserver){panel.classList.remove('docked');return;}
+  dockObs=new IntersectionObserver(([e])=>{
+    panel.classList.toggle('docked',!e.isIntersecting&&e.boundingClientRect.top<=0);
+  },{threshold:0});
+  dockObs.observe(mark);
 }
 
 /* ---- итог задания ----
@@ -2319,10 +2384,10 @@ function renderHub(){
       <div style="width:${from[2].toFixed(1)}%;background:var(--dark)"></div>
     </div>
     <div class="hub-prog-stats">
-      <span><i class="dot g"></i> Умею: <b>${allG}</b></span>
-      <span><i class="dot o"></i> Повторить: <b>${allO}</b></span>
-      <span><i class="dot b"></i> Разобраться: <b>${allB}</b></span>
-      <span><i class="dot n"></i> Осталось: <b>${left}</b></span>
+      <span><i class="dot g"></i> Умею <b>${allG}</b></span>
+      <span><i class="dot o"></i> Повторить <b>${allO}</b></span>
+      <span><i class="dot b"></i> Разобраться <b>${allB}</b></span>
+      <span><i class="dot n"></i> Осталось <b>${left}</b></span>
     </div>
     ${goHTML}
   </div>`;
@@ -2421,8 +2486,18 @@ function renderTask(n){
   }
   if(task.mode==='html' && window.TASKDATA[n]==='error'){
     setBack(true); statsEl.innerHTML='';
-    appEl.innerHTML=`<div class="wrap"><div></div><main class="list"><p style="color:var(--accent)">
-      Не удалось загрузить задачи.<br>Убедись, что файл <code>img/t${n}/data.js</code> загружен в репозиторий.</p></main></div>`;
+    /* Здесь стоял текст для разработчика: «убедись, что файл data.js
+       загружен в репозиторий». Ученику он не говорит ничего и не даёт
+       ни одного выхода из положения. */
+    appEl.innerHTML=`<div class="wrap"><div></div><main class="list">
+      <div class="load-fail">
+        <div class="lf-t">Не удалось загрузить задачи</div>
+        <div class="lf-s">Похоже, пропала связь. Задания, которые ты уже открывал, работают и без интернета.</div>
+        <div class="lf-acts">
+          <button class="btn primary" data-retry="${n}">Попробовать снова</button>
+          <button class="btn" data-home>К заданиям</button>
+        </div>
+      </div></main></div>`;
     return;
   }
   setBack(true); statsEl.innerHTML='';
@@ -2505,6 +2580,7 @@ function renderTask(n){
   const gridSummary=`Карта прогресса: умею ${gc.g}, надо повторить ${gc.o}, надо разобраться ${gc.b}, не решал ${gTot-gc.g-gc.o-gc.b} из ${gTot}`;
   const videoBtn=VIDEOS[n]?`<a class="btn-video" href="${VIDEOS[n]}" target="_blank" rel="noopener"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Видеоразбор</a>`:'';
   const fullHTML=`<div class="wrap" data-n="${n}">
+    <i class="stick-mark" aria-hidden="true"></i>
     <aside class="grid-panel">
       <div class="task-nav">
         <button class="back task-back" data-home>← К заданиям</button>
@@ -2532,6 +2608,7 @@ function renderTask(n){
      её aria-label несёт те же числа для голосового доступа. */
   stageAndMount(fullHTML,()=>parseRoute().n===n,()=>{
     prefetchSol([n]);
+    watchPanelDock();
     syncTaskDone(n);
     /* Прокрутка к нужному прототипу — только после сборки экрана: до неё
        карточки ещё нет, а координаты пустого списка ничего не значат. */
@@ -2860,7 +2937,7 @@ appEl.addEventListener('click',e=>{
   const tsol=e.target.closest('[data-tsol]');
   if(tsol){const i=+tsol.dataset.tsol,box=document.getElementById('tsol-'+i);if(!box)return;
     const it=variant.items[i],d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
-    revealToggle(tsol,box,()=>solInner(d.a,solOf(it.n,it.id)),cb=>ensureSol(it.n,cb));
+    revealToggle(tsol,box,()=>solInner(d.a,solOf(it.n,it.id),solFailed(it.n)),cb=>ensureSol(it.n,cb));
     return;}
   const vf=e.target.closest('[data-vfinish]');
   if(vf){ask({title:'Завершить вариант?',
@@ -2872,6 +2949,8 @@ appEl.addEventListener('click',e=>{
     body.dataset.want=open?'1':'0';
     pt.setAttribute('aria-expanded',open);
     setBoxOpen(body,open);return;}
+  const rtr=e.target.closest('[data-retry]');
+  if(rtr){const n=+rtr.dataset.retry;delete window.TASKDATA[n];renderTask(n);return;}
   const hm=e.target.closest('[data-home]'); if(hm){go('#/');return;}
   const ch=e.target.closest('[data-filter]');
   if(ch){viewFilter=ch.dataset.filter;filterKeep.clear();switchFilter();
@@ -2930,7 +3009,7 @@ appEl.addEventListener('click',e=>{
   const sol=e.target.closest('[data-sol]');
   if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id),n=parseRoute().n;
     const d=(window.TASKDATA[n]||[])[id-1]||{};
-    revealToggle(sol,box,()=>solInner(d.a,solOf(n,id)),cb=>ensureSol(n,cb));
+    revealToggle(sol,box,()=>solInner(d.a,solOf(n,id),solFailed(n)),cb=>ensureSol(n,cb));
     return;}
 });
 appEl.addEventListener('input',e=>{const el=e.target;
