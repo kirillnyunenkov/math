@@ -1744,12 +1744,23 @@ function prefetchSol(ns){
 const STORAGE_KEY='ege_hub_v3', STORAGE_KEY_OLD='ege_hub_v2';
 let state={};
 try{state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){state={};}
-/* Плашку показываем только тому, кто реально потерял отметки: признак —
-   лежащий рядом ключ прошлой версии. Новый ученик о переезде банка ничего
-   не знает, и сообщать ему не о чем. */
+/* Плашку показываем только тому, кто реально потерял отметки. Наличия
+   старого ключа для этого мало: он остаётся и после «Сбросить», и тогда
+   объяснение получил бы человек, которому нечего было терять. Поэтому
+   заглядываем внутрь и ищем хоть одну отметку. Кому не показываем —
+   у того ключ сразу убираем: читать его больше нечем, пусть не копится. */
 const RESET_NOTE_KEY='ege_reset_note_v3';
+function hadProgress(raw){
+  try{const o=JSON.parse(raw);
+    return !!o&&Object.keys(o).some(n=>o[n]&&Object.keys(o[n]).some(id=>o[n][id]));
+  }catch(e){return false;}
+}
 let resetNote=false;
-try{resetNote=!!localStorage.getItem(STORAGE_KEY_OLD)&&!localStorage.getItem(RESET_NOTE_KEY);}catch(e){}
+try{
+  const raw=localStorage.getItem(STORAGE_KEY_OLD);
+  resetNote=raw!==null&&hadProgress(raw)&&!localStorage.getItem(RESET_NOTE_KEY);
+  if(raw!==null&&!resetNote)localStorage.removeItem(STORAGE_KEY_OLD);
+}catch(e){}
 function dismissResetNote(){
   resetNote=false;
   try{localStorage.setItem(RESET_NOTE_KEY,'1');localStorage.removeItem(STORAGE_KEY_OLD);}catch(e){}
