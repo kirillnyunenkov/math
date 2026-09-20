@@ -718,7 +718,10 @@
   .cond .figwrap img.fig{transition:opacity .3s var(--ease);}
   /* графики производной шире прочих чертежей; width:100% определён,
      поэтому резервирование работает и здесь. Номер задания — 9: после
-     перенумерации банка производная переехала с восьмого места. */
+     перенумерации банка производная переехала с восьмого места.
+     data-n несёт КАЖДЫЙ контейнер, внутри которого живёт условие: обёртка
+     списка задач и карточка варианта. Иначе правило молча не долетало бы
+     до варианта, и там график оставался бы 280 px из атрибута. */
   [data-n="9"] .cond .figwrap img.fig{width:100%;max-width:520px;}
   .answer{display:inline-block;background:var(--ok-soft);color:var(--ok-text);font-weight:600;
     padding:5px var(--s3);border-radius:var(--r-sm);margin-bottom:var(--s3);
@@ -2921,7 +2924,7 @@ function renderTraining(){
           <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off">
           <button class="btn check" data-tcheck="${i}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
-      return `<div class="vcard ${c}" id="tcard-${i}">
+      return `<div class="vcard ${c}" id="tcard-${i}" data-n="${it.n}">
         <div class="vlabel">Задание ${it.n}<span class="vlabel-art"> · № ${d.art||it.id}</span></div>
         <div class="cond"><div class="tex">${d.c||''}</div></div>
         ${ac}
@@ -2947,7 +2950,7 @@ function renderVariant(){
         <button class="btn primary" data-vfinish>Завершить</button>
       </div>
       ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
-        return `<div class="vcard">
+        return `<div class="vcard" data-n="${it.n}">
           <div class="vlabel">Задание ${it.n}</div>
           <div class="cond"><div class="tex">${d.c||''}</div></div>
           <input class="v-input" type="text" inputmode="decimal" placeholder="Ответ" data-vi="${i}" autocomplete="off">
@@ -2975,7 +2978,7 @@ function renderVariant(){
     </div>
     ${histPanel()?`<div class="vhist-card">${histPanel()}</div>`:''}
     ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
-      return `<div class="vcard ${it.ok?'r-ok':'r-no'}">
+      return `<div class="vcard ${it.ok?'r-ok':'r-no'}" data-n="${it.n}">
         <div class="vlabel">Задание ${it.n}<span class="vtag ${it.ok?'ok':'no'}">${it.ok?'верно':'неверно'}</span></div>
         <div class="cond"><div class="tex">${d.c||''}</div></div>
         <div class="vans-row"><span class="yours">Твой ответ: ${it.given?escapeHtml(it.given):'—'}</span> · <span class="right">Верный: ${d.a||'—'}</span></div>
