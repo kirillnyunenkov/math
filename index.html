@@ -286,6 +286,12 @@
   .hub-go:hover .hg-act .ic{transform:translateX(2px);}
 
   /* сетка заданий */
+  .part + .part{margin-top:var(--s10);}
+  .part-head{display:flex;align-items:baseline;flex-wrap:wrap;gap:var(--s2) var(--s4);
+    padding-bottom:var(--s3);margin-bottom:var(--s4);border-bottom:1px solid var(--line-strong);}
+  .part-t{font-family:'Literata',Georgia,serif;font-size:var(--fs-xl);font-weight:700;
+    letter-spacing:-.01em;line-height:1.2;color:var(--ink);margin:0;}
+  .part-s{font-size:var(--fs-sm);color:var(--ink-3);}
   .tasks{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:var(--s3);}
   .tcard{position:relative;background:var(--surface);border:1px solid var(--line);
     border-radius:var(--r-lg);padding:var(--s5);cursor:pointer;text-align:left;font:inherit;
@@ -1412,6 +1418,12 @@ const TASKS = [
   { n:18, title:"Планиметрия (вторая часть)",      count:77,  mode:"html" },
   { n:19, title:"Задача с параметром",             count:73,  mode:"html" },
   { n:20, title:"Нестандартные задачи",            count:71,  mode:"html" }
+];
+/* Хаб делится на части экзамена: у них разный формат ответа, и ученику
+   надо видеть границу, а не сплошную ленту из двадцати карточек. */
+const HUB_PARTS = [
+  { title:"Часть 1", sub:"Задания 1–13 · краткий ответ",     from:1,  to:13 },
+  { title:"Часть 2", sub:"Задания 14–20 · развёрнутый ответ", from:14, to:20 }
 ];
 
 /* ============================================================
@@ -2785,13 +2797,16 @@ function renderHub(){
       <span><span class="vc-t">Собрать вариант</span><span class="vc-s">Выбери задания и количество — режим тренировки или экзамена</span></span>
       <span class="vc-go">Открыть <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5 18.5 12 13 17.5"/></svg></span>
     </button>
-    <div class="tasks">${TASKS.filter(t=>!t.hidden).map(t=>{
+    ${HUB_PARTS.map(pt=>{const ts=TASKS.filter(t=>!t.hidden&&t.n>=pt.from&&t.n<=pt.to);
+      return ts.length?`<section class="part">
+      <div class="part-head"><h3 class="part-t">${pt.title}</h3><span class="part-s">${pt.sub}</span></div>
+      <div class="tasks">${ts.map(t=>{
       const{g,o,b}=countTask(t.n),tot=displayCount(t.n),gp=tot?g/tot*100:0,op=tot?o/tot*100:0,bp=tot?b/tot*100:0,dis=tot===0?'disabled':'';
       return `<button class="tcard" ${dis} data-go="${t.n}">
         <span class="tnum">Задание ${t.n}</span><span class="tname">${t.title}</span>
         <span class="bar"><span class="bg" style="width:${gp}%"></span><span class="bo" style="width:${op}%"></span><span class="bb" style="width:${bp}%"></span></span>
         <span class="tmeta"><span>${tot?'Освоено '+g+'/'+tot:'Скоро'}</span><span>${o||b?[o?'повтор '+o:'',b?'разбор '+b:''].filter(Boolean).join(' · '):''}</span></span>
-      </button>`;}).join('')}</div>
+      </button>`;}).join('')}</div></section>`:'';}).join('')}
     <footer class="hub-foot"><div class="hf-card">
       <div class="hf-text">
         <div class="hf-title">Подготовка к ЕГЭ и ОГЭ по математике</div>
