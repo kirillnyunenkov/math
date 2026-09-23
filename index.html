@@ -673,7 +673,14 @@
   .tex{font-family:'Times New Roman',serif;font-size:var(--fs-lg);color:var(--ink);
     line-height:normal;overflow-wrap:break-word;}
   .tex .katex{font-size:1.06em;}
-  .tex .katex-display{margin:.5em 0;}
+  /* Выключная формула не переносится: на телефоне длинное уравнение
+     (задание 19) уходило за край карточки и обрезалось. Прокрутка вбок
+     внутри формулы; вертикальный отступ, чтобы не срезать степени.
+     Центрирование — автополями у блока шириной по содержимому: при
+     text-align:center широкая формула вылезала бы в обе стороны, и левый
+     край прокруткой было бы не достать. */
+  .tex .katex-display{margin:.5em 0;overflow-x:auto;overflow-y:hidden;padding:.15em 0;}
+  .tex .katex-display>.katex>.katex-html{width:max-content;margin:0 auto;}
   .tex img{max-width:100%;height:auto;filter:var(--img-filter);}
   .tex img:not(.fig){width:auto;}
   html[data-theme="dark"] .tex,html[data-theme="dark"] .tex *{color:var(--ink)!important;}
@@ -737,6 +744,10 @@
   .answer{display:inline-block;background:var(--ok-soft);color:var(--ok-text);font-weight:600;
     padding:5px var(--s3);border-radius:var(--r-sm);margin-bottom:var(--s3);
     font-size:var(--fs-base);font-family:'Golos Text',sans-serif;}
+  /* Развёрнутый ответ второй части: пункты а) и б) с формулами в одну
+     плашку не влезают, поэтому блок во всю ширину и обычный вес текста. */
+  .answer.long{display:block;font-weight:500;line-height:1.7;margin-bottom:0;
+    padding:var(--s3) var(--s4);overflow-x:auto;}
 
   /* ============================================================
      ВАРИАНТ
@@ -1392,15 +1403,15 @@ const TASKS = [
   { n:11, title:"Текстовые задачи",                count:147, mode:"html" },
   { n:12, title:"Анализ графика",                  count:69,  mode:"html" },
   { n:13, title:"Финансовые задачи",               count:67,  mode:"html" },
-  /* Вторая часть (14-20) — задачи с развёрнутым ответом: тренажёр проверяет
-     короткий, поэтому карточки скрыты. Чтобы вернуть — убери hidden:true. */
-  { n:14, title:"Уравнения (вторая часть)",        count:0, hidden:true },
-  { n:15, title:"Стереометрия (вторая часть)",     count:0, hidden:true },
-  { n:16, title:"Неравенства",                     count:0, hidden:true },
-  { n:17, title:"Экстремальные задачи",            count:0, hidden:true },
-  { n:18, title:"Планиметрия (вторая часть)",      count:0, hidden:true },
-  { n:19, title:"Задача с параметром",             count:0, hidden:true },
-  { n:20, title:"Нестандартные задачи",            count:0, hidden:true }
+  /* Вторая часть (14-20) — развёрнутый ответ: поля ввода нет, ученик
+     раскрывает ответ и сравнивает сам (isLongAns). В вариант не входит. */
+  { n:14, title:"Уравнения (вторая часть)",        count:67,  mode:"html" },
+  { n:15, title:"Стереометрия (вторая часть)",     count:76,  mode:"html" },
+  { n:16, title:"Неравенства",                     count:71,  mode:"html" },
+  { n:17, title:"Экстремальные задачи",            count:2,   mode:"html" },
+  { n:18, title:"Планиметрия (вторая часть)",      count:77,  mode:"html" },
+  { n:19, title:"Задача с параметром",             count:73,  mode:"html" },
+  { n:20, title:"Нестандартные задачи",            count:71,  mode:"html" }
 ];
 
 /* ============================================================
@@ -1674,6 +1685,271 @@ const PROTOTYPES = {
     { p:42, ids:"66" },
     { p:43, ids:"67" },
   ], // Финансовые задачи — 43 прототипа
+  14: [
+    { p:1, ids:"1-4" },
+    { p:2, ids:"5" },
+    { p:3, ids:"6-8" },
+    { p:4, ids:"9-10" },
+    { p:5, ids:"11-12" },
+    { p:6, ids:"13" },
+    { p:7, ids:"14-15" },
+    { p:8, ids:"16-17" },
+    { p:9, ids:"18-19" },
+    { p:10, ids:"20-21" },
+    { p:11, ids:"22-23" },
+    { p:12, ids:"24-26" },
+    { p:13, ids:"27-28" },
+    { p:14, ids:"29-30" },
+    { p:15, ids:"31" },
+    { p:16, ids:"32-33" },
+    { p:17, ids:"34-36" },
+    { p:18, ids:"37-38" },
+    { p:19, ids:"39-40" },
+    { p:20, ids:"41" },
+    { p:21, ids:"42-46" },
+    { p:22, ids:"47" },
+    { p:23, ids:"48-49" },
+    { p:24, ids:"50-53" },
+    { p:25, ids:"54-56" },
+    { p:26, ids:"57-58" },
+    { p:27, ids:"59-60" },
+    { p:28, ids:"61-62" },
+    { p:29, ids:"63-64" },
+    { p:30, ids:"65-66" },
+    { p:31, ids:"67" },
+  ], // Уравнения 2 — 31 прототип
+  15: [
+    { p:1, ids:"1" },
+    { p:2, ids:"2-3" },
+    { p:3, ids:"4" },
+    { p:4, ids:"5" },
+    { p:5, ids:"6-7" },
+    { p:6, ids:"8-9" },
+    { p:7, ids:"10" },
+    { p:8, ids:"11-12" },
+    { p:9, ids:"13" },
+    { p:10, ids:"14" },
+    { p:11, ids:"15-17" },
+    { p:12, ids:"18-19" },
+    { p:13, ids:"20" },
+    { p:14, ids:"21-23" },
+    { p:15, ids:"24" },
+    { p:16, ids:"25" },
+    { p:17, ids:"26" },
+    { p:18, ids:"27-28" },
+    { p:19, ids:"29-30" },
+    { p:20, ids:"31-32" },
+    { p:21, ids:"33" },
+    { p:22, ids:"34" },
+    { p:23, ids:"35" },
+    { p:24, ids:"36" },
+    { p:25, ids:"37" },
+    { p:26, ids:"38" },
+    { p:27, ids:"39" },
+    { p:28, ids:"40" },
+    { p:29, ids:"41-42" },
+    { p:30, ids:"43-44" },
+    { p:31, ids:"45-46" },
+    { p:32, ids:"47" },
+    { p:33, ids:"48-49" },
+    { p:34, ids:"50-51" },
+    { p:35, ids:"52" },
+    { p:36, ids:"53" },
+    { p:37, ids:"54-55" },
+    { p:38, ids:"56" },
+    { p:39, ids:"57" },
+    { p:40, ids:"58-59" },
+    { p:41, ids:"60-62" },
+    { p:42, ids:"63" },
+    { p:43, ids:"64" },
+    { p:44, ids:"65-67" },
+    { p:45, ids:"68-71" },
+    { p:46, ids:"72-75" },
+    { p:47, ids:"76" },
+  ], // Стереометрия 2 — 47 прототипов
+  16: [
+    { p:1, ids:"1-4" },
+    { p:2, ids:"5-6" },
+    { p:3, ids:"7" },
+    { p:4, ids:"8-9" },
+    { p:5, ids:"10" },
+    { p:6, ids:"11" },
+    { p:7, ids:"12" },
+    { p:8, ids:"13" },
+    { p:9, ids:"14-15" },
+    { p:10, ids:"16-17" },
+    { p:11, ids:"18-25" },
+    { p:12, ids:"26-27" },
+    { p:13, ids:"28-30" },
+    { p:14, ids:"31" },
+    { p:15, ids:"32-36" },
+    { p:16, ids:"37-39" },
+    { p:17, ids:"40" },
+    { p:18, ids:"41" },
+    { p:19, ids:"42" },
+    { p:20, ids:"43" },
+    { p:21, ids:"44" },
+    { p:22, ids:"45" },
+    { p:23, ids:"46" },
+    { p:24, ids:"47-48" },
+    { p:25, ids:"49-50" },
+    { p:26, ids:"51-52" },
+    { p:27, ids:"53-54" },
+    { p:28, ids:"55-59" },
+    { p:29, ids:"60-61" },
+    { p:30, ids:"62-63" },
+    { p:31, ids:"64-65" },
+    { p:32, ids:"66-67" },
+    { p:33, ids:"68-70" },
+    { p:34, ids:"71" },
+  ], // Неравенства — 34 прототипа
+  17: [
+    { p:1, ids:"1" },
+    { p:2, ids:"2" },
+  ], // Экстремальные задачи — 2 прототипа
+  18: [
+    { p:1, ids:"1" },
+    { p:2, ids:"2" },
+    { p:3, ids:"3-4" },
+    { p:4, ids:"5" },
+    { p:5, ids:"6" },
+    { p:6, ids:"7" },
+    { p:7, ids:"8" },
+    { p:8, ids:"9-12" },
+    { p:9, ids:"13" },
+    { p:10, ids:"14" },
+    { p:11, ids:"15" },
+    { p:12, ids:"16" },
+    { p:13, ids:"17" },
+    { p:14, ids:"18" },
+    { p:15, ids:"19" },
+    { p:16, ids:"20-21" },
+    { p:17, ids:"22" },
+    { p:18, ids:"23" },
+    { p:19, ids:"24-25" },
+    { p:20, ids:"26" },
+    { p:21, ids:"27" },
+    { p:22, ids:"28-29" },
+    { p:23, ids:"30-34" },
+    { p:24, ids:"35" },
+    { p:25, ids:"36" },
+    { p:26, ids:"37" },
+    { p:27, ids:"38" },
+    { p:28, ids:"39-42" },
+    { p:29, ids:"43" },
+    { p:30, ids:"44-45" },
+    { p:31, ids:"46" },
+    { p:32, ids:"47-48" },
+    { p:33, ids:"49-50" },
+    { p:34, ids:"51" },
+    { p:35, ids:"52" },
+    { p:36, ids:"53" },
+    { p:37, ids:"54" },
+    { p:38, ids:"55" },
+    { p:39, ids:"56-57" },
+    { p:40, ids:"58-59" },
+    { p:41, ids:"60-61" },
+    { p:42, ids:"62-63" },
+    { p:43, ids:"64" },
+    { p:44, ids:"65" },
+    { p:45, ids:"66" },
+    { p:46, ids:"67" },
+    { p:47, ids:"68" },
+    { p:48, ids:"69" },
+    { p:49, ids:"70" },
+    { p:50, ids:"71-72" },
+    { p:51, ids:"73" },
+    { p:52, ids:"74" },
+    { p:53, ids:"75-76" },
+    { p:54, ids:"77" },
+  ], // Планиметрия 2 — 54 прототипа
+  19: [
+    { p:1, ids:"1-3" },
+    { p:2, ids:"4-5" },
+    { p:3, ids:"6-7" },
+    { p:4, ids:"8" },
+    { p:5, ids:"9-10" },
+    { p:6, ids:"11-12" },
+    { p:7, ids:"13" },
+    { p:8, ids:"14-16" },
+    { p:9, ids:"17-18" },
+    { p:10, ids:"19" },
+    { p:11, ids:"20-21" },
+    { p:12, ids:"22" },
+    { p:13, ids:"23-24" },
+    { p:14, ids:"25-26" },
+    { p:15, ids:"27-28" },
+    { p:16, ids:"29-30" },
+    { p:17, ids:"31" },
+    { p:18, ids:"32" },
+    { p:19, ids:"33" },
+    { p:20, ids:"34" },
+    { p:21, ids:"35" },
+    { p:22, ids:"36" },
+    { p:23, ids:"37" },
+    { p:24, ids:"38-39" },
+    { p:25, ids:"40-41" },
+    { p:26, ids:"42-44" },
+    { p:27, ids:"45-46" },
+    { p:28, ids:"47-48" },
+    { p:29, ids:"49-50" },
+    { p:30, ids:"51-53" },
+    { p:31, ids:"54-55" },
+    { p:32, ids:"56" },
+    { p:33, ids:"57-59" },
+    { p:34, ids:"60" },
+    { p:35, ids:"61" },
+    { p:36, ids:"62" },
+    { p:37, ids:"63-64" },
+    { p:38, ids:"65" },
+    { p:39, ids:"66" },
+    { p:40, ids:"67" },
+    { p:41, ids:"68" },
+    { p:42, ids:"69" },
+    { p:43, ids:"70-71" },
+    { p:44, ids:"72-73" },
+  ], // Задачи с параметром — 44 прототипа
+  20: [
+    { p:1, ids:"1-2" },
+    { p:2, ids:"3" },
+    { p:3, ids:"4" },
+    { p:4, ids:"5-6" },
+    { p:5, ids:"7" },
+    { p:6, ids:"8" },
+    { p:7, ids:"9-11" },
+    { p:8, ids:"12-13" },
+    { p:9, ids:"14-16" },
+    { p:10, ids:"17" },
+    { p:11, ids:"18-19" },
+    { p:12, ids:"20" },
+    { p:13, ids:"21-22" },
+    { p:14, ids:"23-24" },
+    { p:15, ids:"25" },
+    { p:16, ids:"26" },
+    { p:17, ids:"27-28" },
+    { p:18, ids:"29-30" },
+    { p:19, ids:"31-32" },
+    { p:20, ids:"33-34" },
+    { p:21, ids:"35-38" },
+    { p:22, ids:"39-40" },
+    { p:23, ids:"41" },
+    { p:24, ids:"42-45" },
+    { p:25, ids:"46" },
+    { p:26, ids:"47" },
+    { p:27, ids:"48-49" },
+    { p:28, ids:"50" },
+    { p:29, ids:"51-55" },
+    { p:30, ids:"56-59" },
+    { p:31, ids:"60" },
+    { p:32, ids:"61-62" },
+    { p:33, ids:"63-65" },
+    { p:34, ids:"66" },
+    { p:35, ids:"67" },
+    { p:36, ids:"68" },
+    { p:37, ids:"69" },
+    { p:38, ids:"70" },
+    { p:39, ids:"71" },
+  ], // Нестандартные задачи — 39 прототипов
 };
 
 function parseIds(spec){const out=[];String(spec).split(',').forEach(part=>{part=part.trim();
@@ -1746,7 +2022,7 @@ function thriftyNet(){const c=navigator.connection;
   return !!c && (c.saveData===true || /^(slow-)?2g$/.test(c.effectiveType||''));}
 function prefetchSol(ns){
   if(thriftyNet())return;
-  onIdle(()=>{ns.forEach(n=>ensureSol(n,()=>{}));},{timeout:5000});}
+  onIdle(()=>{ns.filter(n=>!isLongAns(n)).forEach(n=>ensureSol(n,()=>{}));},{timeout:5000});}
 
 /* ---- сброс прогресса после перенумерации банка ----
    Банк перенумеровали вслед за ЕГЭ: задания 6-11 сдвинулись на +1, шестым
@@ -1986,6 +2262,10 @@ const solInner=(ans,html,failed,elsewhere)=>`<div class="sol-inner">`+
         ?`<p class="sol-fail">Разбора именно к этим числам нет, но задача того же типа разобрана — открой «Похожие задачи».</p>`
         :`<p class="sol-fail">Разбор к этой задаче я ещё не написал — здесь только ответ.</p>`)+
   `</div>`;
+/* Вторая часть (14-20): поля ввода нет, разборов нет. Ученик раскрывает
+   эталонный ответ ФИПИ и сам сравнивает со своим. */
+const isLongAns=n=>n>=14;
+const ansInner=ans=>`<div class="sol-inner"><div class="answer long tex">Ответ: ${ans||'на источнике не указан'}</div></div>`;
 /* Банк иногда меняет, какой из аналогов считается прототипом. Разбор написан
    под конкретные числа и остаётся при своей задаче, поэтому у представителя
    его может не быть, а у соседа по прототипу — быть. Молчать об этом нельзя:
@@ -2630,7 +2910,7 @@ function renderTask(n){
       ?`<div class="solution" id="sol-${id}" data-html="1"></div>`
       :`<div class="solution" id="sol-${id}"><div class="sol-body"><img loading="lazy" data-src="${SOL(n,id)}" alt="Решение ${id}"></div></div>`;
   const pl=protoList(n);
-  const acHTML=id=>{const ansTxt=task.mode==='html'?plainAnswer((data[id-1]||{}).a):'';
+  const acHTML=id=>{const ansTxt=task.mode==='html'&&!isLongAns(n)?plainAnswer((data[id-1]||{}).a):'';
     return ansTxt?`<div class="answer-check">
           <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
           <button class="btn check" data-check="${id}">Проверить</button>
@@ -2651,7 +2931,7 @@ function renderTask(n){
         ${acHTML(id)}
         ${marksHTML(st,'mark','id',id)}
         <div class="reveal">
-          ${revealLnk('sol',id,'Решение')}
+          ${revealLnk('sol',id,isLongAns(n)?'Ответ':'Решение')}
           ${simBtn}
         </div>
         ${solBox(id)}
@@ -2725,7 +3005,7 @@ function renderTask(n){
 }
 
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
-  const ansTxt=plainAnswer(d.a);
+  const ansTxt=isLongAns(n)?'':plainAnswer(d.a);
   const ac=ansTxt?`<div class="answer-check">
       <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
       <button class="btn check" data-check="${id}" data-nostatus="1">Проверить</button>
@@ -2734,7 +3014,7 @@ function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
     <div class="sub-num">№ ${d.art||id}</div>
     <div class="cond"><div class="tex">${d.c||''}</div></div>
     ${ac}
-    <div class="reveal">${revealLnk('sol',id,'Решение')}</div>
+    <div class="reveal">${revealLnk('sol',id,isLongAns(n)?'Ответ':'Решение')}</div>
     <div class="solution" id="sol-${id}" data-html="1"></div>
   </div>`;}
 let variant=null, variantTimerId=null;
@@ -2809,7 +3089,9 @@ function startVariantTimer(){const el=document.getElementById('v-timer');if(!el)
 const BUILDER_KEY='ege_builder_v2';
 const EXAM_HINT='Таймер, ввод ответов, в конце — первичный и тестовый балл. Ответы влияют на прогресс.';
 const TRAIN_HINT='Без таймера: решаешь и сразу проверяешь каждую задачу, отмечаешь статус. Прогресс сохраняется.';
-function activeTasks(){return TASKS.filter(t=>!t.hidden&&t.count>0);}
+/* Вариант собирается только из первой части: во второй ответ развёрнутый,
+   автопроверки и баллов для неё нет. */
+function activeTasks(){return TASKS.filter(t=>!t.hidden&&t.count>0&&!isLongAns(t.n));}
 function maxForTask(n){return displayCount(n);}                 // потолок = число прототипов (данные не нужны)
 function defaultBuilder(){const counts={};activeTasks().forEach(t=>counts[t.n]=Math.min(1,maxForTask(t.n)));return{counts,mode:'exam'};}
 let builder=null;
@@ -3119,6 +3401,7 @@ appEl.addEventListener('click',e=>{
   const sol=e.target.closest('[data-sol]');
   if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id),n=parseRoute().n;
     const d=(window.TASKDATA[n]||[])[id-1]||{};
+    if(isLongAns(n)){revealToggle(sol,box,()=>ansInner(d.a));return;}
     revealToggle(sol,box,()=>solInner(d.a,solOf(n,id),solFailed(n),solNearby(n,id)),
       cb=>ensureSol(n,cb));
     return;}
