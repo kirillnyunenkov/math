@@ -3234,7 +3234,7 @@ function completeVariant(){
 function critHTML(n){const c=PART2_CRIT[n]||{max:0,rules:[]};
   return `<div class="vcrit"><div class="vcrit-h">Критерии · максимум ${c.max} ${ballWord(c.max)}</div>
     ${c.rules.length?`<ul>${c.rules.map(r=>`<li>${r}</li>`).join('')}</ul>`
-      :`<p>От 0 до ${c.max} баллов — критерии у каждой задачи свои, оцени решение по эталону.</p>`}</div>`;}
+      :`<p>От 0 до ${c.max} баллов — критерии у каждой задачи свои, оцени примерно.</p>`}</div>`;}
 function renderScoring(){
   const long=variant.items.map((it,i)=>[it,i]).filter(([it])=>isLongAns(it.n));
   const html=`<div class="vbox">
