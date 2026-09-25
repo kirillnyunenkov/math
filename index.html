@@ -679,6 +679,10 @@
   .tex{font-family:'Times New Roman',serif;font-size:var(--fs-lg);color:var(--ink);
     line-height:normal;overflow-wrap:break-word;}
   .tex .katex{font-size:1.06em;}
+  /* Inline \dfrac is taller than the line; without a margin two such lines
+     stack flush and the denominator of one touches the numerator of the next
+     (answer to 14.22). Margin on .base grows only the lines that hold math. */
+  .tex .katex:not(.katex-display>.katex) .base{margin:.2em 0;}
   /* Выключная формула не переносится: на телефоне длинное уравнение
      (задание 19) уходило за край карточки и обрезалось. Прокрутка вбок
      внутри формулы; вертикальный отступ, чтобы не срезать степени.
