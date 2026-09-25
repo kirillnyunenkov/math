@@ -799,6 +799,19 @@
     padding:3px var(--s3);margin-left:var(--s2);}
   .vtag.ok{background:var(--ok-soft);color:var(--ok-text);}
   .vtag.no{background:var(--err-soft);color:var(--err-text);}
+  .vtag.part{background:var(--warn-soft);color:var(--warn-text);}
+  .vlong-hint{margin:var(--s3) 0 0;color:var(--ink-2);font-size:var(--fs-sm);line-height:1.5;}
+  .vscoring-intro{margin-bottom:var(--s5);}
+  .vcard .answer.long{margin-top:var(--s3);}
+  .vcrit{margin-top:var(--s4);padding:var(--s3) var(--s4);background:var(--surface-2);
+    border:1px solid var(--line);border-radius:var(--r-md);font-size:var(--fs-sm);color:var(--ink-2);line-height:1.5;}
+  .vcrit-h{font-weight:600;color:var(--ink);margin-bottom:var(--s1);}
+  .vcrit ul{margin:0;padding-left:1.2em;}
+  .vcrit p{margin:0;}
+  .vpts{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;margin-top:var(--s4);}
+  .vpts-l{font-weight:600;color:var(--ink);}
+  .vpts-seg{margin:0;}
+  .vpts-seg .seg{min-width:48px;justify-content:center;padding:0 var(--s3);font-variant-numeric:tabular-nums;}
   .vans-row{margin-top:var(--s3);font-size:var(--fs-base);}
   .vans-row .yours{color:var(--ink-2);}
   .vans-row .right{color:var(--ok-text);font-weight:600;}
@@ -815,6 +828,9 @@
   .cfg-list{display:flex;flex-direction:column;margin:0 0 var(--s1);}
   .cfg-row{display:flex;align-items:center;gap:var(--s3);padding:var(--s2) 0;}
   .cfg-row + .cfg-row{border-top:1px solid var(--line);}
+  .cfg-part{font-weight:600;color:var(--ink);font-size:var(--fs-sm);padding:var(--s4) 0 var(--s1);}
+  .cfg-part:first-child{padding-top:var(--s2);}
+  .cfg-part span{font-weight:400;color:var(--ink-3);}
   .cfg-name{flex:1;font-size:var(--fs-base);min-width:0;}
   .cfg-name b{color:var(--ink);font-weight:600;}
   .cfg-name .cfg-sub{display:block;color:var(--ink-3);font-size:var(--fs-xs);}
@@ -1410,7 +1426,8 @@ const TASKS = [
   { n:12, title:"Анализ графика",                  count:69,  mode:"html" },
   { n:13, title:"Финансовые задачи",               count:67,  mode:"html" },
   /* Вторая часть (14-20) — развёрнутый ответ: поля ввода нет, ученик
-     раскрывает ответ и сравнивает сам (isLongAns). В вариант не входит. */
+     раскрывает ответ и сравнивает сам (isLongAns). В пробнике баллы за
+     них ученик ставит себе сам по критериям PART2_CRIT. */
   { n:14, title:"Уравнения (вторая часть)",        count:67,  mode:"html" },
   { n:15, title:"Стереометрия (вторая часть)",     count:76,  mode:"html" },
   { n:16, title:"Неравенства",                     count:71,  mode:"html" },
@@ -2522,9 +2539,22 @@ function syncTaskDone(n){
   el.classList.add('on');
 }
 
-// --- перевод первичного балла в тестовый (профиль; первая часть — 13 задач) ---
-const SEC_SCORE=[0,6,11,17,22,27,34,40,46,52,58,62,66,70];
-function secondaryScore(primary){return SEC_SCORE[Math.min(primary,SEC_SCORE.length-1)];}
+// --- перевод первичного балла в тестовый (профиль; 13 задач части 1 + 20 баллов части 2 = 33) ---
+const SEC_SCORE=[0,6,11,17,22,27,34,40,46,52,58,62,66,70,72,74,76,78,80,82,84,86,88,90,92,94,95,96,97,98,99,100,100,100];
+function secondaryScore(primary){return SEC_SCORE[Math.max(0,Math.min(primary,SEC_SCORE.length-1))];}
+/* Part 2 is self-graded: the student reads the criteria next to each task
+   and picks the score. Criteria wording comes from the owner. */
+const PART2_CRIT={
+  14:{max:2,rules:['а) — 1 балл','б) — 1 балл']},
+  15:{max:3,rules:['а) — 1 балл','б) — 2 балла','б) — 1 балл, если логика верна и ошибка чисто арифметическая']},
+  16:{max:2,rules:['2 балла — полностью верное решение','1 балл — логика верна, ошибка чисто арифметическая','1 балл — ошибка только в круглых и квадратных скобках']},
+  17:{max:2,rules:['2 балла — полностью верное решение','1 балл — уравнение составлено верно, но не доведено до ответа','1 балл — уравнение составлено верно, логика верна, ошибка чисто арифметическая']},
+  18:{max:3,rules:['а) — 1 балл','б) — 2 балла','б) — 1 балл, если логика верна и ошибка чисто арифметическая']},
+  19:{max:4,rules:[]},
+  20:{max:4,rules:['а) — 1 балл','б) — 1 балл','в) — 2 балла']}
+};
+const itemMax=n=>isLongAns(n)?((PART2_CRIT[n]||{}).max||0):1;
+const ballWord=k=>{const a=k%10,b=k%100;return a===1&&b!==11?'балл':a>=2&&a<=4&&(b<12||b>14)?'балла':'баллов';};
 function fmtTime(ms){const s=Math.floor(ms/1000),m=Math.floor(s/60);return String(m).padStart(2,'0')+':'+String(s%60).padStart(2,'0');}
 function ensureAll(ns,cb){let left=ns.length;if(!left){cb();return;}ns.forEach(n=>ensureData(n,()=>{if(--left===0)cb();}));}
 
@@ -2543,10 +2573,11 @@ function b64ToBytes(str){let b=str.replace(/-/g,'+').replace(/_/g,'/');while(b.l
 function histEncode(){
   const h=loadHistory();if(!h.length)return'';
   const s=h.slice().sort((a,b)=>a.t-b.t),base=Math.floor(s[0].t/60000),L=[];
-  L.push([1,8]);L.push([Math.min(s.length,255),8]);L.push([base,32]);
+  L.push([2,8]);L.push([Math.min(s.length,255),8]);L.push([base,32]);
   s.slice(0,255).forEach(r=>{
     const dm=Math.min(Math.max(Math.floor(r.t/60000)-base,0),1048575);
-    L.push([dm,20]);L.push([Math.min(r.p|0,15),4]);L.push([Math.min(r.total|0,31),5]);
+    L.push([dm,20]);L.push([Math.min(r.p|0,63),6]);L.push([Math.min(r.total|0,63),6]);
+    L.push([Math.min((r.m||r.total)|0,63),6]);
     L.push([Math.min(Math.round(r.ms/1000),16383),14]);
   });
   return bytesToB64(packBits(L));
@@ -2554,9 +2585,10 @@ function histEncode(){
 function histDecode(str){
   try{const by=b64ToBytes(str);let idx=0,bit=0;
     const read=n=>{let v=0;for(let k=0;k<n;k++){v=(v<<1)|((by[idx]>>(7-bit))&1);if(++bit===8){bit=0;idx++;}}return v;};
-    if(read(8)!==1)return null;const count=read(8),base=read(32),out=[];
-    for(let i=0;i<count;i++){const dm=read(20),p=read(4),tot=read(5),sec=read(14);
-      out.push({t:(base+dm)*60000,p,total:tot,s:secondaryScore(p),ms:sec*1000});}
+    const ver=read(8);if(ver!==1&&ver!==2)return null;const count=read(8),base=read(32),out=[];
+    for(let i=0;i<count;i++){const dm=read(20),p=read(ver===1?4:6),tot=read(ver===1?5:6),
+        m=ver===1?tot:read(6),sec=read(14);
+      out.push({t:(base+dm)*60000,p,total:tot,m,s:secondaryScore(p),ms:sec*1000});}
     return out;}catch(e){return null;}
 }
 function mergeHistory(incoming){
@@ -2580,7 +2612,7 @@ function histPanel(){
   const hist=loadHistory();if(!hist.length)return'';
   const rows=hist.slice().reverse().slice(0,12).map(h=>`<div class="vhist-row">
       <span class="vh-date">${fmtDate(h.t)}</span>
-      <span class="vh-score">${h.p}/${h.total} верно</span>
+      <span class="vh-score">${h.p}/${h.m||h.total} ${ballWord(h.m||h.total)}</span>
       <span class="vh-sec">тест. ${h.s}</span>
       <span class="vh-time">${fmtTime(h.ms)}</span>
     </div>`).join('');
@@ -3104,9 +3136,9 @@ function startVariantTimer(){const el=document.getElementById('v-timer');if(!el)
 const BUILDER_KEY='ege_builder_v2';
 const EXAM_HINT='Таймер, ввод ответов, в конце — первичный и тестовый балл. Ответы влияют на прогресс.';
 const TRAIN_HINT='Без таймера: решаешь и сразу проверяешь каждую задачу, отмечаешь статус. Прогресс сохраняется.';
-/* Вариант собирается только из первой части: во второй ответ развёрнутый,
-   автопроверки и баллов для неё нет. */
-function activeTasks(){return TASKS.filter(t=>!t.hidden&&t.count>0&&!isLongAns(t.n));}
+/* Part 1 is auto-checked; part 2 has no auto-check, the student grades
+   it by the criteria after finishing (see renderScoring). */
+function activeTasks(){return TASKS.filter(t=>!t.hidden&&t.count>0);}
 function maxForTask(n){return displayCount(n);}                 // потолок = число прототипов (данные не нужны)
 function defaultBuilder(){const counts={};activeTasks().forEach(t=>counts[t.n]=Math.min(1,maxForTask(t.n)));return{counts,mode:'exam'};}
 let builder=null;
@@ -3127,16 +3159,24 @@ function bumpBuilder(n,delta){
   const qEl=document.getElementById('q-'+n);if(qEl)qEl.textContent=q;
   const dec=document.querySelector('[data-dec="'+n+'"]');if(dec)dec.disabled=q<=0;
   const inc=document.querySelector('[data-inc="'+n+'"]');if(inc)inc.disabled=q>=mx;
-  syncBuilderTotal();
+  syncBuilderTotal();syncPresetChips();
 }
 function syncBuilderTotal(){const t=builderTotal();
   const el=document.getElementById('cfg-total');if(el)el.textContent=t;
   const b=document.querySelector('[data-build]');if(b)b.disabled=!t;}
+function presetCount(p,n){const mx=maxForTask(n);
+  return p==='each1'?Math.min(1,mx):p==='part1'?(isLongAns(n)?0:Math.min(1,mx)):p==='max'?mx:0;}
 function applyPreset(p){
-  activeTasks().forEach(t=>{const mx=maxForTask(t.n);
-    builder.counts[t.n]=p==='each1'?Math.min(1,mx):p==='max'?mx:0;});
+  activeTasks().forEach(t=>{builder.counts[t.n]=presetCount(p,t.n);});
   saveBuilder();renderBuilder();
 }
+/* The chip whose preset matches the current counts stays lit, so the
+   student sees which set is selected (by default «по одной из каждого»). */
+function currentPreset(){return['each1','part1','max','clear'].find(p=>
+  activeTasks().every(t=>(builder.counts[t.n]||0)===presetCount(p,t.n)))||'';}
+function syncPresetChips(){const cur=currentPreset();
+  document.querySelectorAll('[data-preset]').forEach(c=>{const on=c.dataset.preset===cur;
+    c.classList.toggle('on',on);c.setAttribute('aria-pressed',on);});}
 function setBuilderMode(m){builder.mode=m;saveBuilder();
   document.querySelectorAll('.mode-seg .seg').forEach(s=>s.classList.toggle('on',s.dataset.mode===m));
   const h=document.getElementById('mode-hint');if(h)h.textContent=m==='exam'?EXAM_HINT:TRAIN_HINT;}
@@ -3165,26 +3205,64 @@ function buildVariant(){
 }
 function finishVariant(){
   variant.elapsed=Date.now()-variant.startAt;
-  let correct=0;
   variant.items.forEach((it,i)=>{
+    if(isLongAns(it.n)){it.pts=0;return;}                 // part 2: graded by the student next
     const inp=document.querySelector('.v-input[data-vi="'+i+'"]');
     const given=inp?inp.value.trim():'';it.given=given;
     const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
-    const ok = given!=='' && answersEqual(given, plainAnswer(d.a));it.ok=ok;if(ok)correct++;
-    const cur=(state[it.n]||{})[it.id];
-    recordStatus(it.n,it.id, ok ? ((cur==='b'||cur==='o')?'o':'g') : 'b');
+    it.ok = given!=='' && answersEqual(given, plainAnswer(d.a));it.pts=it.ok?1:0;
+  });
+  if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
+  /* Before the results the student grades part 2 by the criteria;
+     without part 2 the results open right away. */
+  if(variant.items.some(it=>isLongAns(it.n))){variant.scoring=true;scrollTop();renderVariant();return;}
+  completeVariant();
+}
+function completeVariant(){
+  variant.scoring=false;
+  let pts=0,max=0;
+  variant.items.forEach(it=>{const mx=itemMax(it.n);pts+=it.pts;max+=mx;
+    const cur=(state[it.n]||{})[it.id],full=it.pts>=mx;
+    if(!isLongAns(it.n))it.ok=full;
+    recordStatus(it.n,it.id, full ? ((cur==='b'||cur==='o')?'o':'g') : it.pts>0 ? 'o' : 'b');
   });
   save();variant.finished=true;
-  pushHistory({t:Date.now(),p:correct,s:secondaryScore(correct),ms:variant.elapsed,total:variant.items.length});
-  if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
+  pushHistory({t:Date.now(),p:pts,s:secondaryScore(pts),ms:variant.elapsed,total:variant.items.length,m:max});
   /* «Завершить» нажимают внизу списка — итоги должны открыться сверху */
   scrollTop();renderVariant();
+}
+function critHTML(n){const c=PART2_CRIT[n]||{max:0,rules:[]};
+  return `<div class="vcrit"><div class="vcrit-h">Критерии · максимум ${c.max} ${ballWord(c.max)}</div>
+    ${c.rules.length?`<ul>${c.rules.map(r=>`<li>${r}</li>`).join('')}</ul>`
+      :`<p>От 0 до ${c.max} баллов — критерии у каждой задачи свои, оцени решение по эталону.</p>`}</div>`;}
+function renderScoring(){
+  const long=variant.items.map((it,i)=>[it,i]).filter(([it])=>isLongAns(it.n));
+  const html=`<div class="vbox">
+    <div class="vintro vscoring-intro">
+      <h2>Оцени вторую часть</h2>
+      <p class="lead">Сравни своё решение с ответом и поставь себе баллы по критериям. По умолчанию везде 0.</p>
+    </div>
+    ${long.map(([it,i])=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{},mx=itemMax(it.n);
+      return `<div class="vcard" data-n="${it.n}">
+        <div class="vlabel">Задание ${it.n}<span class="vlabel-art"> · № ${d.art||it.id}</span></div>
+        <div class="cond"><div class="tex">${d.c||''}</div></div>
+        <div class="answer long tex">Ответ: ${d.a||'на источнике не указан'}</div>
+        ${critHTML(it.n)}
+        <div class="vpts"><span class="vpts-l">Мой балл</span>
+          <div class="mode-seg vpts-seg" role="radiogroup" aria-label="Баллы за задание ${it.n}">
+            ${Array.from({length:mx+1},(_,k)=>`<button class="seg${it.pts===k?' on':''}" role="radio" aria-checked="${it.pts===k}" data-pts="${k}" data-pi="${i}">${k}</button>`).join('')}
+          </div></div>
+      </div>`;}).join('')}
+    <div style="text-align:center;margin-top:8px"><button class="btn primary" data-vscore>Показать результат</button></div>
+  </div>`;
+  stageAndMount(html);
 }
 function renderBuilder(){
   if(!builder)builder=loadBuilder();
   const rows=activeTasks().map(t=>{const mx=maxForTask(t.n),q=builder.counts[t.n]||0;
-    return `<div class="cfg-row">
-      <span class="cfg-name"><b>Задание ${t.n}</b> · ${t.title}<span class="cfg-sub">макс. ${mx}</span></span>
+    const part=HUB_PARTS.find(p=>p.from===t.n);
+    return (part?`<div class="cfg-part">${part.title} · <span>${part.sub}</span></div>`:'')+`<div class="cfg-row">
+      <span class="cfg-name"><b>Задание ${t.n}</b> · ${t.title}<span class="cfg-sub">макс. ${mx}${isLongAns(t.n)?' · развёрнутый ответ':''}</span></span>
       <div class="stepper">
         <button data-dec="${t.n}" ${q<=0?'disabled':''} aria-label="Меньше">−</button>
         <span class="cfg-q" id="q-${t.n}">${q}</span>
@@ -3200,9 +3278,8 @@ function renderBuilder(){
     </div>
     <p class="mode-hint" id="mode-hint">${builder.mode==='exam'?EXAM_HINT:TRAIN_HINT}</p>
     <div class="cfg-presets">
-      <button class="chip" data-preset="each1">По одной из каждого</button>
-      <button class="chip" data-preset="max">Максимум</button>
-      <button class="chip" data-preset="clear">Очистить</button>
+      ${[['each1','По одной из каждого'],['part1','По одной из первой части'],['max','Максимум'],['clear','Очистить']]
+        .map(([p,l])=>{const on=currentPreset()===p;return `<button class="chip${on?' on':''}" data-preset="${p}" aria-pressed="${on}">${l}</button>`;}).join('')}
     </div>
     <div class="cfg-list">${rows}</div>
     <div class="cfg-total">Всего задач: <b id="cfg-total">${total}</b></div>
@@ -3227,7 +3304,7 @@ function renderTraining(){
     </div>
     ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
       const st=(state[it.n]||{})[it.id]||'',c=st?'is-'+st:'';
-      const ansTxt=plainAnswer(d.a);
+      const ansTxt=isLongAns(it.n)?'':plainAnswer(d.a);
       const ac=ansTxt?`<div class="answer-check">
           <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off">
           <button class="btn check" data-tcheck="${i}">Проверить</button>
@@ -3248,6 +3325,7 @@ function renderVariant(){
   setBack(true);statsEl.innerHTML='';
   if(!variant||!variant.started){renderBuilder();return;}
   if(variant.mode==='train'){renderTraining();return;}
+  if(variant.scoring){renderScoring();return;}
   if(!variant.finished){
     const items=variant.items;
     const html=`<div class="vbox">
@@ -3258,10 +3336,12 @@ function renderVariant(){
         <button class="btn primary" data-vfinish>Завершить</button>
       </div>
       ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
+        const long=isLongAns(it.n),mx=itemMax(it.n);
         return `<div class="vcard" data-n="${it.n}">
-          <div class="vlabel">Задание ${it.n}</div>
+          <div class="vlabel">Задание ${it.n}${long?`<span class="vlabel-art"> · максимум ${mx} ${ballWord(mx)}</span>`:''}</div>
           <div class="cond"><div class="tex">${d.c||''}</div></div>
-          <input class="v-input" type="text" inputmode="decimal" placeholder="Ответ" data-vi="${i}" autocomplete="off">
+          ${long?'<p class="vlong-hint">Решение записывай на листе. Баллы поставишь себе сам по критериям после завершения.</p>'
+            :`<input class="v-input" type="text" inputmode="decimal" placeholder="Ответ" data-vi="${i}" autocomplete="off">`}
         </div>`;}).join('')}
       <div style="text-align:center;margin-top:8px"><button class="btn primary" data-vfinish>Завершить вариант</button></div>
     </div>`;
@@ -3269,13 +3349,16 @@ function renderVariant(){
        Отсчёт идёт от variant.startAt, поэтому время сборки не теряется. */
     stageAndMount(html,null,startVariantTimer);return;
   }
-  const items=variant.items,correct=items.filter(x=>x.ok).length,primary=correct,sec=secondaryScore(primary);
+  const items=variant.items,p1=items.filter(x=>!isLongAns(x.n)),p2=items.filter(x=>isLongAns(x.n));
+  const primary=items.reduce((s,x)=>s+x.pts,0),maxPts=items.reduce((s,x)=>s+itemMax(x.n),0),sec=secondaryScore(primary);
+  const sub=`style="font-size:16px;font-weight:500;opacity:.7"`;
   const html=`<div class="vbox">
     <div class="vresult">
       <h2>Вариант завершён</h2>
       <div class="vscores">
-        <div class="vscore"><div class="vk">Решено</div><div class="vv">${correct}<span style="font-size:16px;font-weight:500;opacity:.7">/${items.length}</span></div></div>
-        <div class="vscore"><div class="vk">Первичный балл</div><div class="vv">${primary}</div></div>
+        ${p1.length?`<div class="vscore"><div class="vk">Часть 1</div><div class="vv">${p1.filter(x=>x.ok).length}<span ${sub}>/${p1.length}</span></div></div>`:''}
+        ${p2.length?`<div class="vscore"><div class="vk">Часть 2</div><div class="vv">${p2.reduce((s,x)=>s+x.pts,0)}<span ${sub}>/${p2.reduce((s,x)=>s+itemMax(x.n),0)}</span></div></div>`:''}
+        <div class="vscore"><div class="vk">Первичный балл</div><div class="vv">${primary}<span ${sub}>/${maxPts}</span></div></div>
         <div class="vscore"><div class="vk">Тестовый балл</div><div class="vv">${sec}</div></div>
         <div class="vscore"><div class="vk">Время</div><div class="vv" style="font-size:22px">${fmtTime(variant.elapsed)}</div></div>
       </div>
@@ -3286,6 +3369,12 @@ function renderVariant(){
     </div>
     ${histPanel()?`<div class="vhist-card">${histPanel()}</div>`:''}
     ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
+      if(isLongAns(it.n)){const mx=itemMax(it.n),full=it.pts>=mx;
+        return `<div class="vcard ${full?'r-ok':it.pts?'is-o':'r-no'}" data-n="${it.n}">
+          <div class="vlabel">Задание ${it.n}<span class="vtag ${full?'ok':it.pts?'part':'no'}">${it.pts} из ${mx}</span></div>
+          <div class="cond"><div class="tex">${d.c||''}</div></div>
+          <div class="answer long tex">Ответ: ${d.a||'на источнике не указан'}</div>
+        </div>`;}
       return `<div class="vcard ${it.ok?'r-ok':'r-no'}" data-n="${it.n}">
         <div class="vlabel">Задание ${it.n}<span class="vtag ${it.ok?'ok':'no'}">${it.ok?'верно':'неверно'}</span></div>
         <div class="cond"><div class="tex">${d.c||''}</div></div>
@@ -3344,11 +3433,19 @@ appEl.addEventListener('click',e=>{
   const tsol=e.target.closest('[data-tsol]');
   if(tsol){const i=+tsol.dataset.tsol,box=document.getElementById('tsol-'+i);if(!box)return;
     const it=variant.items[i],d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
+    if(isLongAns(it.n)){revealToggle(tsol,box,()=>ansInner(d.a));return;}
     revealToggle(tsol,box,()=>solInner(d.a,solOf(it.n,it.id),solFailed(it.n)),cb=>ensureSol(it.n,cb));
     return;}
+  const vpt=e.target.closest('[data-pts]');
+  if(vpt){const i=+vpt.dataset.pi,k=+vpt.dataset.pts;variant.items[i].pts=k;
+    vpt.parentNode.querySelectorAll('.seg').forEach(b=>{const on=+b.dataset.pts===k;
+      b.classList.toggle('on',on);b.setAttribute('aria-checked',on);});return;}
+  const vsc=e.target.closest('[data-vscore]'); if(vsc){completeVariant();return;}
   const vf=e.target.closest('[data-vfinish]');
   if(vf){ask({title:'Завершить вариант?',
-    text:'Ответы будут проверены, результат повлияет на прогресс по заданиям.',
+    text:variant.items.some(it=>isLongAns(it.n))
+      ?'Ответы первой части будут проверены, затем ты оценишь вторую часть по критериям. Результат повлияет на прогресс.'
+      :'Ответы будут проверены, результат повлияет на прогресс по заданиям.',
     ok:'Завершить'}).then(y=>{if(y)finishVariant();});return;}
   const pt=e.target.closest('[data-panel]');
   if(pt){const body=document.getElementById('panel-body');if(!body)return;
