@@ -1568,6 +1568,13 @@ const AUTH_KEY='ege_auth_v1',OUTBOX_KEY='ege_outbox_v1',STAMPS_KEY='ege_stamps_v
 const loadJ=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v;}catch(e){return d;}};
 const saveJ=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
 let auth=loadJ(AUTH_KEY,null);
+/* короткий id браузера — создаётся только когда журнал реально нужен */
+function deviceId(){let d=loadJ('ege_device_v1',null);if(!d){d=SyncCore.uid().slice(0,8);saveJ('ege_device_v1',d);}return d;}
+/* Журнал ведётся не только при активной сессии, но и на устройстве, где
+   когда-то был вход: если сессия истекла или ученик вышел, отметки не
+   теряются и уйдут на сервер после следующего входа того же ученика
+   (при входе другого ученика очередь очищается). */
+const tracking=()=>!!auth||localStorage.getItem('ege_auth_last_user')!==null;
 function queue(c,body){const ob=loadJ(OUTBOX_KEY,[]);ob.push({c:c,b:body});saveJ(OUTBOX_KEY,ob);Sync.soon();}
 /* Своё событие сразу учитываем в штампах: иначе более старое событие
    с другого устройства, пришедшее позже, перебило бы свежую отметку. */
@@ -1656,8 +1663,10 @@ const Sync={
     auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
     render();
     if(disabled)note('Аккаунт отключён','Преподаватель отключил этот аккаунт. Тренажёр работает как раньше, но прогресс больше не синхронизируется.');
-    else note('Вход больше не действует',
-      'Преподаватель выпустил новую ссылку для входа. Попроси её — прогресс на этом устройстве сохранится.');},
+    /* 401 бывает и после новой ссылки, и после смены настроек входа на
+       сервере — во втором случае старая ссылка по-прежнему работает. */
+    else note('Нужно войти заново',
+      'Открой свою ссылку для входа ещё раз. Если она не сработает — попроси у преподавателя новую. Прогресс на этом устройстве сохранится.');},
   async login(loginId,secret,link){
     let r;
     try{r=await this.api('/collections/users/auth-with-password',
@@ -1675,7 +1684,7 @@ const Sync={
     const known=loadJ('ege_auth_last_user',null);
     const same=known===rec.id;
     auth={token:r.json.token,userId:rec.id,name:rec.name||rec.login,role:rec.role,link:link,
-      device:(prev&&prev.device)||SyncCore.uid().slice(0,8)};
+      device:deviceId()};
     saveJ(AUTH_KEY,auth);
     if(!same){
       /* Другой ученик на этом устройстве: его журнал к нам не относится. */
@@ -1683,7 +1692,7 @@ const Sync={
       saveJ(OUTBOX_KEY,[]);saveJ(STAMPS_KEY,SyncCore.newStamps());saveJ(CURSOR_KEY,{});
       try{localStorage.removeItem(VCLEAR_KEY);}catch(e){}
       /* Отметки, сделанные до входа, дополняют журнал, но не перебивают его. */
-      SyncCore.importEvents(state,{device:auth.device}).forEach(journal);
+      SyncCore.importEvents(state,{device:deviceId()}).forEach(journal);
       const hs=loadHistory();
       hs.forEach(h=>{if(!h.uid)h.uid=SyncCore.uid();queue('variants',h);});
       saveHistory(hs);
@@ -1956,7 +1965,7 @@ function refreshCard(n,id){const st=(state[n]||{})[id]||'';const card=document.g
   card.querySelectorAll('[data-mark]').forEach(b=>{const on=b.dataset.mark===st;
     b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);});}
 function recordStatus(n,id,status,meta){const ts=taskState(n);if(status)ts[id]=status;else delete ts[id];
-  if(auth)journal(SyncCore.markEvent(n,id,status,{source:(meta&&meta.source)||'manual',given:meta&&meta.given,device:auth.device}));}
+  if(tracking())journal(SyncCore.markEvent(n,id,status,{source:(meta&&meta.source)||'manual',given:meta&&meta.given,device:deviceId()}));}
 function setStatus(n,id,status,meta){
   /* Карточка, которую только что отметили, остаётся на месте до следующего
      переключения фильтра. Раньше applyFilter прятал её сразу: при фильтре
@@ -2194,10 +2203,10 @@ const HIST_KEY='ege_variants_v1';
 function loadHistory(){try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}catch(e){return[];}}
 function saveHistory(a){try{localStorage.setItem(HIST_KEY,JSON.stringify(a));}catch(e){}}
 function pushHistory(rec){rec.uid=SyncCore.uid();const a=loadHistory();a.push(rec);if(a.length>50)a.splice(0,a.length-50);saveHistory(a);
-  if(auth)queue('variants',rec);}
+  if(tracking())queue('variants',rec);}
 function clearHistory(){saveHistory([]);const c={uid:SyncCore.uid(),ts:Date.now()};
   try{localStorage.setItem(VCLEAR_KEY,String(c.ts));}catch(e){}
-  if(auth)queue('variant_clears',c);}
+  if(tracking())queue('variant_clears',c);}
 
 // компактная упаковка истории в ссылку (отдельный параметр &h=)
 function packBits(list){const by=[];let cur=0,fill=0;
@@ -3267,12 +3276,12 @@ document.getElementById('reset').addEventListener('click',()=>{const r=parseRout
     ask({title:'Сбросить прогресс по заданию '+r.n+'?',
       text:'Отметки по всем прототипам этого задания будут сняты. Остальные задания не тронутся.',
       ok:'Сбросить',danger:true}).then(y=>{if(y){state[r.n]={};save();saveLast(r.n,null);
-        if(auth)journal(SyncCore.resetEvent(r.n,{device:auth.device}));renderTask(r.n);}});
+        if(tracking())journal(SyncCore.resetEvent(r.n,{device:deviceId()}));renderTask(r.n);}});
   else
     ask({title:'Сбросить весь прогресс?',
       text:'Отметки по всем заданиям будут сняты. История пробников останется.',
       ok:'Сбросить всё',danger:true}).then(y=>{if(y){state={};save();clearLast();
-        if(auth)journal(SyncCore.resetEvent(0,{device:auth.device}));renderHub();}});});
+        if(tracking())journal(SyncCore.resetEvent(0,{device:deviceId()}));renderHub();}});});
 const burgerEl=document.getElementById('burger'),navMenuEl=document.getElementById('nav-menu');
 burgerEl.addEventListener('click',e=>{e.stopPropagation();navMenuEl.classList.toggle('open');});
 navMenuEl.addEventListener('click',()=>navMenuEl.classList.remove('open'));
@@ -3304,7 +3313,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     const apply=proceed=>{
       if(proceed){
         if(inc){state=inc;save();
-          if(auth)SyncCore.snapshotEvents(inc,{device:auth.device}).forEach(journal);}
+          if(tracking())SyncCore.snapshotEvents(inc,{device:deviceId()}).forEach(journal);}
         if(incH){mergeHistory(incH);}
       }
       history.replaceState(null,'',location.pathname);
