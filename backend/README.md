@@ -32,6 +32,11 @@ Spins up a throwaway PocketBase with the migrations and checks access rules.
 2. Copy it to `/opt/ege-api/pb_migrations/`, then
    `systemctl restart ege-api` (migrations auto-apply on start).
    A settings change made by a migration needs that restart too.
+3. **Warning:** saving the `users` collection (rules, auth options) makes
+   PocketBase invalidate every issued session — all students get
+   "Нужно войти заново" and must reopen their link (the link itself still
+   works). Verified on 2026-10-01 with `authRule`. Avoid touching `users`
+   in migrations; if unavoidable, do it when students can be told.
 
 ## Restore from backup
 
