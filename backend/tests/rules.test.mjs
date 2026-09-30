@@ -111,9 +111,14 @@ test('links are teacher-only', async () => {
   assert.ok([400, 403].includes((await req('POST', '/collections/links/records', tok.stu1, { user: ids.stu2, secret: 'x' })).status));
 });
 
-test('deactivated student cannot write', async () => {
+test('deactivated student cannot write, log in or refresh', async () => {
   await req('PATCH', `/collections/users/records/${ids.stu2}`, tok.teacher, { active: false });
   assert.equal((await req('POST', '/collections/events/records', tok.stu2, ev(ids.stu2, 'late'))).status, 400);
+  const li = await req('POST', '/collections/users/auth-with-password', null, { identity: 'stu2', password: PW.stu2 });
+  assert.notEqual(li.status, 200);
+  const rf = await req('POST', '/collections/users/auth-refresh', tok.stu2);
+  assert.notEqual(rf.status, 200);
+  console.log('deactivated refresh status', rf.status, 'login status', li.status);
   await req('PATCH', `/collections/users/records/${ids.stu2}`, tok.teacher, { active: true });
 });
 

@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#f2efe7">
+<title>Панель преподавателя · Тренажёр ЕГЭ</title>
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="stylesheet" href="katex/katex.min.css">
+<script defer src="katex/katex.min.js"></script>
+<script defer src="katex/auto-render.min.js"></script>
+<style>
+  @font-face{font-family:'Golos Text';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url(fonts/golos-text-cyrillic.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+  @font-face{font-family:'Golos Text';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url(fonts/golos-text-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+  @font-face{font-family:'Literata';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url(fonts/literata-cyrillic.woff2) format('woff2');unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116;}
+  @font-face{font-family:'Literata';font-style:normal;font-weight:400 700;font-display:swap;
+    src:url(fonts/literata-latin.woff2) format('woff2');unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;}
+  :root{
+    color-scheme:light;
+    /* ground */
+    --paper:#f2efe7;--surface:#fdfcf9;--surface-2:#eeeade;
+    --ink:#221f1a;--ink-2:#4e493f;--ink-3:#635d51;
+    --line:#e2ddd0;--line-strong:#cdc6b5;
+    /* accent — чернильно-синий */
+    --accent:#1d4e89;--accent-hover:#163f70;--accent-on:#ffffff;
+    --accent-soft:#e7eef7;--accent-line:#bccfe6;
+    --focus:#1d4e89;
+    /* статусы */
+    --ok:#2f7d54;--ok-text:#1f5b3a;--ok-soft:#e3efe8;--ok-on:#ffffff;
+    --warn:#c8861f;--warn-text:#754d0d;--warn-soft:#f8eeda;--warn-on:#2a1c05;
+    --todo:#4a4a44;--todo-text:#43433d;--todo-soft:#e9e7e0;--todo-on:#ffffff;
+    --err:#b23c2e;--err-text:#932f22;--err-soft:#f9e7e3;--err-on:#ffffff;
+    /* высота (тёплые тени, не чёрные) */
+    --e1:0 1px 2px rgba(74,58,38,.05);
+    --e2:0 2px 4px rgba(74,58,38,.05),0 10px 24px -8px rgba(74,58,38,.14);
+    --e3:0 4px 10px rgba(74,58,38,.08),0 18px 40px -12px rgba(74,58,38,.2);
+    /* поверхности-компоненты */
+    --header-bg:rgba(242,239,231,.88);--vbar-bg:rgba(253,252,249,.9);
+    --input-bg:#ffffff;--track:#e6e1d4;
+    --invert-1:#25282a;--invert-2:#1a1d1f;--invert-ink:#f4f2ec;
+    --invert-tile:rgba(255,255,255,.07);--invert-line:rgba(255,255,255,.12);
+    --dot-empty:#fdfcf9;--img-filter:none;
+    --sk-base:#e8e3d7;--sk-shine:#f5f2ea;
+    /* шкала кегля */
+    --fs-2xs:11.5px;--fs-xs:12.5px;--fs-sm:13.5px;--fs-base:15px;--fs-md:16px;
+    --fs-lg:18px;--fs-xl:21px;--fs-2xl:25px;--fs-3xl:30px;
+    /* шкала отступов */
+    --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;--s8:32px;--s10:40px;--s12:48px;--s16:64px;
+    /* радиусы */
+    --r-sm:8px;--r-md:12px;--r-lg:16px;--r-full:999px;
+    /* движение */
+    --dur:.18s;--ease:cubic-bezier(.2,.8,.3,1);
+    /* Отдельная кривая для раскрытия. Основная --ease очень резкая на
+       старте: 62% пути за первые 20% времени. Для кнопки это бодро, для
+       панели в 650px — рывок. Здесь спокойное замедление. */
+    --ease-reveal:cubic-bezier(.22,.61,.36,1);
+    /* постоянная часть высоты карточки задачи (без чертежа) — для оценки
+       content-visibility. На телефоне больше: тот же текст занимает
+       больше строк. Замерено на заданиях 1, 4, 6, 12. */
+    --card-base:280px;
+    /* легаси-псевдонимы: на них ссылается JS */
+    --green:var(--ok);--orange:var(--warn);--dark:var(--todo);--muted:var(--ink-3);
+    --bg:var(--paper);
+  }
+  html[data-theme="dark"]{
+    color-scheme:dark;
+    --paper:#161713;--surface:#1f211d;--surface-2:#282a25;
+    --ink:#eae5da;--ink-2:#a8a498;--ink-3:#a09c8b;
+    --line:#33362f;--line-strong:#454940;
+    --accent:#7fb2ea;--accent-hover:#9cc5f2;--accent-on:#0e1a28;
+    --accent-soft:rgba(127,178,234,.14);--accent-line:rgba(127,178,234,.38);
+    --focus:#9cc5f2;
+    --ok:#4caf7d;--ok-text:#6cc396;--ok-soft:rgba(76,175,125,.16);--ok-on:#0c1f16;
+    --warn:#d9932f;--warn-text:#e0a955;--warn-soft:rgba(217,147,47,.15);--warn-on:#241704;
+    --todo:#8d8a7e;--todo-text:#adaa9c;--todo-soft:rgba(141,138,126,.18);--todo-on:#16170f;
+    --err:#e0685a;--err-text:#e8867a;--err-soft:rgba(224,104,90,.16);--err-on:#220906;
+    --e1:0 1px 2px rgba(0,0,0,.4);
+    --e2:0 2px 4px rgba(0,0,0,.4),0 10px 24px -8px rgba(0,0,0,.55);
+    --e3:0 4px 10px rgba(0,0,0,.45),0 18px 40px -12px rgba(0,0,0,.6);
+    --header-bg:rgba(22,23,19,.88);--vbar-bg:rgba(31,33,29,.9);
+    --input-bg:#1b1d19;--track:#2e312a;
+    --invert-1:#2b2e28;--invert-2:#212420;--invert-ink:#eae5da;
+    --invert-tile:rgba(255,255,255,.06);--invert-line:rgba(255,255,255,.1);
+    --dot-empty:#1f211d;--img-filter:invert(.92) hue-rotate(180deg);
+    --sk-base:#2b2e27;--sk-shine:#383c33;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:'Golos Text',system-ui,sans-serif;font-size:var(--fs-md);line-height:1.55;
+    -webkit-font-smoothing:antialiased;}
+  h1,h2,h3{font-family:'Literata',Georgia,serif;font-weight:600;letter-spacing:-.011em;line-height:1.2;margin:0;}
+  :focus-visible{outline:2px solid var(--focus);outline-offset:2px;}
+  button{font:inherit;}
+  a{color:var(--accent);}
+
+  header{position:sticky;top:0;z-index:50;background:var(--header-bg);
+    backdrop-filter:saturate(180%) blur(10px);-webkit-backdrop-filter:saturate(180%) blur(10px);
+    border-bottom:1px solid var(--line);}
+  .head-inner{max-width:1180px;margin:0 auto;padding:var(--s3) var(--s6);display:flex;
+    align-items:center;gap:var(--s3);min-height:60px;flex-wrap:wrap;}
+  .title{font-family:'Literata',Georgia,serif;font-weight:700;font-size:var(--fs-lg);cursor:pointer;margin-right:auto;}
+  .title span{color:var(--accent);}
+  .ghost{font-size:var(--fs-sm);font-weight:500;color:var(--ink-2);background:transparent;
+    border:1px solid var(--line-strong);border-radius:var(--r-md);padding:0 var(--s3);min-height:38px;
+    cursor:pointer;display:inline-flex;align-items:center;gap:var(--s2);text-decoration:none;}
+  .ghost:hover{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft);}
+  .btn{font-size:var(--fs-sm);font-weight:600;border-radius:var(--r-md);min-height:40px;padding:0 var(--s4);
+    cursor:pointer;border:1px solid transparent;background:var(--accent);color:var(--accent-on);}
+  .btn:hover{background:var(--accent-hover);}
+  .btn.quiet{background:transparent;color:var(--ink-2);border-color:var(--line-strong);}
+  .btn.quiet:hover{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft);}
+  .btn.danger{background:transparent;color:var(--err-text);border-color:var(--line-strong);}
+  .btn.danger:hover{background:var(--err-soft);border-color:var(--err);}
+
+  main{max-width:1180px;margin:0 auto;padding:var(--s8) var(--s6) var(--s16);}
+  .lead{color:var(--ink-3);margin:var(--s2) 0 var(--s6);}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+    box-shadow:var(--e1);padding:var(--s6);margin-bottom:var(--s5);}
+  .panel h3{font-size:var(--fs-lg);margin-bottom:var(--s4);}
+  .toolbar{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap;margin-bottom:var(--s4);}
+  .toolbar .grow{flex:1;}
+  .muted{color:var(--ink-3);font-size:var(--fs-sm);}
+  .center{text-align:center;padding:var(--s12) var(--s4);}
+
+  table{width:100%;border-collapse:collapse;font-size:var(--fs-sm);}
+  th{text-align:left;font-weight:600;color:var(--ink-3);font-size:var(--fs-xs);text-transform:uppercase;
+    letter-spacing:.04em;padding:var(--s2) var(--s3);border-bottom:1px solid var(--line);white-space:nowrap;}
+  th[data-sort]{cursor:pointer;user-select:none;}
+  th[data-sort]:hover{color:var(--accent);}
+  th .arr{display:inline-block;width:1em;}
+  td{padding:var(--s3);border-bottom:1px solid var(--line);vertical-align:middle;}
+  tr.row{cursor:pointer;}
+  tr.row:hover td{background:var(--accent-soft);}
+  tr.off td{opacity:.55;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  .name{font-weight:600;color:var(--ink);}
+  .chip{display:inline-flex;align-items:center;gap:6px;border-radius:var(--r-full);padding:2px 10px;
+    font-size:var(--fs-xs);font-weight:600;white-space:nowrap;}
+  .chip.stale{background:var(--warn-soft);color:var(--warn-text);}
+  .chip.never{background:var(--todo-soft);color:var(--todo-text);}
+  .chip.fresh{background:var(--ok-soft);color:var(--ok-text);}
+  .chip.off{background:var(--todo-soft);color:var(--todo-text);}
+  .table-wrap{overflow-x:auto;}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s5);}
+  @media (max-width:860px){.grid2{grid-template-columns:1fr;}}
+  .kpis{display:flex;gap:var(--s4);flex-wrap:wrap;margin-bottom:var(--s5);}
+  .kpi{flex:1;min-width:150px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s4) var(--s5);}
+  .kpi b{display:block;font-family:'Literata',Georgia,serif;font-size:var(--fs-2xl);font-variant-numeric:tabular-nums;}
+  .kpi span{color:var(--ink-3);font-size:var(--fs-sm);}
+
+  .tasks .t{display:grid;grid-template-columns:32px minmax(0,1fr) 150px;gap:var(--s3);align-items:center;
+    padding:6px 0;font-size:var(--fs-sm);}
+  .tasks .t .n{font-family:'Literata',Georgia,serif;font-weight:700;color:var(--ink-2);}
+  .tasks .t .tt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .bar{display:flex;height:8px;border-radius:var(--r-full);overflow:hidden;background:var(--track);}
+  .bar i{display:block;height:100%;}
+  .bar .g{background:var(--ok);} .bar .o{background:var(--warn);} .bar .b{background:var(--err);}
+  .legend{display:flex;gap:var(--s4);flex-wrap:wrap;font-size:var(--fs-xs);color:var(--ink-3);margin-bottom:var(--s3);}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:0;}
+  .dot.g{background:var(--ok);} .dot.o{background:var(--warn);} .dot.b{background:var(--err);}
+
+  .act{display:flex;align-items:flex-end;gap:3px;height:90px;}
+  .act i{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px;opacity:.85;}
+  .act i.z{background:var(--track);opacity:1;}
+  .act-axis{display:flex;justify-content:space-between;font-size:var(--fs-2xs);color:var(--ink-3);margin-top:4px;}
+
+  .list .it{display:flex;gap:var(--s3);justify-content:space-between;align-items:baseline;
+    padding:var(--s2) 0;border-bottom:1px solid var(--line);font-size:var(--fs-sm);}
+  .list .it:last-child{border-bottom:none;}
+  .wrong .it{display:block;}
+  .wrong .meta{display:flex;justify-content:space-between;gap:var(--s3);color:var(--ink-3);font-size:var(--fs-xs);}
+  .wrong .cond{margin:6px 0;font-size:var(--fs-sm);color:var(--ink-2);}
+  .wrong .cond img{max-width:260px;height:auto;filter:var(--img-filter);}
+  .wrong .ans{font-size:var(--fs-sm);}
+  .wrong .ans .given{color:var(--err-text);font-weight:600;}
+  .wrong .ans .right{color:var(--ok-text);font-weight:600;}
+  .wrong details summary{cursor:pointer;color:var(--accent);font-size:var(--fs-xs);}
+
+  .sheet-ov{position:fixed;inset:0;background:rgba(20,18,14,.45);display:none;align-items:center;
+    justify-content:center;z-index:100;padding:var(--s4);}
+  .sheet-ov.open{display:flex;}
+  .sheet{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e3);padding:var(--s6);
+    width:100%;max-width:480px;}
+  .sheet h3{font-size:var(--fs-xl);margin-bottom:var(--s3);}
+  .sheet p{color:var(--ink-2);font-size:var(--fs-sm);margin:0 0 var(--s4);}
+  .sheet .acts{display:flex;gap:var(--s3);justify-content:flex-end;flex-wrap:wrap;margin-top:var(--s4);}
+  .field{width:100%;font:inherit;padding:10px 12px;border-radius:var(--r-sm);border:1px solid var(--line-strong);
+    background:var(--input-bg);color:var(--ink);}
+  .linkbox{word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:var(--fs-xs);
+    background:var(--surface-2);border-radius:var(--r-sm);padding:var(--s3);color:var(--ink-2);}
+  .ic-sun{display:none;} html[data-theme="dark"] .ic-moon{display:none;} html[data-theme="dark"] .ic-sun{display:block;}
+  @media (max-width:760px){
+    .head-inner{padding:var(--s2) var(--s4);}
+    main{padding:var(--s6) var(--s4) var(--s12);}
+    .panel{padding:var(--s4);}
+    .hide-m{display:none;}
+    .tasks .t{grid-template-columns:28px minmax(0,1fr) 110px;}
+  }
+</style>
+<script>
+(function(){try{var t=localStorage.getItem('ege_theme');
+  if(!t)t=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  if(t==='dark'){document.documentElement.setAttribute('data-theme','dark');
+    document.querySelector('meta[name="theme-color"]').setAttribute('content','#161713');}}catch(e){}})();
+</script>
+</head>
+<body>
+<header>
+  <div class="head-inner">
+    <h1 class="title" id="home">Панель <span>преподавателя</span></h1>
+    <a class="ghost" href="./">Тренажёр</a>
+    <button class="ghost" id="theme" title="Сменить тему" aria-label="Сменить тему" style="width:38px;padding:0;justify-content:center">
+      <svg class="ic-moon" width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+      <svg class="ic-sun" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4"/></svg>
+    </button>
+    <button class="ghost" id="logout" style="display:none">Выйти</button>
+  </div>
+</header>
+<main id="app"></main>
+<div class="sheet-ov" id="sheet-ov"><div class="sheet" id="sheet"></div></div>
+
+<script src="sync-core.js"></script>
+<script src="stats-core.js"></script>
+<script src="config.js"></script>
+<script>
+/* Панель преподавателя. Данные учеников сюда приходят только с сервера и
+   только после входа по ссылке учителя; в самой странице их нет.
+   Все цифры считает stats-core.js из журнала событий (см. sync-core.js). */
+const API=/^(localhost|127\.0\.0\.1)$/.test(location.hostname)?'http://127.0.0.1:8090/api':'https://api.kirillnyun.space/api';
+const AUTH_KEY='ege_teacher_auth_v1';
+const TRAINER=location.origin+location.pathname.replace(/teacher\.html$/,'');
+const DAY=86400000;
+let auth=null;try{auth=JSON.parse(localStorage.getItem(AUTH_KEY));}catch(e){}
+const app=document.getElementById('app');
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const taskTitle=n=>(TASKS.find(t=>t.n===n)||{}).title||('Задание '+n);
+
+async function api(path,opt){opt=opt||{};
+  const r=await fetch(API+path,{method:opt.method||'GET',body:opt.body&&JSON.stringify(opt.body),
+    headers:Object.assign({'content-type':'application/json'},auth&&!opt.anon?{Authorization:auth.token}:{})});
+  let json=null;try{json=await r.json();}catch(e){}
+  if(r.status===401&&!opt.anon){logout('Вход больше не действует. Открой актуальную ссылку преподавателя.');throw new Error('401');}
+  return{status:r.status,json:json};}
+async function all(c,filter){
+  const out=[];
+  for(let page=1;;page++){
+    const r=await api(`/collections/${c}/records?perPage=500&page=${page}&skipTotal=1&sort=created`+(filter?'&filter='+encodeURIComponent(filter):''));
+    if(r.status!==200)throw new Error(c+' '+r.status);
+    out.push(...r.json.items);if(r.json.items.length<500)return out;
+  }}
+
+// ---- вход ----
+function logout(msg){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render(msg);}
+async function loginFromHash(){
+  const m=location.hash.match(/^#\/login\/([a-z0-9_-]+)\.([A-Za-z0-9]+)$/);
+  if(!m)return;
+  history.replaceState(null,'',location.pathname);
+  app.innerHTML='<p class="center muted">Вход…</p>';
+  let r;
+  try{r=await api('/collections/users/auth-with-password',{method:'POST',anon:true,body:{identity:m[1],password:m[2]}});}
+  catch(e){render('Нет связи с сервером.');return;}
+  if(r.status!==200){render('Ссылка не подошла.');return;}
+  if(r.json.record.role!=='teacher'){render('Эта страница только для преподавателя.');return;}
+  auth={token:r.json.token,id:r.json.record.id,name:r.json.record.name};
+  try{localStorage.setItem(AUTH_KEY,JSON.stringify(auth));}catch(e){}
+}
+
+// ---- данные ----
+let data=null;   // {students, links, byUser:{id:{events,variants,clears}}}
+async function load(){
+  const [users,links,events,variants,clears]=await Promise.all([
+    all('users','role="student"'),all('links'),all('events'),all('variants'),all('variant_clears')]);
+  const byUser={};
+  users.forEach(u=>byUser[u.id]={events:[],variants:[],clears:[]});
+  events.forEach(e=>byUser[e.user]&&byUser[e.user].events.push(e));
+  variants.forEach(v=>byUser[v.user]&&byUser[v.user].variants.push(v));
+  clears.forEach(c=>byUser[c.user]&&byUser[c.user].clears.push(c));
+  const linkOf={};links.forEach(l=>linkOf[l.user]=l);
+  data={students:users,linkOf,byUser,loaded:Date.now()};
+}
+const cfg={
+  protoOf(n,pid){const pl=protoList(n);if(!pl)return null;const g=pl.find(g=>g.ids.includes(pid));return g?g.p:null;},
+  reps(n){const pl=protoList(n);return pl?pl.map(g=>g.ids[0]):null;},
+  count(n){const t=TASKS.find(t=>t.n===n);return t?t.count:0;},
+};
+const summaries={};
+function summaryOf(u){
+  if(!summaries[u.id]){const d=data.byUser[u.id];
+    summaries[u.id]=StatsCore.studentSummary(d.events,d.variants,d.clears,Date.now(),cfg);}
+  return summaries[u.id];}
+
+function ago(ts){
+  if(ts==null)return'<span class="chip never">не заходил</span>';
+  const d0=StatsCore.mskDay(Date.now()),d=StatsCore.mskDay(ts);
+  const diff=Math.round((Date.parse(d0)-Date.parse(d))/DAY);
+  const txt=diff===0?'сегодня':diff===1?'вчера':diff+' дн. назад';
+  return `<span class="chip ${diff>=7?'stale':'fresh'}">${txt}</span>`;
+}
+const fmtDate=ts=>new Date(ts).toLocaleString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+const fmtDay=ts=>new Date(ts).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short'});
+
+// ---- список учеников ----
+let sortKey='last',sortDir=-1;
+function rowData(u){const s=summaryOf(u),lastV=s.variants[s.variants.length-1];
+  let g=0;for(let n=1;n<=20;n++)g+=s.byTask[n].g;
+  return{u,last:s.lastActive,week:s.solved7d,mastered:g,mock:lastV?lastV.s:null,mockT:lastV?lastV.t:null};}
+function renderList(){
+  const rows=data.students.map(rowData);
+  const val=r=>sortKey==='name'?(r.u.name||r.u.login).toLowerCase():r[sortKey];
+  rows.sort((a,b)=>{const x=val(a),y=val(b);
+    if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;
+    return (x<y?-1:x>y?1:0)*sortDir;});
+  rows.sort((a,b)=>(a.u.active===false)-(b.u.active===false));
+  const th=(k,label,cls)=>`<th data-sort="${k}" class="${cls||''}">${label}<span class="arr">${sortKey===k?(sortDir>0?'↑':'↓'):''}</span></th>`;
+  app.innerHTML=`
+    <h2>Ученики</h2>
+    <p class="lead">Активных учеников: ${data.students.filter(u=>u.active!==false).length}. Нажми на ученика, чтобы открыть его карточку.</p>
+    <div class="panel">
+      <div class="toolbar"><div class="grow muted">Обновлено ${fmtDate(data.loaded)}</div>
+        <button class="btn quiet" data-act="reload">Обновить</button>
+        <button class="btn" data-act="add">Добавить ученика</button></div>
+      ${rows.length?`<div class="table-wrap"><table>
+        <thead><tr>${th('name','Ученик')}${th('last','Последняя активность')}${th('week','Решено за 7 дней','num')}${th('mastered','Умею','num hide-m')}${th('mock','Последний пробник','num')}</tr></thead>
+        <tbody>${rows.map(r=>`<tr class="row${r.u.active===false?' off':''}" data-open="${r.u.id}">
+          <td><span class="name">${esc(r.u.name||r.u.login)}</span>${r.u.active===false?' <span class="chip off">отключён</span>':''}</td>
+          <td>${ago(r.last)}</td>
+          <td class="num">${r.week}</td>
+          <td class="num hide-m">${r.mastered}</td>
+          <td class="num">${r.mock==null?'<span class="muted">—</span>':`<b>${r.mock}</b> <span class="muted">· ${fmtDay(r.mockT)}</span>`}</td>
+        </tr>`).join('')}</tbody></table></div>`
+      :'<p class="center muted">Учеников пока нет. Нажми «Добавить ученика» — получишь ссылку для входа.</p>'}
+    </div>`;
+}
+
+// ---- карточка ученика ----
+function renderStudent(id){
+  const u=data.students.find(x=>x.id===id);
+  if(!u){location.hash='#/';return;}
+  const s=summaryOf(u),d=data.byUser[id];
+  const protos=StatsCore.problemPrototypes(d.events,cfg).slice(0,12);
+  const maxAct=Math.max(1,...s.activity.map(a=>a.count));
+  const tasksHTML=[];
+  for(let n=1;n<=20;n++){const c=s.byTask[n];if(!c.total)continue;
+    const p=x=>(x/c.total*100).toFixed(1)+'%';
+    tasksHTML.push(`<div class="t"><span class="n">${n}</span><span class="tt" title="${esc(taskTitle(n))}">${esc(taskTitle(n))}</span>
+      <span title="умею ${c.g} · повторить ${c.o} · разобраться ${c.b} из ${c.total}"><span class="bar"><i class="g" style="width:${p(c.g)}"></i><i class="o" style="width:${p(c.o)}"></i><i class="b" style="width:${p(c.b)}"></i></span></span></div>`);}
+  const vs=s.variants.slice().reverse();
+  app.innerHTML=`
+    <p><a href="#/">← Все ученики</a></p>
+    <div class="toolbar"><h2 class="grow">${esc(u.name||u.login)}${u.active===false?' <span class="chip off">отключён</span>':''}</h2>
+      <button class="btn quiet" data-act="link" data-id="${id}">Ссылка для входа</button>
+      <button class="btn quiet" data-act="rotate" data-id="${id}">Новая ссылка</button>
+      <button class="btn ${u.active===false?'quiet':'danger'}" data-act="toggle" data-id="${id}">${u.active===false?'Включить':'Отключить'}</button></div>
+    <div class="kpis">
+      <div class="kpi"><b>${s.lastActive==null?'—':fmtDay(s.lastActive)}</b><span>последняя активность</span></div>
+      <div class="kpi"><b>${s.solved7d}</b><span>решено за 7 дней</span></div>
+      <div class="kpi"><b>${vs.length?vs[0].s:'—'}</b><span>последний пробник, тестовый балл</span></div>
+      <div class="kpi"><b>${d.events.filter(e=>e.kind==='mark'&&e.source!=='import').length}</b><span>всего действий</span></div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>По номерам ЕГЭ</h3>
+        <div class="legend"><span><i class="dot g"></i>умею</span><span><i class="dot o"></i>повторить</span><span><i class="dot b"></i>разобраться</span></div>
+        <div class="tasks">${tasksHTML.join('')}</div></div>
+      <div>
+        <div class="panel"><h3>Активность за 30 дней</h3>
+          <div class="act">${s.activity.map(a=>`<i class="${a.count?'':'z'}" style="height:${a.count?Math.max(6,a.count/maxAct*100):3}%" title="${a.day}: ${a.count}"></i>`).join('')}</div>
+          <div class="act-axis"><span>${s.activity[0].day.slice(5).split('-').reverse().join('.')}</span><span>сегодня</span></div></div>
+        <div class="panel"><h3>Где ошибается</h3>
+          ${protos.length?`<div class="list">${protos.map(p=>`<div class="it"><span>Задание ${p.n} · ${p.proto==null?'задача '+p.pid:'прототип '+p.proto}</span><span class="muted">${p.wrong} из ${p.attempts} неверно</span></div>`).join('')}</div>`:'<p class="muted">Ошибок пока нет.</p>'}</div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="panel"><h3>Пробники</h3>
+        ${vs.length?`<div class="list">${vs.map(v=>`<div class="it"><span>${fmtDate(v.t)}</span><span><b>${v.s}</b> <span class="muted">тест. · ${v.p} из ${v.m||v.total} перв. · ${Math.round((v.ms||0)/60000)} мин</span></span></div>`).join('')}</div>`:'<p class="muted">Пробников пока не было.</p>'}</div>
+      <div class="panel"><h3>Последние неверные ответы</h3>
+        ${s.wrong.length?`<div class="list wrong">${s.wrong.map(w=>`<div class="it" data-cond="${w.n}:${w.pid}">
+          <div class="meta"><span>Задание ${w.n} · задача ${w.pid}</span><span>${fmtDate(w.ts)}</span></div>
+          <div class="ans">Ответил <span class="given">${esc(w.given)}</span> · верно <span class="right" data-right>…</span></div>
+          <details><summary>условие</summary><div class="cond" data-c></div></details></div>`).join('')}</div>`:'<p class="muted">Неверных ответов нет.</p>'}</div>
+    </div>`;
+  fillWrong();
+}
+// Условия и ответы берём из тех же data.js, что и тренажёр.
+window.TASKDATA=window.TASKDATA||{};
+const dataP={};
+function ensureData(n){return dataP[n]||(dataP[n]=new Promise(res=>{
+  const sc=document.createElement('script');sc.src=`img/t${n}/data.js`;sc.onload=res;sc.onerror=res;document.head.appendChild(sc);}));}
+function plain(html){const t=document.createElement('div');t.innerHTML=html||'';return(t.textContent||'').trim();}
+function fillWrong(){
+  document.querySelectorAll('[data-cond]').forEach(el=>{
+    const [n,pid]=el.dataset.cond.split(':').map(Number);
+    ensureData(n).then(()=>{const p=(window.TASKDATA[n]||[])[pid-1];
+      el.querySelector('[data-right]').textContent=p?plain(p.a):'?';
+      const c=el.querySelector('[data-c]');
+      c.innerHTML=p?p.c:'Условие не найдено';   // image paths in data.js are already site-relative
+      if(window.renderMathInElement)try{renderMathInElement(c,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});}catch(e){}
+    });
+  });
+}
+
+// ---- управление ----
+const rnd=(len,alpha)=>{const a=new Uint8Array(len*2);crypto.getRandomValues(a);let s='';
+  for(const b of a){if(b<Math.floor(256/alpha.length)*alpha.length)s+=alpha[b%alpha.length];if(s.length===len)break;}
+  return s.length===len?s:rnd(len,alpha);};
+const ALNUM='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const linkFor=(u,secret)=>TRAINER+'#/login/'+u.login+'.'+secret;
+function sheet(html){document.getElementById('sheet').innerHTML=html;document.getElementById('sheet-ov').classList.add('open');}
+function closeSheet(){document.getElementById('sheet-ov').classList.remove('open');}
+function showLink(u,secret,title){
+  const url=linkFor(u,secret);
+  sheet(`<h3>${esc(title)}</h3><p>Отправь эту ссылку ученику <b>${esc(u.name||u.login)}</b>. По ней он входит на любом устройстве — пусть никому её не пересылает.</p>
+    <div class="linkbox">${esc(url)}</div>
+    <div class="acts"><button class="btn quiet" data-act="close">Закрыть</button><button class="btn" data-act="copy" data-url="${esc(url)}">Скопировать</button></div>`);
+}
+async function addStudent(){
+  sheet(`<h3>Новый ученик</h3><p>Имя увидишь только ты и сам ученик.</p>
+    <input class="field" id="new-name" maxlength="80" placeholder="Имя и фамилия" autocomplete="off">
+    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="create">Создать</button></div>`);
+  setTimeout(()=>document.getElementById('new-name').focus(),50);
+}
+async function createStudent(){
+  const name=document.getElementById('new-name').value.trim();if(!name)return;
+  const login='s'+rnd(6,'abcdefghijklmnopqrstuvwxyz0123456789'),secret=rnd(32,ALNUM);
+  const r=await api('/collections/users/records',{method:'POST',body:{login,name,role:'student',active:true,password:secret,passwordConfirm:secret}});
+  if(r.status!==200){sheet(`<h3>Не получилось</h3><p>${esc(JSON.stringify(r.json&&r.json.data||r.status))}</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
+  await api('/collections/links/records',{method:'POST',body:{user:r.json.id,secret}});
+  await refresh();
+  showLink(r.json,secret,'Ученик создан');
+}
+async function rotate(id){
+  const u=data.students.find(x=>x.id===id);
+  sheet(`<h3>Выпустить новую ссылку?</h3><p>Старая ссылка перестанет работать, и все устройства, где ${esc(u.name)} вошёл по ней, выйдут из аккаунта. Прогресс не пропадёт.</p>
+    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="rotate-go" data-id="${id}">Выпустить</button></div>`);
+}
+async function rotateGo(id){
+  const u=data.students.find(x=>x.id===id),secret=rnd(32,ALNUM);
+  const r=await api('/collections/users/records/'+id,{method:'PATCH',body:{password:secret,passwordConfirm:secret}});
+  if(r.status!==200){closeSheet();return;}
+  const l=data.linkOf[id];
+  if(l)await api('/collections/links/records/'+l.id,{method:'PATCH',body:{secret}});
+  else await api('/collections/links/records',{method:'POST',body:{user:id,secret}});
+  await refresh();
+  showLink(u,secret,'Новая ссылка');
+}
+async function toggle(id){
+  const u=data.students.find(x=>x.id===id);
+  await api('/collections/users/records/'+id,{method:'PATCH',body:{active:u.active===false}});
+  await refresh();
+}
+
+// ---- маршруты ----
+async function refresh(){await load();for(const k in summaries)delete summaries[k];route();}
+function route(){
+  const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
+  if(m)renderStudent(m[1]);else renderList();
+  window.scrollTo(0,0);
+}
+function render(msg){
+  document.getElementById('logout').style.display=auth?'':'none';
+  if(!auth){app.innerHTML=`<div class="center"><h2>Панель преподавателя</h2><p class="lead">${esc(msg||'Открой свою личную ссылку для входа.')}</p></div>`;return;}
+  app.innerHTML='<p class="center muted">Загружаю данные…</p>';
+  refresh().catch(e=>{if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
+}
+
+document.addEventListener('click',e=>{
+  const th=e.target.closest('th[data-sort]');
+  if(th){const k=th.dataset.sort;if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=k==='name'?1:-1;}renderList();return;}
+  const row=e.target.closest('[data-open]');if(row){location.hash='#/s/'+row.dataset.open;return;}
+  const b=e.target.closest('[data-act]');if(!b)return;
+  const a=b.dataset.act,id=b.dataset.id;
+  if(a==='reload')refresh();
+  else if(a==='add')addStudent();
+  else if(a==='create')createStudent();
+  else if(a==='close')closeSheet();
+  else if(a==='copy')navigator.clipboard.writeText(b.dataset.url).then(()=>{b.textContent='Скопировано';});
+  else if(a==='link'){const l=data.linkOf[id],u=data.students.find(x=>x.id===id);
+    if(l)showLink(u,l.secret,'Ссылка для входа');else rotate(id);}
+  else if(a==='rotate')rotate(id);
+  else if(a==='rotate-go')rotateGo(id);
+  else if(a==='toggle')toggle(id);
+});
+document.getElementById('sheet-ov').addEventListener('click',e=>{if(e.target.id==='sheet-ov')closeSheet();});
+document.addEventListener('keydown',e=>{
+  if(e.key==='Escape')closeSheet();
+  if(e.key==='Enter'&&e.target.id==='new-name')createStudent();});
+document.getElementById('home').addEventListener('click',()=>{location.hash='#/';});
+document.getElementById('logout').addEventListener('click',()=>logout('Ты вышел. Чтобы войти снова, открой свою ссылку.'));
+document.getElementById('theme').addEventListener('click',()=>{
+  const dark=document.documentElement.getAttribute('data-theme')==='dark';
+  if(dark)document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','dark');
+  try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
+  document.querySelector('meta[name="theme-color"]').setAttribute('content',dark?'#f2efe7':'#161713');});
+window.addEventListener('hashchange',async()=>{
+  if(/^#\/login\//.test(location.hash)){await loginFromHash();render();return;}
+  if(data)route();});
+(async()=>{await loginFromHash();render();})();
+</script>
+</body>
+</html>
