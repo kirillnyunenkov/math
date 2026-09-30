@@ -634,6 +634,14 @@
   .ans-input.correct{border-color:var(--ok);background:var(--ok-soft);color:var(--ok-text);font-weight:600;}
   .ans-input.wrong{border-color:var(--err);background:var(--err-soft);color:var(--err-text);font-weight:600;}
   .v-input{width:180px;margin-top:var(--s3);}
+  /* iOS decimal keypad has no minus key, so touch devices get a sign toggle
+     next to the field. Hidden where a hardware keyboard is the norm. */
+  .v-ans{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s3);}
+  .v-ans .v-input{margin-top:0;}
+  .ans-sign{display:none;font:inherit;font-size:1.3em;line-height:1;font-weight:600;min-width:44px;min-height:44px;
+    padding:0;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--input-bg);
+    color:var(--ink);cursor:pointer;touch-action:manipulation;}
+  @media (pointer:coarse){.ans-sign{display:inline-flex;align-items:center;justify-content:center;}}
   .ans-msg{font-size:var(--fs-sm);font-weight:600;display:inline-flex;align-items:center;gap:5px;}
   .ans-msg.ok{color:var(--ok-text);}
   .ans-msg.no{color:var(--err-text);}
@@ -863,11 +871,38 @@
     transition:color var(--dur) var(--ease),border-color var(--dur) var(--ease),background var(--dur) var(--ease);}
   .vhist-clear:hover{color:var(--err-text);border-color:var(--err);background:var(--err-soft);}
   .spark{display:block;width:100%;height:48px;margin-bottom:var(--s4);overflow:visible;}
-  .vhist-list{display:flex;flex-direction:column;gap:var(--s1);max-height:260px;overflow:auto;}
-  .vhist-row{display:grid;grid-template-columns:1fr auto auto auto;gap:var(--s4);
+  .vhist-list{display:flex;flex-direction:column;gap:var(--s1);max-height:420px;overflow:auto;}
+  .vhist-row{display:block;width:100%;text-align:left;font:inherit;font-family:'Golos Text',sans-serif;
     font-size:var(--fs-sm);color:var(--ink-2);padding:var(--s2) var(--s3);background:var(--surface-2);
-    border:1px solid var(--line);border-radius:var(--r-md);align-items:center;
+    border:1px solid var(--line);border-radius:var(--r-md);
     font-variant-numeric:tabular-nums;}
+  .vhist-row[data-vhrow]{cursor:pointer;transition:border-color var(--dur) var(--ease);}
+  .vhist-row[data-vhrow]:hover,.vhist-row[aria-expanded="true"]{border-color:var(--accent-line);}
+  .vhist-row:disabled{cursor:default;}
+  .vh-line{display:grid;grid-template-columns:1fr auto auto auto;gap:var(--s4);align-items:center;}
+  /* One cell per task number, same columns in every row — errors on the
+     same task line up vertically across attempts. */
+  .vh-strip,.vh-cols{display:grid;gap:2px;}
+  .vh-strip{margin-top:var(--s2);}
+  .vh-strip i{display:block;height:8px;border-radius:2px;background:var(--line);}
+  .vh-strip i.c-ok{background:var(--ok);}
+  .vh-strip i.c-no{background:var(--err);}
+  .vh-strip i.c-part{background:var(--warn);}
+  /* Inside the scroll box, so the scrollbar narrows it together with the rows */
+  .vh-cols{padding:var(--s1) calc(var(--s3) + 1px);font-size:var(--fs-2xs);
+    color:var(--ink-3);text-align:center;font-variant-numeric:tabular-nums;letter-spacing:-.03em;
+    position:sticky;top:0;z-index:1;background:var(--surface);border-radius:var(--r-sm);}
+  .vh-weak{margin:0 0 var(--s3);font-size:var(--fs-sm);color:var(--ink-2);}
+  .vh-weak b{color:var(--err-text);}
+  .vh-det{padding:var(--s2) var(--s3) var(--s1);font-size:var(--fs-sm);}
+  .vh-wait{margin:0;color:var(--ink-3);}
+  .vh-d{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;padding:3px 0;
+    font-variant-numeric:tabular-nums;}
+  .vh-d .vtag{margin-left:0;padding:1px var(--s2);}
+  .vh-n{min-width:20px;font-weight:700;color:var(--ink);}
+  .vh-art{color:var(--ink-3);font-size:var(--fs-xs);}
+  .vh-a{color:var(--ink-2);}
+  .vh-a b{color:var(--ok-text);}
   .vhist-row .vh-score{color:var(--ink);font-weight:600;}
   .vhist-row .vh-sec{color:var(--accent);font-weight:700;}
   .vhist-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
@@ -969,7 +1004,8 @@
     .vbar{top:var(--header-h,60px);gap:var(--s3);
       border-radius:var(--r-md);padding:var(--s2) var(--s3);}
     .vbar .vtimer{font-size:var(--fs-lg);}
-    .vhist-row{gap:var(--s2);font-size:var(--fs-xs);padding:var(--s2);}
+    .vhist-row{font-size:var(--fs-xs);padding:var(--s2);}
+    .vh-line{gap:var(--s2);}.vh-cols{padding:var(--s1) calc(var(--s2) + 1px);font-size:10px;}
     .vresult{padding:var(--s5);}
     .variant-cta{padding:var(--s4);gap:var(--s3);}
     /* Кнопка остаётся в строке, а не разворачивается во всю ширину.
@@ -1002,7 +1038,7 @@
     /* 320px: доступно 238px, на отступы по 12px их уже не хватает */
     @media (max-width:359px){.marks .btn{padding:0 var(--s2);}}
     .lnk{min-height:44px;}
-    .ans-input,.v-input{min-height:44px;flex:1;min-width:140px;width:auto;}
+    .ans-input,.v-input{min-height:44px;flex:1;min-width:120px;width:auto;}
   }
 
   /* ============================================================
@@ -2577,27 +2613,33 @@ function b64ToBytes(str){let b=str.replace(/-/g,'+').replace(/_/g,'/');while(b.l
 function histEncode(){
   const h=loadHistory();if(!h.length)return'';
   const s=h.slice().sort((a,b)=>a.t-b.t),base=Math.floor(s[0].t/60000),L=[];
-  L.push([2,8]);L.push([Math.min(s.length,255),8]);L.push([base,32]);
+  L.push([3,8]);L.push([Math.min(s.length,255),8]);L.push([base,32]);
   s.slice(0,255).forEach(r=>{
     const dm=Math.min(Math.max(Math.floor(r.t/60000)-base,0),1048575);
     L.push([dm,20]);L.push([Math.min(r.p|0,63),6]);L.push([Math.min(r.total|0,63),6]);
     L.push([Math.min((r.m||r.total)|0,63),6]);
     L.push([Math.min(Math.round(r.ms/1000),16383),14]);
+    const q=(r.q||[]).slice(0,63);L.push([q.length,6]);
+    q.forEach(([n,id,pts])=>{L.push([Math.min(n,31),5]);L.push([Math.min(id,2047),11]);L.push([Math.min(pts,7),3]);});
   });
   return bytesToB64(packBits(L));
 }
 function histDecode(str){
   try{const by=b64ToBytes(str);let idx=0,bit=0;
     const read=n=>{let v=0;for(let k=0;k<n;k++){v=(v<<1)|((by[idx]>>(7-bit))&1);if(++bit===8){bit=0;idx++;}}return v;};
-    const ver=read(8);if(ver!==1&&ver!==2)return null;const count=read(8),base=read(32),out=[];
+    const ver=read(8);if(ver<1||ver>3)return null;const count=read(8),base=read(32),out=[];
     for(let i=0;i<count;i++){const dm=read(20),p=read(ver===1?4:6),tot=read(ver===1?5:6),
-        m=ver===1?tot:read(6),sec=read(14);
-      out.push({t:(base+dm)*60000,p,total:tot,m,s:secondaryScore(p),ms:sec*1000});}
+        m=ver===1?tot:read(6),sec=read(14),rec={t:(base+dm)*60000,p,total:tot,m,s:secondaryScore(p),ms:sec*1000};
+      if(ver>=3){const k=read(6);if(k){rec.q=[];for(let j=0;j<k;j++){const n=read(5),id=read(11),pts=read(3);rec.q.push([n,id,pts,'']);}}}
+      out.push(rec);}
+    if(idx>by.length)return null;
     return out;}catch(e){return null;}
 }
 function mergeHistory(incoming){
   const key=r=>Math.floor(r.t/60000)+':'+r.p+':'+r.total,map={};
-  loadHistory().concat(incoming).forEach(r=>{map[key(r)]=r;});
+  /* Local records go first and keep the typed answers the link does not
+     carry; an incoming record replaces one only if it knows more. */
+  loadHistory().concat(incoming).forEach(r=>{const k=key(r);if(!map[k]||(r.q&&!map[k].q))map[k]=r;});
   let arr=Object.values(map).sort((a,b)=>a.t-b.t);
   if(arr.length>50)arr=arr.slice(arr.length-50);
   saveHistory(arr);
@@ -2612,19 +2654,61 @@ function sparkline(hist){
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
     <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}</svg>`;
 }
+/* Per-task cell: all copies of task n in one attempt merged into one
+   state — ok (full score everywhere), no (nothing anywhere), part otherwise. */
+function histCells(r){const by={};
+  (r.q||[]).forEach(([n,,pts])=>{const full=pts>=itemMax(n),c=by[n]||(by[n]={full:0,zero:0,k:0});
+    c.k++;if(full)c.full++;else if(!pts)c.zero++;});
+  const out={};Object.keys(by).forEach(n=>{const c=by[n];out[n]=c.full===c.k?'ok':c.zero===c.k?'no':'part';});
+  return out;}
+function histWeak(hist){const st={};
+  hist.slice(-12).forEach(r=>{const c=histCells(r);Object.keys(c).forEach(n=>{
+    const x=st[n]||(st[n]={bad:0,k:0});x.k++;if(c[n]!=='ok')x.bad++;});});
+  return Object.keys(st).filter(n=>st[n].bad*2>=st[n].k&&st[n].bad>0)
+    .sort((a,b)=>st[b].bad/st[b].k-st[a].bad/st[a].k||a-b).slice(0,4);}
 function histPanel(){
   const hist=loadHistory();if(!hist.length)return'';
-  const rows=hist.slice().reverse().slice(0,12).map(h=>`<div class="vhist-row">
-      <span class="vh-date">${fmtDate(h.t)}</span>
-      <span class="vh-score">${h.p}/${h.m||h.total} ${ballWord(h.m||h.total)}</span>
-      <span class="vh-sec">тест. ${h.s}</span>
-      <span class="vh-time">${fmtTime(h.ms)}</span>
-    </div>`).join('');
+  const cols=activeTasks().map(t=>t.n),grid=`style="grid-template-columns:repeat(${cols.length},1fr)"`;
+  const anyQ=hist.some(r=>r.q);
+  const rows=hist.map((h,i)=>[h,i]).reverse().slice(0,12).map(([h,i])=>{
+    const c=h.q?histCells(h):null;
+    const strip=c?`<span class="vh-strip" ${grid} aria-hidden="true">${cols.map(n=>`<i class="${c[n]?'c-'+c[n]:''}"></i>`).join('')}</span>`:'';
+    return `<div class="vh-item">
+      <button class="vhist-row" ${h.q?`data-vhrow="${i}" aria-expanded="false"`:'disabled'}>
+        <span class="vh-line">
+          <span class="vh-date">${fmtDate(h.t)}</span>
+          <span class="vh-score">${h.p}/${h.m||h.total} ${ballWord(h.m||h.total)}</span>
+          <span class="vh-sec">тест. ${h.s}</span>
+          <span class="vh-time">${fmtTime(h.ms)}</span>
+        </span>${strip}
+      </button>
+      <div class="vh-det" id="vhdet-${i}" hidden></div>
+    </div>`;}).join('');
+  const weak=histWeak(hist);
   return `<div class="vhist">
     <div class="vhist-head"><span>Мои пробники</span><button class="vhist-clear" data-vhclear>очистить</button></div>
     ${sparkline(hist)}
-    <div class="vhist-list">${rows}</div>
+    ${weak.length?`<p class="vh-weak">Чаще всего ошибки: <b>${weak.map(n=>'№ '+n).join(', ')}</b></p>`:''}
+    <div class="vhist-list">${anyQ?`<div class="vh-cols" ${grid} aria-hidden="true">${cols.map(n=>`<span>${n}</span>`).join('')}</div>`:''}${rows}</div>
   </div>`;
+}
+/* Details of one attempt: needs the task data for the right answers,
+   so it is built on the first opening, after ensureAll. */
+function toggleHistRow(btn){
+  const i=+btn.dataset.vhrow,det=document.getElementById('vhdet-'+i),r=loadHistory()[i];
+  if(!det||!r||!r.q)return;
+  const open=det.hidden;det.hidden=!open;btn.setAttribute('aria-expanded',open);
+  if(!open||det.dataset.ready)return;
+  det.innerHTML='<p class="vh-wait">Загружаю…</p>';
+  ensureAll([...new Set(r.q.map(x=>x[0]))],()=>{det.dataset.ready='1';
+    det.innerHTML=r.q.slice().sort((a,b)=>a[0]-b[0]).map(([n,id,pts,given])=>{
+      const d=(window.TASKDATA[n]||[])[id-1]||{},mx=itemMax(n),full=pts>=mx;
+      const tag=isLongAns(n)?`<span class="vtag ${full?'ok':pts?'part':'no'}">${pts} из ${mx}</span>`
+        :`<span class="vtag ${full?'ok':'no'}">${full?'верно':'неверно'}</span>`;
+      const ans=isLongAns(n)?'':full?`<span class="vh-a">${escapeHtml(plainAnswer(d.a))||'—'}</span>`
+        :`<span class="vh-a">${given?escapeHtml(given):'—'} → <b>${escapeHtml(plainAnswer(d.a))||'—'}</b></span>`;
+      return `<div class="vh-d"><span class="vh-n">${n}</span>${tag}<span class="vh-art">№ ${d.art||id}</span>${ans}</div>`;}).join('');
+  });
 }
 
 /* Версия 4 = нумерация заданий после перенумерации банка. Ссылки прежних
@@ -2775,7 +2859,9 @@ let lastHubShare=null;
 function renderHub(){
   setBack(false);
   let allG=0,allO=0,allB=0,total=0;
-  TASKS.filter(t=>!t.hidden).forEach(t=>{const c=countTask(t.n);allG+=c.g;allO+=c.o;allB+=c.b;total+=displayCount(t.n);});
+  /* The hub bar tracks part 1 only; part 2 has its own cards below. */
+  const P1=HUB_PARTS[0];
+  TASKS.filter(t=>!t.hidden&&t.n>=P1.from&&t.n<=P1.to).forEach(t=>{const c=countTask(t.n);allG+=c.g;allO+=c.o;allB+=c.b;total+=displayCount(t.n);});
   const left=total-allG-allO-allB;
   const gp=total?allG/total*100:0,op=total?allO/total*100:0,bp=total?allB/total*100:0;
   /* Первый заход за сессию — сразу конечные доли: анимировать нечего,
@@ -2802,7 +2888,7 @@ function renderHub(){
     </button>`;})():'';
   const progHTML=`<div class="hub-prog">
     <div class="hub-prog-head">
-      <span class="hub-prog-label">Общий прогресс</span>
+      <span class="hub-prog-label">Прогресс по первой части</span>
       <span class="hub-prog-pct">${Math.round(gp)}%<span>освоено · ${allG} из ${total}</span></span>
     </div>
     <div class="hub-prog-bar">
@@ -2963,7 +3049,7 @@ function renderTask(n){
   const pl=protoList(n);
   const acHTML=id=>{const ansTxt=task.mode==='html'&&!isLongAns(n)?plainAnswer((data[id-1]||{}).a):'';
     return ansTxt?`<div class="answer-check">
-          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
+          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off"><button class="ans-sign" type="button" data-sign aria-label="Сменить знак">±</button>
           <button class="btn check" data-check="${id}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span>
         </div>`:'';};
@@ -3058,7 +3144,7 @@ function renderTask(n){
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
   const ansTxt=isLongAns(n)?'':plainAnswer(d.a);
   const ac=ansTxt?`<div class="answer-check">
-      <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
+      <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off"><button class="ans-sign" type="button" data-sign aria-label="Сменить знак">±</button>
       <button class="btn check" data-check="${id}" data-nostatus="1">Проверить</button>
       <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
   return `<div class="subcard">
@@ -3231,7 +3317,10 @@ function completeVariant(){
     recordStatus(it.n,it.id, full ? ((cur==='b'||cur==='o')?'o':'g') : it.pts>0 ? 'o' : 'b');
   });
   save();variant.finished=true;
-  pushHistory({t:Date.now(),p:pts,s:secondaryScore(pts),ms:variant.elapsed,total:variant.items.length,m:max});
+  /* q: per-task results [n, id, pts, given] — lets the history show where
+     the student was right and where not, not just the total. */
+  pushHistory({t:Date.now(),p:pts,s:secondaryScore(pts),ms:variant.elapsed,total:variant.items.length,m:max,
+    q:variant.items.map(it=>[it.n,it.id,it.pts,it.given||''])});
   /* «Завершить» нажимают внизу списка — итоги должны открыться сверху */
   scrollTop();renderVariant();
 }
@@ -3310,7 +3399,7 @@ function renderTraining(){
       const st=(state[it.n]||{})[it.id]||'',c=st?'is-'+st:'';
       const ansTxt=isLongAns(it.n)?'':plainAnswer(d.a);
       const ac=ansTxt?`<div class="answer-check">
-          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off">
+          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off"><button class="ans-sign" type="button" data-sign aria-label="Сменить знак">±</button>
           <button class="btn check" data-tcheck="${i}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
       return `<div class="vcard ${c}" id="tcard-${i}" data-n="${it.n}">
@@ -3345,7 +3434,7 @@ function renderVariant(){
           <div class="vlabel">Задание ${it.n}${long?`<span class="vlabel-art"> · максимум ${mx} ${ballWord(mx)}</span>`:''}</div>
           <div class="cond"><div class="tex">${d.c||''}</div></div>
           ${long?'<p class="vlong-hint">Решение записывай на листе. Баллы поставишь себе сам по критериям после завершения.</p>'
-            :`<input class="v-input" type="text" inputmode="decimal" placeholder="Ответ" data-vi="${i}" autocomplete="off">`}
+            :`<div class="v-ans"><input class="v-input" type="text" inputmode="decimal" placeholder="Ответ" data-vi="${i}" autocomplete="off"><button class="ans-sign" type="button" data-sign aria-label="Сменить знак">±</button></div>`}
         </div>`;}).join('')}
       <div style="text-align:center;margin-top:8px"><button class="btn primary" data-vfinish>Завершить вариант</button></div>
     </div>`;
@@ -3466,6 +3555,7 @@ appEl.addEventListener('click',e=>{
        там — значит показать пустоту под последней карточкой отбора. */
     if(ch.closest('.task-done')){const f=document.querySelector('.filters');if(f)scrollToEl(f,false);}
     return;}
+  const vhr=e.target.closest('[data-vhrow]'); if(vhr){toggleHistRow(vhr);return;}
   const vhc=e.target.closest('[data-vhclear]');
   if(vhc){ask({title:'Очистить историю пробников?',
     text:'Список попыток и график будут удалены. Прогресс по заданиям останется.',
@@ -3550,6 +3640,14 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&hintOv.classList.contains('open'))closeSheet(false);});
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
+/* Sign toggle for touch keyboards without a minus key. pointerdown is
+   cancelled so the input keeps focus and the keypad stays open. */
+appEl.addEventListener('pointerdown',e=>{if(e.target.closest('[data-sign]'))e.preventDefault();});
+appEl.addEventListener('click',e=>{const b=e.target.closest('[data-sign]');if(!b)return;
+  const inp=b.parentElement.querySelector('.ans-input,.v-input');if(!inp)return;
+  inp.value=inp.value.startsWith('-')?inp.value.slice(1):'-'+inp.value;
+  inp.focus();
+  try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(_){}});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
   if(inp){e.preventDefault();const b=appEl.querySelector('[data-check="'+inp.dataset.id+'"]');if(b)b.click();}});
 backEl.addEventListener('click',()=>go('#/'));
