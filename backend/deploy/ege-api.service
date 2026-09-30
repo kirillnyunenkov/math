@@ -1,0 +1,22 @@
+# PocketBase backend of the EGE trainer (api.kirillnyun.space).
+[Unit]
+Description=EGE trainer API (PocketBase)
+After=network.target
+
+[Service]
+Type=simple
+User=egeapi
+Group=egeapi
+WorkingDirectory=/opt/ege-api
+ExecStart=/opt/ege-api/pocketbase serve --http 127.0.0.1:8091 --dir /opt/ege-api/pb_data --migrationsDir /opt/ege-api/pb_migrations --origins https://kirillnyunenkov.github.io
+Restart=always
+RestartSec=3
+LimitNOFILE=4096
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/ege-api/pb_data
+
+[Install]
+WantedBy=multi-user.target

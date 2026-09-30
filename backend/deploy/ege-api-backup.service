@@ -1,0 +1,6 @@
+[Unit]
+Description=Backup of the EGE trainer API data
+
+[Service]
+Type=oneshot
+ExecStart=/opt/ege-api/backup.sh
