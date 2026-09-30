@@ -2783,7 +2783,9 @@ let lastHubShare=null;
 function renderHub(){
   setBack(false);
   let allG=0,allO=0,allB=0,total=0;
-  TASKS.filter(t=>!t.hidden).forEach(t=>{const c=countTask(t.n);allG+=c.g;allO+=c.o;allB+=c.b;total+=displayCount(t.n);});
+  /* The hub bar tracks part 1 only; part 2 has its own cards below. */
+  const P1=HUB_PARTS[0];
+  TASKS.filter(t=>!t.hidden&&t.n>=P1.from&&t.n<=P1.to).forEach(t=>{const c=countTask(t.n);allG+=c.g;allO+=c.o;allB+=c.b;total+=displayCount(t.n);});
   const left=total-allG-allO-allB;
   const gp=total?allG/total*100:0,op=total?allO/total*100:0,bp=total?allB/total*100:0;
   /* Первый заход за сессию — сразу конечные доли: анимировать нечего,
@@ -2810,7 +2812,7 @@ function renderHub(){
     </button>`;})():'';
   const progHTML=`<div class="hub-prog">
     <div class="hub-prog-head">
-      <span class="hub-prog-label">Общий прогресс</span>
+      <span class="hub-prog-label">Прогресс по первой части</span>
       <span class="hub-prog-pct">${Math.round(gp)}%<span>освоено · ${allG} из ${total}</span></span>
     </div>
     <div class="hub-prog-bar">
