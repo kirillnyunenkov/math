@@ -1652,16 +1652,18 @@ const Sync={
     if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'))return;
     if(parseRoute().view==='variant'&&variant&&!variant.finished)return;
     render();},
-  expired(){
+  expired(disabled){
     auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
     render();
-    note('Вход больше не действует',
+    if(disabled)note('Аккаунт отключён','Преподаватель отключил этот аккаунт. Тренажёр работает как раньше, но прогресс больше не синхронизируется.');
+    else note('Вход больше не действует',
       'Преподаватель выпустил новую ссылку для входа. Попроси её — прогресс на этом устройстве сохранится.');},
   async login(loginId,secret,link){
     let r;
     try{r=await this.api('/collections/users/auth-with-password',
       {method:'POST',anon:true,body:{identity:loginId,password:secret}});}
     catch(e){note('Нет связи','Не получилось войти: нет интернета. Открой ссылку ещё раз, когда связь появится.');return;}
+    if(r.status===403){note('Аккаунт отключён','Преподаватель отключил этот аккаунт.');return;}
     if(r.status!==200){note('Ссылка не подошла','Возможно, преподаватель выпустил новую. Попроси актуальную ссылку.');return;}
     const rec=r.json.record,prev=auth;
     if(prev&&prev.userId!==rec.id){
@@ -1693,7 +1695,7 @@ const Sync={
   async refreshToken(){
     if(!auth||!navigator.onLine)return;
     try{const r=await this.api('/collections/users/auth-refresh',{method:'POST'});
-      if(r.status===401){this.expired();return;}
+      if(r.status===401||r.status===403){this.expired(r.status===403);return;}
       if(r.status===200){auth.token=r.json.token;auth.name=r.json.record.name||auth.name;saveJ(AUTH_KEY,auth);}
     }catch(e){}},
   logout(){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
