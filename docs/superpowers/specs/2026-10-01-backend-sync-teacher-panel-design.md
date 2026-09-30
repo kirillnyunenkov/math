@@ -118,8 +118,9 @@ cache that equals "the latest action per problem".
   the client fetches events and variants created after its last server
   cursor (`ege_cursor_v1`, server `created`), merges, re-renders if changed.
 - **First login on a device.** Existing local marks (which have no history)
-  are uploaded as `import` marks with `ts = now`, local history as
-  `variants`. Merged with whatever the server has by the same rule.
+  are uploaded as `import` marks with `ts = 1` (oldest possible), local
+  history as `variants`. They fill gaps but never override real journal
+  events, so logging in on an old device cannot wipe newer progress.
 - **Offline / server down.** Nothing changes for the student; the outbox
   waits. The service worker must not cache API responses (different origin,
   not in the cache list; verify).

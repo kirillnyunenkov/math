@@ -2,9 +2,9 @@
    При выкладке новой версии сайта поднимай VERSION (любое изменение этого файла
    заставит браузер установить новый SW и удалить старый кеш). HTML грузится
    network-first, поэтому онлайн-пользователи всегда получают свежую версию. */
-const VERSION = 'v67';
+const VERSION = 'v68';
 const CACHE = 'ege-' + VERSION;
-const SHELL = ['./', './index.html', './manifest.webmanifest',
+const SHELL = ['./', './index.html', './sync-core.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
   './logo.svg', './favicon.ico', './favicon-32.png',
   './katex/katex.min.css', './katex/katex.min.js', './katex/auto-render.min.js',
@@ -31,17 +31,20 @@ self.addEventListener('fetch', e => {
   const url = new URL(req.url);
   if (url.origin !== location.origin) return; // сторонние (шрифты и т.п.) — как есть
 
-  // HTML/навигация — свежая версия когда онлайн, кеш когда офлайн
+  // HTML/навигация — свежая версия когда онлайн, кеш когда офлайн.
+  // У каждой страницы своя запись: иначе открытая однажды панель учителя
+  // (teacher.html) подменила бы собой тренажёр в офлайне.
   if (req.mode === 'navigate') {
+    const page = url.pathname.endsWith('/teacher.html') ? './teacher.html' : './index.html';
     e.respondWith((async () => {
       try {
         const net = await fetch(req);
         const c = await caches.open(CACHE);
-        c.put('./index.html', net.clone());
+        if (net.ok) c.put(page, net.clone());
         return net;
       } catch (err) {
         const c = await caches.open(CACHE);
-        return (await c.match('./index.html')) || (await c.match('./')) || Response.error();
+        return (await c.match(page)) || (page === './index.html' && await c.match('./')) || Response.error();
       }
     })());
     return;

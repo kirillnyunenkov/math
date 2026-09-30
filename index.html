@@ -184,6 +184,12 @@
   html[data-theme="dark"] #theme .ic-moon,html[data-theme="dark"] .task-theme .ic-moon{display:none;}
   html[data-theme="dark"] #theme .ic-sun,html[data-theme="dark"] .task-theme .ic-sun{display:block;}
   .install-mobile-only{display:none!important;}
+  /* Аккаунт (виден только после входа) не должен сталкивать кнопку темы на
+     вторую строку: пока ряду тесно, имя прячется, остаётся значок — имя
+     видно в подсказке и в самом листе аккаунта. */
+  @media (min-width:761px) and (max-width:1279px){
+    #account{padding:0;width:38px;justify-content:center;flex:none;}
+    #account .acc-label{display:none;}}
   @media(max-width:760px){.install-mobile-only{display:inline-flex!important;}}
   @media(max-width:760px){:root{--card-base:330px;}}
   .burger{display:none;font:inherit;background:transparent;border:1px solid var(--line-strong);
@@ -1431,6 +1437,7 @@ var THEME_COLOR={light:'#f2efe7',dark:'#161713'};
     </button>
     <div class="stats" id="stats"></div>
     <nav class="nav-menu" id="nav-menu">
+      <button class="ghost" id="account" style="display:none"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8.5" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg> <span class="acc-label">Аккаунт</span></button>
       <button class="ghost" id="guide"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.9 2.9 0 0 1 5.6 1c0 1.9-2.8 2.4-2.8 4"/><path d="M12 17.6h.01"/></svg> Как пользоваться</button>
       <button class="ghost install-mobile-only" id="install"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M12 6.5v6m0 0 2.2-2.2M12 12.5l-2.2-2.2"/><path d="M10.5 18.5h3"/></svg> Установить приложение</button>
       <button class="ghost" id="share"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13.5a4 4 0 0 0 5.7 0l2.8-2.8a4 4 0 0 0-5.7-5.7l-1.6 1.6"/><path d="M14 10.5a4 4 0 0 0-5.7 0l-2.8 2.8a4 4 0 0 0 5.7 5.7l1.6-1.6"/></svg> <span class="share-label">Поделиться прогрессом</span></button>
@@ -1443,6 +1450,7 @@ var THEME_COLOR={light:'#f2efe7',dark:'#161713'};
   <div class="sheet" id="sheet-body"></div>
 </div>
 
+<script src="sync-core.js"></script>
 <script>
 /* ============================================================
    КОНФИГ. Это единственное, что ты правишь.
@@ -2125,8 +2133,170 @@ function dismissResetNote(){
   try{localStorage.setItem(RESET_NOTE_KEY,'1');localStorage.removeItem(STORAGE_KEY_OLD);}catch(e){}
 }
 const appEl=document.getElementById('app'), statsEl=document.getElementById('stats'), backEl=document.getElementById('back'), headerEl=document.querySelector('header');
+const accountEl=document.getElementById('account');
 const shareEl=document.getElementById('share'), resetEl=document.getElementById('reset'), guideEl=document.getElementById('guide'), installEl=document.getElementById('install');
 function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
+
+/* ---- аккаунт и синхронизация ----
+   Вход только по личной ссылке от преподавателя (#/login/<login>.<secret>).
+   Без входа тренажёр не делает ни одного сетевого запроса. После входа каждое
+   действие ложится в журнал (ege_outbox_v1) и уезжает на сервер пачками;
+   встречный журнал с других устройств сливается через SyncCore — порядок
+   прихода событий на итог не влияет. Схема: backend/README.md. */
+/* локальная разработка ходит в локальный PocketBase (backend/README.md) */
+const API=/^(localhost|127\.0\.0\.1)$/.test(location.hostname)?'http://127.0.0.1:8090/api':'https://api.kirillnyun.space/api';
+const AUTH_KEY='ege_auth_v1',OUTBOX_KEY='ege_outbox_v1',STAMPS_KEY='ege_stamps_v1',
+      CURSOR_KEY='ege_cursor_v1',VCLEAR_KEY='ege_vclear_v1';
+const loadJ=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v;}catch(e){return d;}};
+const saveJ=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
+let auth=loadJ(AUTH_KEY,null);
+function queue(c,body){const ob=loadJ(OUTBOX_KEY,[]);ob.push({c:c,b:body});saveJ(OUTBOX_KEY,ob);Sync.soon();}
+/* Своё событие сразу учитываем в штампах: иначе более старое событие
+   с другого устройства, пришедшее позже, перебило бы свежую отметку. */
+function journal(ev){
+  const r=SyncCore.applyEvents({},loadJ(STAMPS_KEY,SyncCore.newStamps()),[ev]);
+  saveJ(STAMPS_KEY,r.stamps);queue('events',ev);
+}
+const HIST_FIELDS=['uid','t','p','s','ms','total','m','q'];
+const Sync={
+  timer:null,busy:false,
+  soon(ms){clearTimeout(this.timer);this.timer=setTimeout(()=>this.run(),ms==null?1500:ms);},
+  async api(path,opt){opt=opt||{};
+    const r=await fetch(API+path,{method:opt.method||'GET',body:opt.body&&JSON.stringify(opt.body),
+      headers:Object.assign({'content-type':'application/json'},auth&&!opt.anon?{Authorization:auth.token}:{})});
+    let json=null;try{json=await r.json();}catch(e){}
+    return{status:r.status,json:json};},
+  async run(){
+    if(!auth||this.busy||!navigator.onLine)return;
+    this.busy=true;
+    try{await this.push();await this.pull();}catch(e){/* сеть пропала — повторим позже */}
+    finally{this.busy=false;}},
+  /* Пачка, повторённая после потерянного ответа, целиком падает на
+     повторном uid. Тогда шлём по одной: «уже есть» — значит доставлено. */
+  async push(){
+    for(;;){
+      const ob=loadJ(OUTBOX_KEY,[]);if(!ob.length)return;
+      const chunk=ob.slice(0,200),done=new Set();
+      const body=x=>Object.assign({},x.b,{user:auth.userId});
+      const r=await this.api('/batch',{method:'POST',body:{requests:chunk.map(x=>(
+        {method:'POST',url:'/api/collections/'+x.c+'/records',body:body(x)}))}});
+      if(r.status===401){this.expired();return;}
+      if(r.status===200)chunk.forEach(x=>done.add(x.b.uid));
+      else if(r.status===400){
+        for(const x of chunk){
+          const one=await this.api('/collections/'+x.c+'/records',{method:'POST',body:body(x)});
+          if(one.status>=500||one.status===429)break;
+          /* 400 на повторном uid — уже доставлено; иной 400 не пройдёт
+             никогда, держать его в очереди значит застрять навсегда. */
+          if(one.status===200||one.status===400)done.add(x.b.uid);
+        }
+      }else return;
+      if(!done.size)return;
+      saveJ(OUTBOX_KEY,loadJ(OUTBOX_KEY,[]).filter(x=>!done.has(x.b.uid)));
+    }},
+  async fetchNew(c,cur){
+    const out=[];let max=cur[c]||'';
+    for(let page=1;;page++){
+      const f=encodeURIComponent(`user="${auth.userId}"`+(cur[c]?` && created >= "${cur[c]}"`:''));
+      const r=await this.api(`/collections/${c}/records?filter=${f}&sort=created&perPage=500&page=${page}&skipTotal=1`);
+      if(r.status===401){this.expired();return null;}
+      if(r.status!==200)return null;
+      for(const it of r.json.items){out.push(it);if(it.created>max)max=it.created;}
+      if(r.json.items.length<500)break;
+    }
+    cur[c]=max;return out;},
+  async pull(){
+    const cur=loadJ(CURSOR_KEY,{});
+    const evs=await this.fetchNew('events',cur);if(!evs||!auth)return;
+    const vs=await this.fetchNew('variants',cur);if(!vs)return;
+    const cl=await this.fetchNew('variant_clears',cur);if(!cl)return;
+    let changed=false;
+    if(evs.length){
+      const r=SyncCore.applyEvents(state,loadJ(STAMPS_KEY,SyncCore.newStamps()),evs);
+      saveJ(STAMPS_KEY,r.stamps);
+      if(r.changed){state=r.state;save();changed=true;}
+    }
+    if(vs.length||cl.length){
+      let vclear=+(localStorage.getItem(VCLEAR_KEY)||0);
+      cl.forEach(c=>{if(c.ts>vclear)vclear=c.ts;});
+      try{localStorage.setItem(VCLEAR_KEY,String(vclear));}catch(e){}
+      const inc=vs.map(v=>{const o={};HIST_FIELDS.forEach(k=>{if(v[k]!=null)o[k]=v[k];});return o;});
+      const before=JSON.stringify(loadHistory());
+      const merged=SyncCore.mergeVariants(loadHistory(),inc,vclear?[{ts:vclear}]:[]);
+      if(JSON.stringify(merged)!==before){saveHistory(merged);changed=true;}
+    }
+    saveJ(CURSOR_KEY,cur);
+    if(changed)this.refresh();},
+  /* Перерисовываем, только если ученик сейчас ничего не вводит и не решает
+     пробник: данные уже сохранены, экран догонит при следующем переходе. */
+  refresh(){
+    const a=document.activeElement;
+    if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'))return;
+    if(parseRoute().view==='variant'&&variant&&!variant.finished)return;
+    render();},
+  expired(){
+    auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
+    render();
+    note('Вход больше не действует',
+      'Преподаватель выпустил новую ссылку для входа. Попроси её — прогресс на этом устройстве сохранится.');},
+  async login(loginId,secret,link){
+    let r;
+    try{r=await this.api('/collections/users/auth-with-password',
+      {method:'POST',anon:true,body:{identity:loginId,password:secret}});}
+    catch(e){note('Нет связи','Не получилось войти: нет интернета. Открой ссылку ещё раз, когда связь появится.');return;}
+    if(r.status!==200){note('Ссылка не подошла','Возможно, преподаватель выпустил новую. Попроси актуальную ссылку.');return;}
+    const rec=r.json.record,prev=auth;
+    if(prev&&prev.userId!==rec.id){
+      const y=await ask({title:'Войти другим учеником?',
+        text:'На этом устройстве уже выполнен вход ('+escapeHtml(prev.name)+'). Его отметки здесь будут заменены прогрессом '+escapeHtml(rec.name)+'.',
+        ok:'Войти'});
+      if(!y)return;
+    }
+    const known=loadJ('ege_auth_last_user',null);
+    const same=known===rec.id;
+    auth={token:r.json.token,userId:rec.id,name:rec.name||rec.login,role:rec.role,link:link,
+      device:(prev&&prev.device)||SyncCore.uid().slice(0,8)};
+    saveJ(AUTH_KEY,auth);
+    if(!same){
+      /* Другой ученик на этом устройстве: его журнал к нам не относится. */
+      if(known!==null){state={};save();saveHistory([]);}
+      saveJ(OUTBOX_KEY,[]);saveJ(STAMPS_KEY,SyncCore.newStamps());saveJ(CURSOR_KEY,{});
+      try{localStorage.removeItem(VCLEAR_KEY);}catch(e){}
+      /* Отметки, сделанные до входа, дополняют журнал, но не перебивают его. */
+      SyncCore.importEvents(state,{device:auth.device}).forEach(journal);
+      const hs=loadHistory();
+      hs.forEach(h=>{if(!h.uid)h.uid=SyncCore.uid();queue('variants',h);});
+      saveHistory(hs);
+    }
+    saveJ('ege_auth_last_user',rec.id);
+    render();
+    note('Вход выполнен','Привет, '+escapeHtml(auth.name)+'! Теперь прогресс сохраняется и на других устройствах.');
+    this.soon(0);},
+  async refreshToken(){
+    if(!auth||!navigator.onLine)return;
+    try{const r=await this.api('/collections/users/auth-refresh',{method:'POST'});
+      if(r.status===401){this.expired();return;}
+      if(r.status===200){auth.token=r.json.token;auth.name=r.json.record.name||auth.name;saveJ(AUTH_KEY,auth);}
+    }catch(e){}},
+  logout(){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
+};
+window.addEventListener('online',()=>Sync.soon(0));
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')Sync.soon(0);});
+setInterval(()=>{if(document.visibilityState==='visible')Sync.soon(0);},60000);
+function accountSheet(){
+  if(!auth)return;
+  return new Promise(res=>{sheetResolve=res;
+    showSheet(`<h3>${escapeHtml(auth.name)}</h3><p class="ih-sub">Прогресс сохраняется на сервере. Чтобы продолжить на другом устройстве, открой там свою ссылку для входа.</p>`+
+      `<button class="sheet-go" data-sheet="copy">Скопировать ссылку для другого устройства</button>`+
+      `<div class="sheet-actions" style="margin-top:10px"><button class="sheet-btn" data-sheet="logout">Выйти</button><button class="sheet-btn" data-sheet="0">Закрыть</button></div>`);
+  }).then(v=>{
+    if(v==='copy')navigator.clipboard.writeText(auth.link).then(
+      ()=>note('Ссылка скопирована','Открой её на другом устройстве. Никому её не пересылай — по ней входят в твой аккаунт.'),
+      ()=>prompt('Твоя ссылка для входа:',auth.link));
+    else if(v==='logout')ask({title:'Выйти из аккаунта?',
+      text:'Отметки на этом устройстве останутся, но перестанут синхронизироваться.',ok:'Выйти'}).then(y=>{if(y)Sync.logout();});
+  });
+}
 /* Где ученик остановился в прошлый раз. Отдельный ключ, а не поле в state:
    state целиком уезжает в ссылку «поделиться прогрессом», и чужая закладка
    на чужом прототипе там не нужна. Хранится только последнее место — не
@@ -2365,8 +2535,9 @@ function refreshCard(n,id){const st=(state[n]||{})[id]||'';const card=document.g
   if(!card)return;card.className='card'+(st?' is-'+st:'');
   card.querySelectorAll('[data-mark]').forEach(b=>{const on=b.dataset.mark===st;
     b.classList.toggle('on',on);b.setAttribute('aria-pressed',on);});}
-function recordStatus(n,id,status){const ts=taskState(n);if(status)ts[id]=status;else delete ts[id];}
-function setStatus(n,id,status){
+function recordStatus(n,id,status,meta){const ts=taskState(n);if(status)ts[id]=status;else delete ts[id];
+  if(auth)journal(SyncCore.markEvent(n,id,status,{source:(meta&&meta.source)||'manual',given:meta&&meta.given,device:auth.device}));}
+function setStatus(n,id,status,meta){
   /* Карточка, которую только что отметили, остаётся на месте до следующего
      переключения фильтра. Раньше applyFilter прятал её сразу: при фильтре
      «Не решал» нажатие «Умею» убирало карточку из-под пальца, а всё, что
@@ -2374,7 +2545,7 @@ function setStatus(n,id,status){
      карточка исчезала раньше, чем ученик успевал прочитать «Правильно».
      Отметка и так видна: сегмент подсвечен, левый кант карточки сменил цвет. */
   filterKeep.add(id);
-  recordStatus(n,id,status);save();refreshCard(n,id);refreshCell(n,id);
+  recordStatus(n,id,status,meta);save();refreshCard(n,id);refreshCell(n,id);
   syncTaskDone(n);applyFilter();}
 
 // --- фильтр по статусу внутри задания ---
@@ -2602,7 +2773,11 @@ function ensureAll(ns,cb){let left=ns.length;if(!left){cb();return;}ns.forEach(n
 const HIST_KEY='ege_variants_v1';
 function loadHistory(){try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}catch(e){return[];}}
 function saveHistory(a){try{localStorage.setItem(HIST_KEY,JSON.stringify(a));}catch(e){}}
-function pushHistory(rec){const a=loadHistory();a.push(rec);if(a.length>50)a.splice(0,a.length-50);saveHistory(a);}
+function pushHistory(rec){rec.uid=SyncCore.uid();const a=loadHistory();a.push(rec);if(a.length>50)a.splice(0,a.length-50);saveHistory(a);
+  if(auth)queue('variants',rec);}
+function clearHistory(){saveHistory([]);const c={uid:SyncCore.uid(),ts:Date.now()};
+  try{localStorage.setItem(VCLEAR_KEY,String(c.ts));}catch(e){}
+  if(auth)queue('variant_clears',c);}
 
 // компактная упаковка истории в ссылку (отдельный параметр &h=)
 function packBits(list){const by=[];let cur=0,fill=0;
@@ -3169,6 +3344,8 @@ function render(){
   shareEl.style.display=progCtrls?'':'none';
   resetEl.style.display=progCtrls?'':'none';
   guideEl.style.display=(r.view==='help')?'none':'';
+  accountEl.style.display=auth?'':'none';
+  if(auth){accountEl.querySelector('.acc-label').textContent=auth.name;accountEl.title=auth.name;}
   if(r.view==='help'||isStandalone()){installEl.style.setProperty('display','none','important');}else{installEl.style.removeProperty('display');}
   if(r.view==='help')renderHelp();
   else if(r.view==='variant')renderVariant();
@@ -3314,7 +3491,8 @@ function completeVariant(){
   variant.items.forEach(it=>{const mx=itemMax(it.n);pts+=it.pts;max+=mx;
     const cur=(state[it.n]||{})[it.id],full=it.pts>=mx;
     if(!isLongAns(it.n))it.ok=full;
-    recordStatus(it.n,it.id, full ? ((cur==='b'||cur==='o')?'o':'g') : it.pts>0 ? 'o' : 'b');
+    recordStatus(it.n,it.id, full ? ((cur==='b'||cur==='o')?'o':'g') : it.pts>0 ? 'o' : 'b',
+      isLongAns(it.n)?{source:'manual'}:{source:'check',given:it.given||''});
   });
   save();variant.finished=true;
   /* q: per-task results [n, id, pts, given] — lets the history show where
@@ -3514,13 +3692,13 @@ appEl.addEventListener('click',e=>{
     const correct=plainAnswer(((window.TASKDATA[it.n]||[])[it.id-1]||{}).a),cur=(state[it.n]||{})[it.id];
     if(answersEqual(raw,correct)){
       input.classList.remove('wrong');input.classList.add('correct');reanim(input,'pop');
-      if(cur==='b'||cur==='o'){msg.textContent='Правильно! Отметь «умею», когда закрепишь';recordStatus(it.n,it.id,'o');}
-      else{msg.textContent='Правильно';recordStatus(it.n,it.id,'g');}
+      if(cur==='b'||cur==='o'){msg.textContent='Правильно! Отметь «умею», когда закрепишь';recordStatus(it.n,it.id,'o',{source:'check',given:raw});}
+      else{msg.textContent='Правильно';recordStatus(it.n,it.id,'g',{source:'check',given:raw});}
       msg.className='ans-msg ok';reanim(msg,'flash');
     }else{
       input.classList.remove('correct');input.classList.add('wrong');
       msg.textContent='Неправильно';msg.className='ans-msg no';
-      reanim(input,'shake');reanim(msg,'flash');recordStatus(it.n,it.id,'b');
+      reanim(input,'shake');reanim(msg,'flash');recordStatus(it.n,it.id,'b',{source:'check',given:raw});
     }
     save();refreshTrainCard(i);return;}
   const tsol=e.target.closest('[data-tsol]');
@@ -3559,7 +3737,7 @@ appEl.addEventListener('click',e=>{
   const vhc=e.target.closest('[data-vhclear]');
   if(vhc){ask({title:'Очистить историю пробников?',
     text:'Список попыток и график будут удалены. Прогресс по заданиям останется.',
-    ok:'Очистить',danger:true}).then(y=>{if(y){saveHistory([]);renderVariant();}});return;}
+    ok:'Очистить',danger:true}).then(y=>{if(y){clearHistory();renderVariant();}});return;}
   const t=e.target.closest('[data-go]'); if(t){go('#/t/'+t.dataset.go);return;}
   const mk=e.target.closest('[data-mark]');
   if(mk){const r=parseRoute();if(r.view!=='task')return;const ts=taskState(r.n),id=+mk.dataset.id,m=mk.dataset.mark;
@@ -3582,10 +3760,10 @@ appEl.addEventListener('click',e=>{
       const cur=(state[n]||{})[id];
       if(!noStatus&&(cur==='b'||cur==='o')){
         msg.textContent='Правильно! Отметь «умею решать», когда закрепишь';msg.className='ans-msg ok';
-        setStatus(n,id,'o');
+        setStatus(n,id,'o',{source:'check',given:rawGiven});
       }else{
         msg.textContent='Правильно';msg.className='ans-msg ok';
-        if(!noStatus)setStatus(n,id,'g');
+        if(!noStatus)setStatus(n,id,'g',{source:'check',given:rawGiven});
       }
       reanim(msg,'flash');
       /* Пауза длиннее, чем у отметки: «Правильно» надо успеть прочитать.
@@ -3596,7 +3774,7 @@ appEl.addEventListener('click',e=>{
       input.classList.remove('correct');input.classList.add('wrong');
       msg.textContent='Неправильно';msg.className='ans-msg no';
       reanim(input,'shake');reanim(msg,'flash');
-      if(!noStatus){setStatus(n,id,'b');saveLast(n,id);}
+      if(!noStatus){setStatus(n,id,'b',{source:'check',given:rawGiven});saveLast(n,id);}
     }
     return;}
   const sm=e.target.closest('[data-similar]');
@@ -3629,10 +3807,11 @@ function toggleTheme(){
 }
 document.getElementById('theme').addEventListener('click',toggleTheme);
 document.getElementById('install').addEventListener('click',()=>doInstall());
+accountEl.addEventListener('click',()=>accountSheet());
 const hintOv=document.getElementById('sheet-ov');
 hintOv.addEventListener('click',e=>{
   const b=e.target.closest('[data-sheet]');
-  if(b){closeSheet(b.dataset.sheet==='1');return;}
+  if(b){const v=b.dataset.sheet;closeSheet(v==='1'?true:v==='0'?false:v);return;}
   /* клик по затемнению и по «Понятно» у подсказок без data-sheet */
   if(e.target===hintOv||e.target.classList.contains('sheet-go'))closeSheet(false);
 });
@@ -3667,22 +3846,36 @@ document.getElementById('reset').addEventListener('click',()=>{const r=parseRout
   if(r.view==='task')
     ask({title:'Сбросить прогресс по заданию '+r.n+'?',
       text:'Отметки по всем прототипам этого задания будут сняты. Остальные задания не тронутся.',
-      ok:'Сбросить',danger:true}).then(y=>{if(y){state[r.n]={};save();saveLast(r.n,null);renderTask(r.n);}});
+      ok:'Сбросить',danger:true}).then(y=>{if(y){state[r.n]={};save();saveLast(r.n,null);
+        if(auth)journal(SyncCore.resetEvent(r.n,{device:auth.device}));renderTask(r.n);}});
   else
     ask({title:'Сбросить весь прогресс?',
       text:'Отметки по всем заданиям будут сняты. История пробников останется.',
-      ok:'Сбросить всё',danger:true}).then(y=>{if(y){state={};save();clearLast();renderHub();}});});
+      ok:'Сбросить всё',danger:true}).then(y=>{if(y){state={};save();clearLast();
+        if(auth)journal(SyncCore.resetEvent(0,{device:auth.device}));renderHub();}});});
 const burgerEl=document.getElementById('burger'),navMenuEl=document.getElementById('nav-menu');
 burgerEl.addEventListener('click',e=>{e.stopPropagation();navMenuEl.classList.toggle('open');});
 navMenuEl.addEventListener('click',()=>navMenuEl.classList.remove('open'));
 document.addEventListener('click',()=>navMenuEl.classList.remove('open'));
-window.addEventListener('hashchange',render);
+/* Ссылку для входа могут открыть и в уже запущенном тренажёре — тогда
+   страница не перезагружается, приходит только смена hash. */
+function loginFromHash(){
+  const lm=location.hash.match(/^#\/login\/([a-z0-9_-]+)\.([A-Za-z0-9]+)$/);
+  if(!lm)return false;
+  const link=location.origin+location.pathname+location.hash;
+  /* секрет не должен оставаться в адресной строке и истории */
+  history.replaceState(null,'',location.pathname);
+  render();Sync.login(lm[1],lm[2],link);return true;
+}
+window.addEventListener('hashchange',()=>{if(!loginFromHash())render();});
 // PWA
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;
   const r=parseRoute();if(r.view==='hub'||r.view==='help')render();});
 window.addEventListener('appinstalled',()=>{deferredPrompt=null;render();});
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 window.addEventListener('DOMContentLoaded',()=>{
+  if(loginFromHash())return;
+  if(auth)Sync.refreshToken().then(()=>Sync.soon(0));
   const params=new URLSearchParams(location.search);
   const sp=params.get('p'),hp=params.get('h');
   if(sp||hp){
@@ -3690,7 +3883,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     const hasProgress=Object.values(state).some(o=>Object.keys(o||{}).length>0);
     const apply=proceed=>{
       if(proceed){
-        if(inc){state=inc;save();}
+        if(inc){state=inc;save();
+          if(auth)SyncCore.snapshotEvents(inc,{device:auth.device}).forEach(journal);}
         if(incH){mergeHistory(incH);}
       }
       history.replaceState(null,'',location.pathname);
