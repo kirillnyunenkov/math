@@ -634,6 +634,14 @@
   .ans-input.correct{border-color:var(--ok);background:var(--ok-soft);color:var(--ok-text);font-weight:600;}
   .ans-input.wrong{border-color:var(--err);background:var(--err-soft);color:var(--err-text);font-weight:600;}
   .v-input{width:180px;margin-top:var(--s3);}
+  /* iOS decimal keypad has no minus key, so touch devices get a sign toggle
+     next to the field. Hidden where a hardware keyboard is the norm. */
+  .v-ans{display:flex;align-items:center;gap:var(--s2);margin-top:var(--s3);}
+  .v-ans .v-input{margin-top:0;}
+  .ans-sign{display:none;font:inherit;font-size:1.3em;line-height:1;font-weight:600;min-width:44px;min-height:44px;
+    padding:0;border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--input-bg);
+    color:var(--ink);cursor:pointer;touch-action:manipulation;}
+  @media (pointer:coarse){.ans-sign{display:inline-flex;align-items:center;justify-content:center;}}
   .ans-msg{font-size:var(--fs-sm);font-weight:600;display:inline-flex;align-items:center;gap:5px;}
   .ans-msg.ok{color:var(--ok-text);}
   .ans-msg.no{color:var(--err-text);}
@@ -1002,7 +1010,7 @@
     /* 320px: доступно 238px, на отступы по 12px их уже не хватает */
     @media (max-width:359px){.marks .btn{padding:0 var(--s2);}}
     .lnk{min-height:44px;}
-    .ans-input,.v-input{min-height:44px;flex:1;min-width:140px;width:auto;}
+    .ans-input,.v-input{min-height:44px;flex:1;min-width:120px;width:auto;}
   }
 
   /* ============================================================
@@ -2963,7 +2971,7 @@ function renderTask(n){
   const pl=protoList(n);
   const acHTML=id=>{const ansTxt=task.mode==='html'&&!isLongAns(n)?plainAnswer((data[id-1]||{}).a):'';
     return ansTxt?`<div class="answer-check">
-          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
+          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off"><button class="ans-sign" type="button" data-sign aria-label="Сменить знак">±</button>
           <button class="btn check" data-check="${id}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span>
         </div>`:'';};
@@ -3058,7 +3066,7 @@ function renderTask(n){
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
   const ansTxt=isLongAns(n)?'':plainAnswer(d.a);
   const ac=ansTxt?`<div class="answer-check">
-      <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
+      <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off"><button class="ans-sign" type="button" data-sign aria-label="Сменить знак">±</button>
       <button class="btn check" data-check="${id}" data-nostatus="1">Проверить</button>
       <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
   return `<div class="subcard">
@@ -3310,7 +3318,7 @@ function renderTraining(){
       const st=(state[it.n]||{})[it.id]||'',c=st?'is-'+st:'';
       const ansTxt=isLongAns(it.n)?'':plainAnswer(d.a);
       const ac=ansTxt?`<div class="answer-check">
-          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off">
+          <input class="ans-input" type="text" inputmode="decimal" placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off"><button class="ans-sign" type="button" data-sign aria-label="Сменить знак">±</button>
           <button class="btn check" data-tcheck="${i}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
       return `<div class="vcard ${c}" id="tcard-${i}" data-n="${it.n}">
@@ -3345,7 +3353,7 @@ function renderVariant(){
           <div class="vlabel">Задание ${it.n}${long?`<span class="vlabel-art"> · максимум ${mx} ${ballWord(mx)}</span>`:''}</div>
           <div class="cond"><div class="tex">${d.c||''}</div></div>
           ${long?'<p class="vlong-hint">Решение записывай на листе. Баллы поставишь себе сам по критериям после завершения.</p>'
-            :`<input class="v-input" type="text" inputmode="decimal" placeholder="Ответ" data-vi="${i}" autocomplete="off">`}
+            :`<div class="v-ans"><input class="v-input" type="text" inputmode="decimal" placeholder="Ответ" data-vi="${i}" autocomplete="off"><button class="ans-sign" type="button" data-sign aria-label="Сменить знак">±</button></div>`}
         </div>`;}).join('')}
       <div style="text-align:center;margin-top:8px"><button class="btn primary" data-vfinish>Завершить вариант</button></div>
     </div>`;
@@ -3550,6 +3558,14 @@ document.addEventListener('keydown',e=>{
   if(e.key==='Escape'&&hintOv.classList.contains('open'))closeSheet(false);});
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
+/* Sign toggle for touch keyboards without a minus key. pointerdown is
+   cancelled so the input keeps focus and the keypad stays open. */
+appEl.addEventListener('pointerdown',e=>{if(e.target.closest('[data-sign]'))e.preventDefault();});
+appEl.addEventListener('click',e=>{const b=e.target.closest('[data-sign]');if(!b)return;
+  const inp=b.parentElement.querySelector('.ans-input,.v-input');if(!inp)return;
+  inp.value=inp.value.startsWith('-')?inp.value.slice(1):'-'+inp.value;
+  inp.focus();
+  try{inp.setSelectionRange(inp.value.length,inp.value.length);}catch(_){}});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
   if(inp){e.preventDefault();const b=appEl.querySelector('[data-check="'+inp.dataset.id+'"]');if(b)b.click();}});
 backEl.addEventListener('click',()=>go('#/'));
