@@ -289,6 +289,20 @@
   .hub-go:hover .hg-act{background:var(--accent-hover);}
   .hub-go:active .hg-act{transform:translateY(1px);}
   .hub-go .hg-act .ic{transition:transform var(--dur) var(--ease);}
+  /* «Работа над ошибками» — вторая строка той же сводки, без своей заливки:
+     акцент остаётся на кнопке «Продолжить», а эта строка видна, только
+     когда есть что разбирать. */
+  .hub-fix{display:flex;align-items:center;gap:var(--s3);width:100%;min-height:44px;
+    text-align:left;font:inherit;font-size:var(--fs-sm);color:var(--ink-2);cursor:pointer;
+    background:none;border:none;border-top:1px solid var(--line);
+    margin-top:var(--s4);padding:var(--s3) 0 0;}
+  .hub-fix b{display:block;color:var(--ink);font-weight:600;}
+  .hub-fix .hx-body{min-width:0;}
+  .hub-fix .hx-body span{display:block;margin-top:2px;font-variant-numeric:tabular-nums;}
+  .hub-fix .dot{flex:none;}
+  .hub-fix .hx-act{margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:6px;
+    color:var(--accent);font-weight:600;white-space:nowrap;}
+  .hub-fix:hover .hx-act{text-decoration:underline;}
   .hub-go:hover .hg-act .ic{transform:translateX(2px);}
 
   /* сетка заданий */
@@ -1458,6 +1472,7 @@ var THEME_COLOR={light:'#f2efe7',dark:'#161713'};
 </div>
 
 <script src="sync-core.js"></script>
+<script src="mistakes-core.js"></script>
 <script src="config.js"></script>
 <script>
 
@@ -2523,6 +2538,12 @@ function renderHub(){
       </span>
       <span class="hg-act">${verb} <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5 18.5 12 13 17.5"/></svg></span>
     </button>`;})():'';
+  const fixN=fixGroups().length;
+  const fixHTML=fixN?`<button class="hub-fix" data-fix>
+      <i class="dot b"></i>
+      <span class="hx-body"><b>Работа над ошибками</b><span>${fixN} ${taskWord(fixN)} на разбор</span></span>
+      <span class="hx-act">Разобрать <svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5 18.5 12 13 17.5"/></svg></span>
+    </button>`:'';
   const progHTML=`<div class="hub-prog">
     <div class="hub-prog-head">
       <span class="hub-prog-label">Прогресс по первой части</span>
@@ -2540,6 +2561,7 @@ function renderHub(){
       <span><i class="dot n"></i> Осталось <b>${left}</b></span>
     </div>
     ${goHTML}
+    ${fixHTML}
   </div>`;
   const noteHTML=resetNote?`<div class="hub-note">
       <svg class="ic hn-ico" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><path d="M12 7.6v.9"/></svg>
@@ -2934,6 +2956,29 @@ function buildVariant(){
     scrollTop();renderVariant();
   });
 }
+/* ---- работа над ошибками ----
+   Набор для тренировки собирается сам: по одной похожей задаче на каждый
+   прототип с отметкой «Разобраться» (правило — в mistakes-core.js). Решил
+   похожую — исходные отметки становятся «Повторить» и прототип уходит из
+   набора. */
+const FIX_LIMIT=10;
+const taskWord=k=>{const a=k%10,b=k%100;return a===1&&b!==11?'задача':a>=2&&a<=4&&(b<12||b>14)?'задачи':'задач';};
+function fixGroups(){const pls={},act=new Set(activeTasks().map(t=>t.n));
+  return MistakesCore.groups(state,{groupOf:(n,pid)=>{
+    const pl=pls[n]||(pls[n]=protoList(n)||[]),g=pl.find(x=>x.ids.includes(pid));return g?g.ids:null;}})
+    .filter(g=>act.has(g.n));}
+function buildFix(){
+  const groups=fixGroups();
+  if(!groups.length){variant=null;note('Ошибок не осталось','Все задачи с отметкой «Разобраться» отработаны.').then(()=>go('#/'));return;}
+  const items=MistakesCore.pick(groups,state,FIX_LIMIT);
+  ensureAll([...new Set(items.map(x=>x.n))],()=>{
+    variant={items,mode:'train',fix:true,started:true,finished:false,startAt:Date.now(),elapsed:0};
+    if(/#\/v\b/.test(location.hash)){scrollTop();renderVariant();}else go('#/v');
+  });
+}
+/* Returns how many original marks were closed by solving item `it`. */
+function closeFix(it){if(!variant||!variant.fix)return 0;
+  const ids=MistakesCore.closed(state,it);ids.forEach(id=>recordStatus(it.n,id,'o'));return ids.length;}
 function finishVariant(){
   variant.elapsed=Date.now()-variant.startAt;
   variant.items.forEach((it,i)=>{
@@ -3031,10 +3076,10 @@ function renderTraining(){
   const items=variant.items;
   const html=`<div class="vbox">
     <div class="vbar">
-      <span class="vtimer" style="font-size:var(--fs-md);display:inline-flex;align-items:center;gap:7px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.2 21 8.6l-9 4.4-9-4.4 9-4.4Z"/><path d="M6.5 10.6v4.6c0 1.5 2.5 2.8 5.5 2.8s5.5-1.3 5.5-2.8v-4.6"/></svg> Тренировка</span>
-      <span class="vprog">${items.length} ${items.length===1?'задача':'задач'}</span>
+      <span class="vtimer" style="font-size:var(--fs-md);display:inline-flex;align-items:center;gap:7px"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4.2 21 8.6l-9 4.4-9-4.4 9-4.4Z"/><path d="M6.5 10.6v4.6c0 1.5 2.5 2.8 5.5 2.8s5.5-1.3 5.5-2.8v-4.6"/></svg> ${variant.fix?'Работа над ошибками':'Тренировка'}</span>
+      <span class="vprog">${items.length} ${variant.fix?taskWord(items.length):items.length===1?'задача':'задач'}</span>
       <span class="spacer"></span>
-      <button class="btn" data-newbuild>Новый набор</button>
+      <button class="btn" data-newbuild>${variant.fix?'Ещё ошибки':'Новый набор'}</button>
       <button class="btn primary" data-home>К заданиям</button>
     </div>
     ${items.map((it,i)=>{const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
@@ -3144,11 +3189,14 @@ appEl.addEventListener('click',e=>{
   const dec=e.target.closest('[data-dec]'); if(dec){bumpBuilder(+dec.dataset.dec,-1);return;}
   const pr=e.target.closest('[data-preset]'); if(pr){applyPreset(pr.dataset.preset);return;}
   const bd=e.target.closest('[data-build]'); if(bd){buildVariant();return;}
-  const nb=e.target.closest('[data-newbuild]'); if(nb){variant=null;scrollTop();renderVariant();return;}
+  const fx=e.target.closest('[data-fix]'); if(fx){buildFix();return;}
+  const nb=e.target.closest('[data-newbuild]');
+  if(nb){if(variant&&variant.fix){buildFix();return;}
+    variant=null;scrollTop();renderVariant();return;}
   // --- тренировка: отметка статуса, проверка ответа, показать ответ ---
   const tm=e.target.closest('[data-tmark]');
   if(tm){const i=+tm.dataset.ti,it=variant.items[i],cur=(state[it.n]||{})[it.id],m=tm.dataset.tmark;
-    recordStatus(it.n,it.id,cur===m?null:m);save();refreshTrainCard(i);return;}
+    recordStatus(it.n,it.id,cur===m?null:m);closeFix(it);save();refreshTrainCard(i);return;}
   const tch=e.target.closest('[data-tcheck]');
   if(tch){const i=+tch.dataset.tcheck,it=variant.items[i];
     const wrap=tch.closest('.answer-check'),input=wrap.querySelector('.ans-input'),msg=wrap.querySelector('.ans-msg');
@@ -3158,6 +3206,7 @@ appEl.addEventListener('click',e=>{
       input.classList.remove('wrong');input.classList.add('correct');reanim(input,'pop');
       if(cur==='b'||cur==='o'){msg.textContent='Правильно! Отметь «умею», когда закрепишь';recordStatus(it.n,it.id,'o',{source:'check',given:raw});}
       else{msg.textContent='Правильно';recordStatus(it.n,it.id,'g',{source:'check',given:raw});}
+      if(closeFix(it))msg.textContent='Правильно! Ошибка разобрана — исходная задача теперь в «Повторить»';
       msg.className='ans-msg ok';reanim(msg,'flash');
     }else{
       input.classList.remove('correct');input.classList.add('wrong');
