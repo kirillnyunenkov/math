@@ -704,6 +704,10 @@
   .tex{font-family:'Times New Roman',serif;font-size:var(--fs-lg);color:var(--ink);
     line-height:1.4;overflow-wrap:break-word;}
   .tex .katex{font-size:1.06em;}
+  /* Text glued into a formula by glueMath: back to the size and face of the
+     surrounding text (the divisors undo the .katex font-size). */
+  .katex .mglue{font-size:calc(1em/1.21);}
+  .tex .katex .mglue{font-family:'Times New Roman',serif;font-size:calc(1em/1.06);}
   /* Inline \dfrac is taller than the line; without a margin two such lines
      stack flush and the denominator of one touches the numerator of the next
      (answer to 14.22). Margin on .base grows only the lines that hold a
@@ -1520,10 +1524,43 @@ function syncCount(n){const t=taskCfg(n);if(t&&Array.isArray(window.TASKDATA[n])
 window.TASKDATA = window.TASKDATA || {};
 function typeset(root){
   if(!root||!window.renderMathInElement)return;
+  tieDashes(root);
   try{renderMathInElement(root,{delimiters:[
     {left:'$$',right:'$$',display:true},
     {left:'$',right:'$',display:false}
   ],throwOnError:false});}catch(e){}
+  glueMath(root);
+}
+/* A dash must not start a line: make the spaces before it non-breaking
+   (the bank writes "space, thin space, dash"). Runs before the formulas
+   are rendered, while each paragraph is still plain text. */
+function tieDashes(root){
+  const tw=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  for(let t;t=tw.nextNode();){
+    const s=t.nodeValue;
+    if(/\s[—–]/.test(s))
+      t.nodeValue=s.replace(/\s+(?=[—–])/g,m=>m.replace(/[ \t\n]+/g,'\u00a0').replace(/\u2009/g,'\u202f'));
+  }
+}
+/* The edge of an inline formula is a line-break opportunity, so text set
+   flush against it could wrap away from it: the period of "$x=5$." started
+   the next line alone, "$n$-го" split before the hyphen, "(" stayed behind.
+   Move such text into the formula's outer .base: KaTeX never wraps inside
+   one, and breaks between the bases of a long formula keep working. */
+function glueMath(root){
+  const mk=s=>{const g=document.createElement('span');g.className='mglue';g.textContent=s;return g;};
+  root.querySelectorAll('.katex').forEach(k=>{
+    if(k.parentNode.classList.contains('katex-display'))return;
+    const bases=k.querySelectorAll('.katex-html>.base');
+    if(!bases.length)return;
+    const w=k.parentNode;                         // auto-render wraps each formula in a bare span
+    const nx=w.nextSibling,pv=w.previousSibling;
+    // up to the first breakable space: non-breaking ones do not hold next to a formula
+    const tail=nx&&nx.nodeType===3&&/^(?:\S|[\u00a0\u202f])+/.exec(nx.nodeValue);
+    if(tail){bases[bases.length-1].append(mk(tail[0]));nx.nodeValue=nx.nodeValue.slice(tail[0].length);}
+    const head=pv&&pv.nodeType===3&&/[(\[«„"]+$/.exec(pv.nodeValue);
+    if(head){bases[0].prepend(mk(head[0]));pv.nodeValue=pv.nodeValue.slice(0,head.index);}
+  });
 }
 const dataLoading = {};
 function ensureData(n, cb){
