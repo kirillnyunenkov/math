@@ -120,4 +120,57 @@ def t5_26():
     f.save('img/t5/sol/26.svg', width=250)
 
 
-FIGS = [t5_26, t5_32, t5_44, t5_50, t5_51]
+def t5_38():
+    # Two markers drawn in turn: blue then red, or red then blue.
+    assert abs(5 / 25 * 9 / 24 - 0.075) < 1e-12 and abs(2 * 0.075 - 0.15) < 1e-12
+    f = Fig.blank(260, 150)
+    root, blue, red, green = (130, 16), (46, 62), (140, 62), (220, 62)
+    br, bo, rb, ro = (20, 112), (72, 112), (114, 112), (166, 112)
+    f.segment(root, blue, width=1.6); f.segment(root, red, width=1.6)
+    f.segment(root, green, color=INK, width=0.8)
+    f.segment(blue, br, width=1.6); f.segment(blue, bo, color=INK, width=0.8)
+    f.segment(red, rb, width=1.6); f.segment(red, ro, color=INK, width=0.8)
+    for pt in (root, blue, red):
+        f.point(pt, r=1.8)
+    f.label(root, 'в коробке 25', dy=-5, size=7, color=INK, bold=False)
+    f.label((88, 39), '5/25', dx=-5, size=7.5, anchor='end')
+    f.label((135, 39), '9/25', dx=4, dy=4, size=7.5, anchor='start')
+    f.label((175, 39), '11/25', dx=6, size=7.5, anchor='start', color=INK, bold=False)
+    f.label(blue, 'синий', dx=-5, dy=-3, size=7, anchor='end', color=INK, bold=False)
+    f.label(red, 'красный', dx=5, dy=5, size=7, anchor='start', color=INK, bold=False)
+    f.label(green, 'зелёный', dy=10, size=7, color=INK, bold=False)
+    f.label((33, 87), '9/24', dx=-4, dy=2, size=7.5, anchor='end')
+    f.label((127, 87), '5/24', dx=-4, dy=2, size=7.5, anchor='end')
+    f.label(br, 'красный', dy=10, size=7); f.label(rb, 'синий', dy=10, size=7)
+    f.label(bo, 'другой', dy=10, size=7, color=INK, bold=False)
+    f.label(ro, 'другой', dy=10, size=7, color=INK, bold=False)
+    f.label(br, '0,075', dy=20, size=7.5); f.label(rb, '0,075', dy=20, size=7.5)
+    f.label((222, 100), 'осталось 24', size=6.5, color=INK, bold=False)
+    f.label((222, 108), 'фломастера', size=6.5, color=INK, bold=False)
+    f.save('img/t5/sol/38.svg', width=320)
+
+
+def t5_20():
+    # Shooting until the first hit: with two cartridges the target survives only on "miss, miss".
+    assert abs(0.5 * 0.5 - 0.25) < 1e-12 and 0.25 <= 0.3 < 0.5
+    f = Fig.blank(200, 132)
+    root, hit1, miss1, hit2, miss2 = (100, 14), (48, 54), (140, 54), (104, 98), (176, 98)
+    f.segment(root, hit1, color=INK, width=0.8); f.segment(root, miss1, width=1.6)
+    f.segment(miss1, hit2, color=INK, width=0.8); f.segment(miss1, miss2, width=1.6)
+    for pt in (root, miss1):
+        f.point(pt, r=1.8)
+    f.label((2, 34), '1-й выстрел', dy=2, size=6.5, color=INK, bold=False, anchor='start')
+    f.label((2, 76), '2-й выстрел', dy=2, size=6.5, color=INK, bold=False, anchor='start')
+    f.label((74, 34), '0,5', dx=4, dy=-3, size=7.5, color=INK, bold=False, anchor='end')
+    f.label((120, 34), '0,5', dx=5, dy=-1, size=7.5, anchor='start')
+    f.label((122, 76), '0,5', dx=-4, dy=-1, size=7.5, color=INK, bold=False, anchor='end')
+    f.label((158, 76), '0,5', dx=5, dy=-1, size=7.5, anchor='start')
+    f.label(hit1, 'попал', dy=10, size=7, color=INK, bold=False)
+    f.label(miss1, 'мимо', dx=6, dy=-2, size=7, anchor='start')
+    f.label(hit2, 'попал', dy=10, size=7, color=INK, bold=False)
+    f.label(miss2, 'мимо', dy=10, size=7)
+    f.label(miss2, '0,5 · 0,5 = 0,25', dx=18, dy=20, size=7, anchor='end')
+    f.save('img/t5/sol/20.svg', width=260)
+
+
+FIGS = [t5_20, t5_26, t5_32, t5_38, t5_44, t5_50, t5_51]
