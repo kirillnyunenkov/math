@@ -2770,7 +2770,9 @@ function render(){
      размера, но на первой отрисовке экрана значение нужно уже сейчас. */
   syncHeaderH();
   const progCtrls=(r.view==='hub'||r.view==='task');
-  shareEl.style.display=progCtrls?'':'none';
+  /* после входа прогресс и так общий на всех устройствах и виден
+     преподавателю — ссылка «поделиться» ничего не добавляет */
+  shareEl.style.display=progCtrls&&!auth?'':'none';
   resetEl.style.display=progCtrls?'':'none';
   guideEl.style.display=(r.view==='help')?'none':'';
   accountEl.style.display=auth?'':'none';
