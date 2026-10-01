@@ -712,6 +712,15 @@
   .tex img:not(.math){display:block;max-width:100%;margin:.5em auto;}
   .tex .center,.tex .math-display{text-align:center;}
   .tex p{margin:0 0 .5em;}
+  /* ---- разбор: идея, шаги, типичная ошибка ----
+     «Идея» — подложка цвета интерфейса. «Где ошибаются» — нейтральная:
+     тёплые цвета заняты статусами ученика, красить ими текст разбора нельзя. */
+  .tex .sol-idea,.tex .sol-trap{border-radius:var(--r-sm);padding:var(--s3) var(--s4);margin:0 0 var(--s3);}
+  .tex .sol-idea{background:var(--accent-soft);}
+  .tex .sol-trap{background:var(--surface-2);margin:var(--s3) 0 0;}
+  .tex .sol-steps{margin:0;padding-left:1.4em;}
+  .tex .sol-steps li{margin:0 0 .5em;padding-left:.2em;}
+  .tex .sol-steps li:last-child{margin-bottom:0;}
   /* ---- таблицы в условии ----
      Их приносят «Случайные величины» и финансовые задачи: там таблица —
      не оформление, а сами данные задачи, без неё условие нечитаемо.
@@ -1488,8 +1497,8 @@ function ensureData(n, cb){
   };
   document.head.appendChild(s);
 }
-/* Решения лежат отдельно от условий: они весят ~99% данных задания
-   (инлайновые SVG формул в base64), а открывает их далеко не каждый.
+/* Решения лежат отдельно от условий: открывает их далеко не каждый.
+   Разбор есть только у представителя прототипа; у похожих задач — один ответ.
    img/tN/data.js — условия и ответы, 1-6 КБ. img/tN/sol.js — решения.
    Ключи в SOLDATA — те же 1-based id, что в TASKDATA и PROTOTYPES. */
 window.SOLDATA = window.SOLDATA || {};
@@ -1919,29 +1928,25 @@ function revealToggle(btn,box,build,ensureFn){
    вместе с условием, поэтому его показываем в любом случае.
    Пустой разбор и оборванная связь — разные вещи, и путать их нельзя:
    у новых прототипов банка решение просто ещё не написано, и обещать
-   «откроется, когда сеть вернётся» было бы враньём. */
-const solInner=(ans,html,failed,elsewhere)=>`<div class="sol-inner">`+
+   «откроется, когда сеть вернётся» было бы враньём.
+   ansOnly — похожая задача: разбор пишется только для прототипа, у его
+   аналогов с другими числами показываем один ответ, без оговорок. */
+const solInner=(ans,html,failed,ansOnly)=>`<div class="sol-inner">`+
   (ans?`<span class="answer">Ответ: ${ans}</span>`:'')+
   (failed
     ?`<p class="sol-fail">Разбор не загрузился, похоже, пропала связь. Ответ выше верный, решение откроется, когда сеть вернётся.</p>`
     :html
       ?`<div class="sol-body"><div class="tex">${html}</div></div>`
-      :elsewhere
-        ?`<p class="sol-fail">Разбора именно к этим числам нет, но задача того же типа разобрана — открой «Похожие задачи».</p>`
+      :ansOnly
+        ?''
         :`<p class="sol-fail">Разбор к этой задаче я ещё не написал — здесь только ответ.</p>`)+
   `</div>`;
 /* Вторая часть (14-20): поля ввода нет, разборов нет. Ученик раскрывает
    эталонный ответ ФИПИ и сам сравнивает со своим. */
 const isLongAns=n=>n>=14;
 const ansInner=ans=>`<div class="sol-inner"><div class="answer long tex">Ответ: ${ans||'на источнике не указан'}</div></div>`;
-/* Банк иногда меняет, какой из аналогов считается прототипом. Разбор написан
-   под конкретные числа и остаётся при своей задаче, поэтому у представителя
-   его может не быть, а у соседа по прототипу — быть. Молчать об этом нельзя:
-   разбор рядом, просто на карточку ниже. */
-function solNearby(n,id){
-  const g=(protoList(n)||[]).find(g=>g.ids.includes(id));
-  return !!g&&g.ids.some(i=>i!==id&&solOf(n,i));
-}
+/* Разбор есть только у представителя прототипа (первый id группы). */
+const isProtoRep=(n,id)=>protoIds(n).includes(id);
 const solFailed=n=>window.SOLDATA[n]==='error';
 /* Та же полоска, что на карточках хаба: на телефоне она заменяет собой
    карту из 27 клеток, а карта уезжает под раскрытие. */
@@ -2755,7 +2760,7 @@ function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
     <div class="sub-num">№ ${d.art||id}</div>
     <div class="cond"><div class="tex">${d.c||''}</div></div>
     ${ac}
-    <div class="reveal">${revealLnk('sol',id,isLongAns(n)?'Ответ':'Решение')}</div>
+    <div class="reveal">${revealLnk('sol',id,'Ответ')}</div>
     <div class="solution" id="sol-${id}" data-html="1"></div>
   </div>`;}
 let variant=null, variantTimerId=null;
@@ -3136,6 +3141,7 @@ appEl.addEventListener('click',e=>{
   if(tsol){const i=+tsol.dataset.tsol,box=document.getElementById('tsol-'+i);if(!box)return;
     const it=variant.items[i],d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
     if(isLongAns(it.n)){revealToggle(tsol,box,()=>ansInner(d.a));return;}
+    if(!isProtoRep(it.n,it.id)){revealToggle(tsol,box,()=>solInner(d.a,'',false,true));return;}
     revealToggle(tsol,box,()=>solInner(d.a,solOf(it.n,it.id),solFailed(it.n)),cb=>ensureSol(it.n,cb));
     return;}
   const vpt=e.target.closest('[data-pts]');
@@ -3217,7 +3223,8 @@ appEl.addEventListener('click',e=>{
   if(sol){const id=+sol.dataset.sol,box=document.getElementById('sol-'+id),n=parseRoute().n;
     const d=(window.TASKDATA[n]||[])[id-1]||{};
     if(isLongAns(n)){revealToggle(sol,box,()=>ansInner(d.a));return;}
-    revealToggle(sol,box,()=>solInner(d.a,solOf(n,id),solFailed(n),solNearby(n,id)),
+    if(!isProtoRep(n,id)){revealToggle(sol,box,()=>solInner(d.a,'',false,true));return;}
+    revealToggle(sol,box,()=>solInner(d.a,solOf(n,id),solFailed(n)),
       cb=>ensureSol(n,cb));
     return;}
 });
