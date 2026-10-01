@@ -3,7 +3,8 @@
 """
 Solution figures: the drawing from the task statement plus highlights on top.
 
-For every entry in FIGS takes img/tN/gfx/<source>.svg, appends an overlay
+Specs live in tools/figs/tN.py (one file per task number, each with a FIGS
+list of functions). Every function takes img/tN/gfx/<source>.svg, appends an overlay
 (points, segments, shaded polygons, labels) and writes img/tN/sol/<id>.svg.
 The solution text then shows it with
     <p class="sol-fig"><img src="img/tN/sol/<id>.svg" alt="..."></p>
@@ -13,7 +14,8 @@ are read from the source SVG itself (grey grid lines, black axes), so a point
 written as (4, 2) lands exactly on the node. Geometry figures have no grid and
 are annotated in the SVG's own units (pt), with vertices taken from its paths.
 
-Run from the repo root:  python3 tools/annotate_figs.py
+Run from the repo root:  python3 tools/annotate_figs.py        # all
+                         python3 tools/annotate_figs.py t9     # one task
 """
 import os
 import re
@@ -61,7 +63,7 @@ class Fig:
             return pt
         return (self.ox + pt[0] * self.cell, self.oy - pt[1] * self.cell)
 
-    def polygon(self, pts, opacity=0.16):
+    def polygon(self, pts, opacity=0.22):
         s = ' '.join('%.2f,%.2f' % self.p(q) for q in pts)
         self.items.append(f'<polygon points="{s}" fill="{ACCENT}" fill-opacity="{opacity}" stroke="none"/>')
 
@@ -83,6 +85,10 @@ class Fig:
             f'font-size="{size}" font-weight="bold" text-anchor="{anchor}" fill="{ACCENT}" '
             f'stroke="{HALO}" stroke-width="2" stroke-linejoin="round" paint-order="stroke">{text}</text>')
 
+    def raw(self, svg_fragment):
+        """Anything the helpers do not cover (arcs, right-angle marks); units are pt."""
+        self.items.append(svg_fragment)
+
     def save(self, dst, width=300):
         """width — displayed width in px; the trainer shows the file at its own size."""
         vb = [float(v) for v in re.search(r'viewBox="([^"]+)"', self.svg).group(1).split()]
@@ -98,46 +104,45 @@ class Fig:
         print('wrote', dst)
 
 
-def t9_9():
-    # Tangent through the grid nodes (-1; 3) and (4; 2): slope = -1/5.
-    f = Fig('img/t9/gfx/derivatives-14.svg', grid=True)
-    a, b, c = (-1, 3), (4, 2), (4, 3)
-    f.polygon([a, b, c])
-    f.segment(a, c, dash='2.5 2')
-    f.segment(c, b, dash='2.5 2')
-    f.label((1.5, 3), '5 клеток вправо', dy=-3.5, size=7)
-    f.label((4, 2.5), '1 вниз', dx=3, dy=2.5, size=7, anchor='start')
-    f.point(a); f.point(b)
-    f.label(a, '(−1; 3)', dy=-5, dx=-2, size=7, anchor='end')
-    f.label(b, '(4; 2)', dy=10, size=7)
-    f.save('img/t9/sol/9.svg')
+def dots(svg_text):
+    """Marked points of a geometry drawing (zero-length round strokes), in pt."""
+    h = float(re.search(r'matrix\(0\.1, 0, 0, -0\.1, 0, ([\d.]+)\)', svg_text).group(1))
+    out = []
+    for m in re.finditer(r'\sd="M ([\d.]+) ([\d.]+) L ([\d.]+) ([\d.]+) "', svg_text):
+        x1, y1, x2, y2 = map(float, m.groups())
+        if x1 == x2 and y1 == y2:
+            out.append((round(x1 / 10, 2), round(h - y1 / 10, 2)))
+    return out
 
 
-def t12_19():
-    # Line through (1; 5); parabola through (0; 0), (1; 0), (2; 2).
-    f = Fig('img/t12/gfx/plots-41.svg', grid=True)
-    for pt, txt, dx, dy, anchor in [((1, 5), '(1; 5)', 4, 3, 'start'), ((2, 2), '(2; 2)', 4, 3, 'start'),
-                                    ((1, 0), '(1; 0)', 4, -4, 'start'), ((0, 0), '(0; 0)', -4, -4, 'end')]:
-        f.point(pt)
-        f.label(pt, txt, dx=dx, dy=dy, size=7.5, anchor=anchor)
-    f.save('img/t12/sol/19.svg')
+def polylines(svg_text):
+    """Every stroked path as a list of points in pt (straight segments only)."""
+    h = float(re.search(r'matrix\(0\.1, 0, 0, -0\.1, 0, ([\d.]+)\)', svg_text).group(1))
+    out = []
+    for m in re.finditer(r'<path\b[^>]*>', svg_text):
+        tag = m.group(0)
+        if 'matrix(0.1' not in tag:
+            continue
+        d = re.search(r'\sd="([^"]+)"', tag).group(1)
+        pts = [(round(float(x) / 10, 2), round(h - float(y) / 10, 2)) for x, y in re.findall(r'[ML] ([\d.]+) ([\d.]+)', d)]
+        if len(pts) > 1 and pts[0] != pts[-1] or len(pts) > 2:
+            out.append({'pts': pts, 'dashed': 'stroke-dasharray' in tag, 'closed': ' Z' in d,
+                        'width': float(re.search(r'stroke-width="([\d.]+)"', tag).group(1)) if 'stroke-width' in tag else 0})
+    return out
 
-
-def t1_68():
-    # Parallelogram ABCD, E — midpoint of AD. Vertices are read from planimetry-7.svg (pt).
-    A, B, C, D, E = (30.69, 63.67), (13.54, 12.21), (82.15, 12.21), (99.30, 63.67), (65.00, 63.67)
-    f = Fig('img/t1/gfx/planimetry-7.svg')
-    f.polygon([A, B, E], opacity=0.30)          # the triangle that is cut off
-    f.polygon([E, B, D], opacity=0.12)          # its twin inside ABD
-    f.segment(B, D, dash='2.5 2')               # the extra diagonal
-    f.label(((A[0] + B[0] + E[0]) / 3, (A[1] + B[1] + E[1]) / 3), '6', dy=2.5, size=7.5)
-    f.label(((E[0] + B[0] + D[0]) / 3, (E[1] + B[1] + D[1]) / 3), '6', dy=2.5, size=7.5)
-    f.label(((B[0] + C[0] + D[0]) / 3, (B[1] + C[1] + D[1]) / 3), '12', dy=2.5, size=7.5)
-    f.save('img/t1/sol/68.svg', width=240)
-
-
-FIGS = [t9_9, t12_19, t1_68]
 
 if __name__ == '__main__':
-    for fn in FIGS:
-        fn()
+    import glob
+    import importlib.util
+    import sys
+    sys.modules['annotate_figs'] = sys.modules['__main__']   # specs do `from annotate_figs import Fig`
+    only = set(sys.argv[1:])           # e.g. "t9" to rebuild one task only
+    for path in sorted(glob.glob(os.path.join(os.path.dirname(__file__), 'figs', 't*.py'))):
+        name = os.path.splitext(os.path.basename(path))[0]
+        if only and name not in only:
+            continue
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        for fn in mod.FIGS:
+            fn()
