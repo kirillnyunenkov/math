@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="250" height="250" viewBox="0 0 150 150"><g id="sol-overlay">
+<polygon points="121.00,26.00 140.00,26.00 140.00,140.00 121.00,140.00" fill="#000000" fill-opacity="0.28" stroke="none"/>
+<polygon points="26.00,121.00 121.00,121.00 121.00,140.00 26.00,140.00" fill="#000000" fill-opacity="0.28" stroke="none"/>
+<polygon points="64.00,102.00 83.00,102.00 83.00,121.00 64.00,121.00" fill="#1d4e89" fill-opacity="0.45" stroke="none"/>
+<polygon points="83.00,83.00 102.00,83.00 102.00,102.00 83.00,102.00" fill="#1d4e89" fill-opacity="0.45" stroke="none"/>
+<polygon points="102.00,64.00 121.00,64.00 121.00,83.00 102.00,83.00" fill="#1d4e89" fill-opacity="0.45" stroke="none"/>
+<line x1="26.00" y1="26.00" x2="26.00" y2="140.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="26.00" y1="26.00" x2="140.00" y2="26.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="45.00" y1="26.00" x2="45.00" y2="140.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="26.00" y1="45.00" x2="140.00" y2="45.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="64.00" y1="26.00" x2="64.00" y2="140.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="26.00" y1="64.00" x2="140.00" y2="64.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="83.00" y1="26.00" x2="83.00" y2="140.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="26.00" y1="83.00" x2="140.00" y2="83.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="102.00" y1="26.00" x2="102.00" y2="140.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="26.00" y1="102.00" x2="140.00" y2="102.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="121.00" y1="26.00" x2="121.00" y2="140.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="26.00" y1="121.00" x2="140.00" y2="121.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="140.00" y1="26.00" x2="140.00" y2="140.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<line x1="26.00" y1="140.00" x2="140.00" y2="140.00" stroke="#000000" stroke-width="0.6" stroke-linecap="round"/>
+<text x="35.50" y="21.00" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">1</text>
+<text x="18.00" y="38.50" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">1</text>
+<text x="54.50" y="21.00" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">2</text>
+<text x="18.00" y="57.50" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">2</text>
+<text x="73.50" y="21.00" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">3</text>
+<text x="18.00" y="76.50" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">3</text>
+<text x="92.50" y="21.00" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">4</text>
+<text x="18.00" y="95.50" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">4</text>
+<text x="111.50" y="21.00" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">5</text>
+<text x="18.00" y="114.50" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">5</text>
+<text x="130.50" y="21.00" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">6</text>
+<text x="18.00" y="133.50" font-family="Times New Roman, Times, serif" font-size="8" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">6</text>
+<text x="73.50" y="114.50" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">8</text>
+<text x="92.50" y="95.50" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">8</text>
+<text x="111.50" y="76.50" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">8</text>
+<text x="54.50" y="133.50" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">8</text>
+<text x="130.50" y="57.50" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">8</text>
+<text x="83.00" y="9.00" font-family="Times New Roman, Times, serif" font-size="7" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">первый бросок</text>
+<text transform="translate(8 83) rotate(-90)" font-family="Times New Roman, Times, serif" font-size="7" text-anchor="middle" fill="#000000">второй бросок</text>
+</g>
+</svg>
