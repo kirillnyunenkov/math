@@ -418,8 +418,8 @@ function showLink(u,secret,title){
     <div class="acts"><button class="btn quiet" data-act="close">Закрыть</button><button class="btn" data-act="copy" data-url="${esc(url)}">Скопировать</button></div>`);
 }
 async function addStudent(){
-  sheet(`<h3>Новый ученик</h3><p>Имя увидишь только ты и сам ученик.</p>
-    <input class="field" id="new-name" maxlength="80" placeholder="Имя и фамилия" autocomplete="off">
+  sheet(`<h3>Новый ученик</h3><p>Как подписать ученика — решаешь ты: хватит имени. Если имена совпадают, добавь пометку. Подпись видишь только ты и сам ученик.</p>
+    <input class="field" id="new-name" maxlength="80" placeholder="Например, Маша или Маша (10 кл.)" autocomplete="off">
     <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="create">Создать</button></div>`);
   setTimeout(()=>document.getElementById('new-name').focus(),50);
 }

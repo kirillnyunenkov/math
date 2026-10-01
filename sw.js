@@ -2,7 +2,7 @@
    При выкладке новой версии сайта поднимай VERSION (любое изменение этого файла
    заставит браузер установить новый SW и удалить старый кеш). HTML грузится
    network-first, поэтому онлайн-пользователи всегда получают свежую версию. */
-const VERSION = 'v71';
+const VERSION = 'v73';
 const CACHE = 'ege-' + VERSION;
 const SHELL = ['./', './index.html', './sync-core.js', './mistakes-core.js', './config.js', './stats-core.js', './teacher.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
