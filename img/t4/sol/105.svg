@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="320" height="108" viewBox="0 0 250 84"><g id="sol-overlay">
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="168" viewBox="0 0 250 84"><g id="sol-overlay">
 <polygon points="86.00,42.00 164.00,42.00 164.00,58.00 86.00,58.00" fill="#1d4e89" fill-opacity="0.28" stroke="none"/>
 <line x1="8.00" y1="50.00" x2="242.00" y2="50.00" stroke="#000000" stroke-width="1.1" stroke-linecap="round"/>
 <path d="M 236 47 L 242 50 L 236 53" fill="none" stroke="#000000" stroke-width="1.1"/>

@@ -5,6 +5,9 @@ import math
 from annotate_figs import ACCENT, Fig, dots, polylines
 
 
+COND_W = 520     # the statement shows task 9 graphs up to this width (index.html, [data-n="9"])
+
+
 # ---- helpers: the plotted curve is the longest polyline of the source SVG ----
 
 def _curve(f):
@@ -57,7 +60,7 @@ def t9_1():
         _stroke(f, _piece(g, x - 11, x + right), 2.6, arrow=9)
         f.point((x, _y(g, x)), r=3)
         f.label((lx, ly), 'вниз', size=11.5, anchor=anchor)
-    f.save('img/t9/sol/1.svg')
+    f.save('img/t9/sol/1.svg', width=COND_W)
 
 
 def t9_9():
@@ -72,7 +75,7 @@ def t9_9():
     f.point(a); f.point(b)
     f.label(a, '(−1; 3)', dy=-5, dx=-2, size=7, anchor='end')
     f.label(b, '(4; 2)', dy=10, size=7)
-    f.save('img/t9/sol/9.svg')
+    f.save('img/t9/sol/9.svg', width=COND_W)
 
 
 def t9_28():
@@ -88,7 +91,7 @@ def t9_28():
         y = _y(g, x)
         f.segment((x - 0.45, y), (x + 0.45, y), width=1.2)
         f.point((x, y))
-    f.save('img/t9/sol/28.svg')
+    f.save('img/t9/sol/28.svg', width=COND_W)
 
 
 def t9_34():
@@ -100,7 +103,7 @@ def t9_34():
     f.point(a); f.point((-2, 0))
     f.label((-2, 0), '−2', dy=-4, size=8)
     f.label(a, '(−2; −4)', dy=10, size=7.5)
-    f.save('img/t9/sol/34.svg')
+    f.save('img/t9/sol/34.svg', width=COND_W)
 
 
 def _tangent(f, g, x, half):
@@ -122,7 +125,7 @@ def t9_40():
     f.label((3, _y(g, 3)), 'вниз', dx=4, dy=-3, size=7.5, anchor='start')
     f.label((1, _y(g, 1)), 'полого', dx=5, dy=9, size=7, anchor='start')
     f.label((4, _y(g, 4)), 'круче', dx=2.5, dy=9, size=7, anchor='start')
-    f.save('img/t9/sol/40.svg')
+    f.save('img/t9/sol/40.svg', width=COND_W)
 
 
 def _axis_segment(f, x1, x2, width=2.4, r=2.4):
@@ -145,7 +148,7 @@ def t9_46():
     for x in (-1, 3, 5):
         f.point((x, 0), r=3.4)
     f.label((3, 0), 'мин', dx=-4, dy=-6, size=11.5, anchor='end')
-    f.save('img/t9/sol/46.svg')
+    f.save('img/t9/sol/46.svg', width=COND_W)
 
 
 def t9_54():
@@ -159,7 +162,7 @@ def t9_54():
     f.label((-1.5, -0.85), '−', dy=3, size=10)
     f.label((2, -1.5), '−', dy=3, size=10)
     f.label((1.7, 1.2), 'f убывает', size=7.5)
-    f.save('img/t9/sol/54.svg')
+    f.save('img/t9/sol/54.svg', width=COND_W)
 
 
 def t9_60():
@@ -177,7 +180,7 @@ def t9_60():
         f.label(pt, '+', dy=4, size=15)
     for pt in [(10, 96), (95, 88), (236, 100)]:
         f.label(pt, '−', dy=4, size=15)
-    f.save('img/t9/sol/60.svg')
+    f.save('img/t9/sol/60.svg', width=COND_W)
 
 
 def t9_68():
@@ -192,7 +195,7 @@ def t9_68():
     f.label((5.3, -0.75), '−', dy=3, size=10)
     f.point((4, 0), r=2.6)
     f.label((4, 0), 'x = 4', dx=4, dy=-5, size=7.5, anchor='start')
-    f.save('img/t9/sol/68.svg')
+    f.save('img/t9/sol/68.svg', width=COND_W)
 
 
 FIGS = [t9_1, t9_9, t9_28, t9_34, t9_40, t9_46, t9_54, t9_60, t9_68]
