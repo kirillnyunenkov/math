@@ -307,10 +307,12 @@ const PROTOTYPES = {
     { p:38, ids:"59-60" },
     { p:39, ids:"61" },
     { p:40, ids:"62-63" },
-    { p:41, ids:"64-65" },
-    { p:42, ids:"66" },
-    { p:43, ids:"67" },
-  ], // Финансовые задачи — 43 прототипа
+    // ids 64-65 (13.41, 13.41.1) are left out on purpose: the answer is a pair of
+    // fractions and cannot be typed into a numeric field. They stay in data.js so
+    // that ids 66-67 do not shift and students' marks keep pointing at the same tasks.
+    { p:41, ids:"66" },
+    { p:42, ids:"67" },
+  ], // Финансовые задачи — 42 прототипа
   14: [
     { p:1, ids:"1-4" },
     { p:2, ids:"5" },

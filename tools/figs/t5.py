@@ -39,7 +39,7 @@ def _tree(dst, p_bad, p_rej_bad, p_rej_good, prod_bad, prod_good, total):
     # products along the highlighted branches
     f.label(ends['bb'], f'{c(p_bad)} · {c(p_rej_bad)} = {c(prod_bad)}', dy=20, size=6.5)
     f.label(ends['gb'], f'{c(q_bad)} · {c(p_rej_good)} = {c(prod_good)}', dy=20, size=6.5)
-    f.save(dst, width=320)
+    f.save(dst)
 
 
 def t5_50():
@@ -68,7 +68,7 @@ def t5_44():
     f.label((200, 34), '0,78', dy=0, size=9)
     f.label((200, 43), 'остался', size=6.5)
     f.label((200, 50), 'в обоих', size=6.5)
-    f.save('img/t5/sol/44.svg', width=300)
+    f.save('img/t5/sol/44.svg')
 
 
 def t5_32():
@@ -87,7 +87,7 @@ def t5_32():
     f.label(((xb + x1) / 2, y - 14), '0,04', size=8.5, color=INK, bold=False)
     f.label(((x0 + xa) / 2, y + 22), 'лёгкая', size=7, color=INK, bold=False)
     f.label(((xb + x1) / 2, y + 22), 'тяжёлая', size=7, color=INK, bold=False)
-    f.save('img/t5/sol/32.svg', width=300)
+    f.save('img/t5/sol/32.svg')
 
 
 def t5_26():
@@ -117,7 +117,7 @@ def t5_26():
     f.label((o + 3 * c, 9), 'первый бросок', size=7, color=INK, bold=False)
     f.raw(f'<text transform="translate(8 {o + 3 * c}) rotate(-90)" font-family="Times New Roman, Times, serif" '
           f'font-size="7" text-anchor="middle" fill="{INK}">второй бросок</text>')
-    f.save('img/t5/sol/26.svg', width=250)
+    f.save('img/t5/sol/26.svg')
 
 
 def t5_38():
@@ -147,7 +147,7 @@ def t5_38():
     f.label(br, '0,075', dy=20, size=7.5); f.label(rb, '0,075', dy=20, size=7.5)
     f.label((222, 100), 'осталось 24', size=6.5, color=INK, bold=False)
     f.label((222, 108), 'фломастера', size=6.5, color=INK, bold=False)
-    f.save('img/t5/sol/38.svg', width=320)
+    f.save('img/t5/sol/38.svg')
 
 
 def t5_20():
@@ -170,7 +170,7 @@ def t5_20():
     f.label(hit2, 'попал', dy=10, size=7, color=INK, bold=False)
     f.label(miss2, 'мимо', dy=10, size=7)
     f.label(miss2, '0,5 · 0,5 = 0,25', dx=18, dy=20, size=7, anchor='end')
-    f.save('img/t5/sol/20.svg', width=260)
+    f.save('img/t5/sol/20.svg')
 
 
 FIGS = [t5_20, t5_26, t5_32, t5_38, t5_44, t5_50, t5_51]

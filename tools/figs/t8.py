@@ -34,7 +34,7 @@ def unit_circle(dst, quarter, sin_a, cos_a, sin_text, cos_text):
     names = {1: 'I четверть', 2: 'II четверть'}
     f.label((cx + sx * r * 0.72, cy - r * 0.86), names[quarter], dx=sx * 4, dy=-6, size=7,
             anchor='start' if sx > 0 else 'end', color=INK, bold=False)
-    f.save(dst, width=250)
+    f.save(dst)
 
 
 def t8_122():

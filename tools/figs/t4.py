@@ -5,7 +5,7 @@ from itertools import product
 from annotate_figs import Fig, ACCENT, INK
 
 
-def coin_tree(dst, depth, letters, hot, rows, width):
+def coin_tree(dst, depth, letters, hot, rows):
     """Full binary tree of `depth` fair choices; leaves listed in `hot` are highlighted."""
     leaves = [''.join(p) for p in product(letters, repeat=depth)]
     assert all(h in leaves for h in hot)
@@ -34,19 +34,19 @@ def coin_tree(dst, depth, letters, hot, rows, width):
                 color=ACCENT if leaf in hot else INK, bold=leaf in hot)
     for level, text in enumerate(rows, start=1):
         f.label((2, y(level)), text, dy=-dy / 2 + 2.5, size=6.5, color=INK, bold=False, anchor='start')
-    f.save(dst, width=width)
+    f.save(dst)
 
 
 def t4_59():
-    coin_tree('img/t4/sol/59.svg', 3, ('Д', 'Н'), ['ДДД'], ['1-й матч', '2-й матч', '3-й матч'], 320)
+    coin_tree('img/t4/sol/59.svg', 3, ('Д', 'Н'), ['ДДД'], ['1-й матч', '2-й матч', '3-й матч'])
 
 
 def t4_65():
-    coin_tree('img/t4/sol/65.svg', 3, ('Д', 'Н'), ['НДН'], ['1-я игра', '2-я игра', '3-я игра'], 320)
+    coin_tree('img/t4/sol/65.svg', 3, ('Д', 'Н'), ['НДН'], ['1-я игра', '2-я игра', '3-я игра'])
 
 
 def t4_71():
-    coin_tree('img/t4/sol/71.svg', 2, ('О', 'Р'), ['ОР', 'РО'], ['1-й бросок', '2-й бросок'], 280)
+    coin_tree('img/t4/sol/71.svg', 2, ('О', 'Р'), ['ОР', 'РО'], ['1-й бросок', '2-й бросок'])
 
 
 def zones(dst, marks, labels, hot, bracket=None):
@@ -69,7 +69,7 @@ def zones(dst, marks, labels, hot, bracket=None):
         f.raw(f'<path d="M {xs[a] + 2:.1f} {yb + 5} L {xs[a] + 2:.1f} {yb} L {xs[b] - 2:.1f} {yb} L {xs[b] - 2:.1f} {yb + 5}" '
               f'fill="none" stroke="{INK}" stroke-width="0.8"/>')
         f.label(((xs[a] + xs[b]) / 2, yb - 4), text, size=7.5, color=INK, bold=False)
-    f.save(dst, width=320)
+    f.save(dst)
 
 
 def t4_105():
