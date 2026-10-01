@@ -734,9 +734,16 @@
   .tex .sol-steps .table-wrapper{margin:.5em 0;}
   /* Кегль меньше основного: на телефоне 375px таблица из четырёх колонок
      занимала ширину шага впритык, без запаса. */
-  .tex .sol-steps table{font-size:var(--fs-sm);}
-  .tex .sol-steps table th,.tex .sol-steps table td{padding:var(--s2);}
-  .tex .sol-steps table th:first-child,.tex .sol-steps table td:first-child{min-width:0;}
+  .tex .sol-steps table,.tex .sol-table table{font-size:var(--fs-sm);}
+  .tex .sol-steps table th,.tex .sol-steps table td,
+  .tex .sol-table table th,.tex .sol-table table td{padding:var(--s2);}
+  .tex .sol-steps table th:first-child,.tex .sol-steps table td:first-child,
+  .tex .sol-table table th:first-child,.tex .sol-table table td:first-child{min-width:0;}
+  /* Таблица движения долга (№13): пять колонок, заголовки в два слова —
+     им разрешён перенос, иначе на телефоне шапка шире самих чисел. */
+  .tex .sol-table table th{white-space:normal;line-height:1.2;}
+  .tex .sol-table table{font-size:var(--fs-xs);}
+  .tex .sol-table table th,.tex .sol-table table td{padding:var(--s2) var(--s1);}
   /* ---- таблицы в условии ----
      Их приносят «Случайные величины» и финансовые задачи: там таблица —
      не оформление, а сами данные задачи, без неё условие нечитаемо.
