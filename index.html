@@ -450,13 +450,20 @@
   .grid-label{font-size:var(--fs-2xs);text-transform:uppercase;letter-spacing:.07em;
     color:var(--ink-3);font-weight:600;margin-bottom:var(--s3);}
   .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:var(--s1);}
-  /* карта прогресса: только показывает состояние, не навигация.
-     Не кнопка и не ловит фокус — до задачи ученик листает вниз. */
+  /* карта прогресса: показывает состояние и ведёт к задаче по клику.
+     Переход держит scrollToEl — он доводит положение, пока список
+     не дораскладывается, поэтому хватает одного клика. */
   .cell{aspect-ratio:1;border:1px solid var(--line);border-radius:var(--r-sm);
     background:var(--surface);color:var(--ink-2);font-size:var(--fs-xs);font-weight:600;
     display:flex;align-items:center;justify-content:center;user-select:none;
     font-family:'Golos Text',sans-serif;font-variant-numeric:tabular-nums;
+    padding:0;margin:0;cursor:pointer;-webkit-tap-highlight-color:transparent;
     transition:background var(--dur) var(--ease),color var(--dur) var(--ease),border-color var(--dur) var(--ease);}
+  @media (hover:hover){
+    .cell:hover{border-color:var(--accent);}
+    .cell:not(.g):not(.o):not(.b):hover{color:var(--accent);}
+  }
+  .cell:active{opacity:.7;}
   .cell.g{background:var(--ok);border-color:var(--ok);color:var(--ok-on);}
   .cell.o{background:var(--warn);border-color:var(--warn);color:var(--warn-on);}
   .cell.b{background:var(--todo);border-color:var(--todo);color:var(--todo-on);}
@@ -1971,8 +1978,8 @@ function refreshCell(n,id){const st=(state[n]||{})[id]||'';const grid=document.q
   const c=grid&&grid.querySelector('[data-cell="'+id+'"]');
   if(c)c.className='cell'+(st?' '+st:'');
   refreshPanelBar(n);
-  /* сетка озвучивается одной сводкой, поэтому её надо пересчитывать после отметки */
-  if(grid&&grid.getAttribute('role')==='img'){const q=countTask(n),t=displayCount(n);
+  /* сводка в подписи сетки — её надо пересчитывать после отметки */
+  if(grid&&grid.getAttribute('role')==='group'){const q=countTask(n),t=displayCount(n);
     grid.setAttribute('aria-label',`Карта прогресса: умею ${q.g}, надо повторить ${q.o}, надо разобраться ${q.b}, не решал ${t-q.g-q.o-q.b} из ${t}`);}}
 function refreshCard(n,id){const st=(state[n]||{})[id]||'';const card=document.getElementById('task-'+id);
   if(!card)return;card.className='card'+(st?' is-'+st:'');
@@ -2052,29 +2059,55 @@ function cardOffset(){
   const p=document.querySelector('.grid-panel');
   if(!p)return 12;
   const r=p.getBoundingClientRect();
-  return r.width>innerWidth*0.7?r.height+12:12;
+  if(r.width<=innerWidth*0.7)return 12;
+  /* Карта сворачивается переходом. Пока он идёт, считаем панель уже
+     свёрнутой: иначе цель ехала бы вслед за панелью все полсекунды. */
+  const b=p.querySelector('.panel-body');
+  const closing=b&&b.dataset.want!=='1'?b.getBoundingClientRect().height:0;
+  return r.height-closing+12;
 }
+/* Высоты ещё не показанных карточек — только оценка (content-visibility).
+   После прыжка список дораскладывается, и цель уезжает на сотни пикселей;
+   на дальнем переходе это повторяется несколько раз подряд, потому что
+   каждая поправка показывает новые карточки. Одной доводки мало — отсюда
+   и был «второй клик». Поэтому положение держим: сверяем цель и
+   подправляем, пока оно не простоит на месте SETTLE_CALM мс.
+   Проверку ведёт и кадр, и таймер: в фоновой вкладке кадров нет, и без
+   таймера переход не состоялся бы вовсе. */
+const SETTLE_CALM=300, SETTLE_MAX=2500;
+let settleGen=0;
 function scrollToEl(el,smooth){
+  const gen=++settleGen;
   const aim=()=>Math.max(0,Math.min(el.getBoundingClientRect().top+scrollY-cardOffset(),
     document.documentElement.scrollHeight-innerHeight));
   const jump=b=>{const y=aim();try{scrollTo({top:y,left:0,behavior:b});}catch(e){scrollTo(0,y);}};
   jump(smooth?'smooth':'instant');
-  /* Доводка. Высоты ещё не показанных карточек — только оценка
-     (content-visibility), поэтому после первого прыжка список
-     дораскладывается и цель уезжает на сотни пикселей.
-     Плавную прокрутку не перебиваем, а проверяем, когда она уже должна
-     была закончиться. Это заодно страховка на случай, когда браузер её не
-     проиграл вовсе: в фоновой вкладке анимации прокрутки не идут, и без
-     проверки переход просто не состоялся бы. */
-  const fix=()=>{if(Math.abs(scrollY-aim())>4)jump('instant');};
-  if(!smooth){requestAnimationFrame(()=>requestAnimationFrame(fix));setTimeout(fix,180);return;}
   /* Если ученик за это время начал листать сам — доводить не надо: его
-     прокрутка важнее нашей. */
-  let off=false;
-  const stop=()=>{off=true;removeEventListener('wheel',stop);removeEventListener('touchmove',stop);};
-  addEventListener('wheel',stop,{passive:true});
-  addEventListener('touchmove',stop,{passive:true});
-  setTimeout(()=>{if(!off)fix();stop();},600);
+     прокрутка важнее нашей. Слушатели — следующим тиком, чтобы не поймать
+     то самое событие, которое переход и вызвало. */
+  let off=false,armed=false;
+  const EV=['wheel','touchmove','keydown','mousedown'];
+  const stop=()=>{off=true;if(armed)EV.forEach(t=>removeEventListener(t,stop));};
+  setTimeout(()=>{if(off||gen!==settleGen)return;armed=true;
+    EV.forEach(t=>addEventListener(t,stop,{passive:true}));},0);
+  const t0=Date.now();
+  let calmSince=t0,lastY=NaN;
+  const tick=()=>{
+    if(off)return;
+    if(gen!==settleGen||!el.isConnected){stop();return;}
+    const now=Date.now(),moved=scrollY!==lastY;lastY=scrollY;
+    if(Math.abs(scrollY-aim())>2){
+      calmSince=now;
+      /* Плавную прокрутку не перебиваем, пока она идёт; встала не там —
+         доводим мгновенно. */
+      if(!(smooth&&moved&&now-t0<1200))jump('instant');
+    }
+    if(now-calmSince>=SETTLE_CALM||now-t0>=SETTLE_MAX){stop();return;}
+    next();
+  };
+  const next=()=>{let ran=false;const run=()=>{if(!ran){ran=true;tick();}};
+    requestAnimationFrame(run);setTimeout(run,120);};
+  next();
 }
 function focusCard(id,smooth){
   const card=document.getElementById('task-'+id);
@@ -2694,9 +2727,9 @@ function renderTask(n){
       </article>`;};
   const gridCells=pl
     ?pl.map(grp=>{const id=grp.ids[0],st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
-        return `<span class="cell ${c}" data-cell="${id}" aria-hidden="true">${grp.p}</span>`;}).join('')
+        return `<button class="cell ${c}" type="button" data-cell="${id}" aria-label="Прототип ${grp.p}">${grp.p}</button>`;}).join('')
     :Array.from({length:task.count},(_,i)=>{const id=i+1,st=ts[id],c=st==='g'?'g':st==='o'?'o':st==='b'?'b':'';
-        return `<span class="cell ${c}" data-cell="${id}" aria-hidden="true">${id}</span>`;}).join('');
+        return `<button class="cell ${c}" type="button" data-cell="${id}" aria-label="Задача ${id}">${id}</button>`;}).join('');
   let listBody;
   if(pl){
     const subOf=rep=>((data[rep-1]||{}).sub)||'';
@@ -2731,7 +2764,7 @@ function renderTask(n){
       </div>
       <div class="panel-body" id="panel-body">
         <div class="grid-label">${gridLabel}</div>
-        <div class="grid" role="img" aria-label="${gridSummary}">${gridCells}</div>${videoBtn}
+        <div class="grid" role="group" aria-label="${gridSummary}">${gridCells}</div>${videoBtn}
       </div>
     </aside>
     <main class="list">
@@ -3170,6 +3203,16 @@ appEl.addEventListener('click',e=>{
     body.dataset.want=open?'1':'0';
     pt.setAttribute('aria-expanded',open);
     setBoxOpen(body,open);return;}
+  const cell=e.target.closest('[data-cell]');
+  if(cell){const id=+cell.dataset.cell,tc=document.getElementById('task-'+id);if(!tc)return;
+    cancelAdvance();
+    /* Задача скрыта отбором — показываем весь список: номер нажат явно. */
+    if(tc.style.display==='none'){viewFilter='all';filterKeep.clear();applyFilter();}
+    /* На телефоне раскрытая карта закрывает пол-экрана — сворачиваем. */
+    const body=document.getElementById('panel-body'),tg=document.querySelector('.panel-toggle');
+    if(body&&body.dataset.want==='1'){body.dataset.want='0';
+      if(tg)tg.setAttribute('aria-expanded',false);setBoxOpen(body,false);}
+    focusCard(id,false);return;}
   const rtr=e.target.closest('[data-retry]');
   if(rtr){const n=+rtr.dataset.retry;delete window.TASKDATA[n];renderTask(n);return;}
   const hm=e.target.closest('[data-home]'); if(hm){go('#/');return;}
