@@ -24,7 +24,7 @@ def t2_14():
     f.label((4.1, 2), '2 вправо', dy=5.5, size=size)
     _ends(f, [((1, 1), '(1; 1)', 2, 6, 'start'), ((4, 5), '(4; 5)', 2.5, 1, 'start'),
               ((3, 3), '(3; 3)', 1, -2.5, 'start'), ((5, 2), '(5; 2)', -1, -3.5, 'start')], size=size, r=1.3)
-    f.save('img/t2/sol/14.svg', width=240)
+    f.save('img/t2/sol/14.svg', width=320)
 
 
 def t2_44():
@@ -41,7 +41,7 @@ def t2_44():
     f.label((7.8, 3), '6 вправо', dy=7, size=size)
     _ends(f, [((1, 2), '(1; 2)', 2, 7, 'start'), ((5, 8), '(5; 8)', 3, 1, 'start'),
               ((5, 5), '(5; 5)', 2, -3, 'start'), ((11, 3), '(11; 3)', 10, 7, 'end')], size=size, r=1.6)
-    f.save('img/t2/sol/44.svg', width=300)
+    f.save('img/t2/sol/44.svg', width=400)
 
 
 FIGS = [t2_14, t2_44]

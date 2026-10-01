@@ -2,6 +2,8 @@
 """Solution figures for task 12. Built by tools/annotate_figs.py."""
 from annotate_figs import Fig, dots, polylines
 
+COND_W = 360     # the statement shows task 12 graphs at this width (index.html, [data-n="12"])
+
 
 def t12_19():
     # Line through (1; 5); parabola through (0; 0), (1; 0), (2; 2).
@@ -10,7 +12,7 @@ def t12_19():
                                     ((1, 0), '(1; 0)', 4, -4, 'start'), ((0, 0), '(0; 0)', -4, -4, 'end')]:
         f.point(pt)
         f.label(pt, txt, dx=dx, dy=dy, size=7.5, anchor=anchor)
-    f.save('img/t12/sol/19.svg')
+    f.save('img/t12/sol/19.svg', width=COND_W)
 
 
 def _mark(f, pt, text, dx, dy, anchor='start', size=7.5, r=2.2):
@@ -30,7 +32,7 @@ def t12_1():
     f.label((0.07, 1.22), '1 вправо', size=4.5, anchor='start')
     _mark(f, a, '(0; −1)', -0.45, -0.5, 'end', size=5, r=1.6)
     _mark(f, b, '(1; 1)', 0.25, -0.1, 'start', size=5, r=1.6)
-    f.save('img/t12/sol/1.svg')
+    f.save('img/t12/sol/1.svg', width=COND_W)
 
 
 def t12_7():
@@ -47,7 +49,7 @@ def t12_7():
     _mark(f, b, '(1; 2)', 0.17, -0.1, 'start', size=6.25, r=1.9)
     _mark(f, (-4, 0), '(−4; 0)', 0.1, -0.5, 'start', size=6.25, r=1.9)
     _mark(f, (0, 4), '(0; 4)', 0.2, -0.3, 'start', size=6.25, r=1.9)
-    f.save('img/t12/sol/7.svg')
+    f.save('img/t12/sol/7.svg', width=COND_W)
 
 
 def t12_13():
@@ -56,14 +58,14 @@ def t12_13():
     _mark(f, (0, 2), '(0; 2)', -0.2, -0.1, 'end', size=6.25, r=1.9)
     _mark(f, (1, 0), '(1; 0)', -0.25, -0.5, 'end', size=6.25, r=1.9)
     _mark(f, (2, 0), '(2; 0)', 0.15, -0.5, 'start', size=6.25, r=1.9)
-    f.save('img/t12/sol/13.svg')
+    f.save('img/t12/sol/13.svg', width=COND_W)
 
 
 def t12_25():
     # Hyperbola through the grid node (5; 1).
     f = Fig('img/t12/gfx/plots-44.svg', grid=True)
     _mark(f, (5, 1), '(5; 1)', 0, 0.5, 'middle', size=6.25, r=1.9)
-    f.save('img/t12/sol/25.svg')
+    f.save('img/t12/sol/25.svg', width=COND_W)
 
 
 def t12_33():
@@ -71,7 +73,7 @@ def t12_33():
     f = Fig('img/t12/gfx/plots-17.svg', grid=True)
     _mark(f, (-4, -2), '(−4; −2)', -0.15, -0.85, 'middle')
     _mark(f, (0, -1), '(0; −1)', -0.15, -0.8, 'end')
-    f.save('img/t12/sol/33.svg')
+    f.save('img/t12/sol/33.svg', width=COND_W)
 
 
 def t12_43():
@@ -80,7 +82,7 @@ def t12_43():
     _mark(f, (0, 0), '(0; 0)', 0.2, 0.15, 'start')
     _mark(f, (1, -3), '(1; −3)', 0.25, 0.1, 'start')
     _mark(f, (4, -6), '(4; −6)', 0.2, 0.2, 'start')
-    f.save('img/t12/sol/43.svg', width=235)
+    f.save('img/t12/sol/43.svg', width=COND_W)
 
 
 def t12_49():
@@ -88,7 +90,7 @@ def t12_49():
     f = Fig('img/t12/gfx/plots-22.svg', grid=True)
     _mark(f, (1, 5), '(1; 5)', 0.2, 0.1, 'start')
     _mark(f, (1, 1), '(1; 1)', 0.2, -0.4, 'start')
-    f.save('img/t12/sol/49.svg')
+    f.save('img/t12/sol/49.svg', width=COND_W)
 
 
 def t12_55():
@@ -96,7 +98,7 @@ def t12_55():
     f = Fig('img/t12/gfx/plots-26.svg', grid=True)
     _mark(f, (-1, 4), '(−1; 4)', -0.2, -0.15, 'end')
     _mark(f, (0, 1), '(0; 1)', 0.2, 0.1, 'start')
-    f.save('img/t12/sol/55.svg')
+    f.save('img/t12/sol/55.svg', width=COND_W)
 
 
 def t12_64():
@@ -104,7 +106,7 @@ def t12_64():
     f = Fig('img/t12/gfx/plots-32.svg', grid=True)
     _mark(f, (1, 0), '(1; 0)', 0.15, 0.15, 'start')
     _mark(f, (2, -1), '(2; −1)', 0.15, 0.1, 'start')
-    f.save('img/t12/sol/64.svg')
+    f.save('img/t12/sol/64.svg', width=COND_W)
 
 
 FIGS = [t12_1, t12_7, t12_13, t12_19, t12_25, t12_33, t12_43, t12_49, t12_55, t12_64]
