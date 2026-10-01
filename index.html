@@ -361,10 +361,12 @@
   .help-step p{font-size:var(--fs-md);line-height:1.6;margin:0 0 var(--s3);}
   .help-step p:last-child{margin-bottom:0;}
   .help-legend{list-style:none;display:flex;flex-direction:column;gap:var(--s2);margin:var(--s3) 0;padding:0;}
-  .help-legend li{display:flex;align-items:center;gap:var(--s3);font-size:var(--fs-base);}
-  /* та же точка, что в шапке и на хабе: это легенда именно к ней,
-     и круг вместо скруглённого квадрата читался как другой элемент */
-  .help-legend .dot{width:12px;height:12px;border-radius:4px;flex:none;}
+  .help-legend li{display:flex;align-items:flex-start;gap:var(--s3);font-size:var(--fs-base);line-height:1.5;}
+  /* the same icon and colour as the pressed mark button on a task card */
+  .help-legend .lg-ic{width:24px;height:24px;border-radius:7px;flex:none;display:inline-flex;align-items:center;justify-content:center;}
+  .help-legend .lg-ic.g{background:var(--ok);color:var(--ok-on);}
+  .help-legend .lg-ic.o{background:var(--warn);color:var(--warn-on);}
+  .help-legend .lg-ic.b{background:var(--todo);color:var(--todo-on);}
   .help-legend b{font-weight:600;}
   .help-way{background:var(--surface-2);border-radius:var(--r-md);padding:var(--s3) var(--s4);
     margin-bottom:var(--s2);font-size:var(--fs-base);line-height:1.55;}
@@ -2480,11 +2482,16 @@ function installBlock(){
   const quick=deferredPrompt
     ? '<p class="install-steps">Самый простой способ — нажми кнопку:</p><button class="ib-go" data-install>Установить приложение</button>'
     : '';
-  const steps=`<ul class="install-list">
-    <li><b>iPhone (Safari):</b> внизу нажми «Поделиться» (квадрат со стрелкой вверх) → пролистай вниз → «На экран „Домой“» → «Добавить».</li>
-    <li><b>Android (Chrome):</b> меню браузера ⋮ справа сверху → «Установить приложение» (или «Добавить на главный экран»).</li>
-    <li><b>Компьютер (Chrome / Edge):</b> значок установки в правой части адресной строки, либо меню → «Установить…». В Safari и Firefox установки нет — открывай по ссылке в браузере.</li>
-  </ul>`;
+  /* One instruction, for the device in hand. iPadOS Safari reports itself
+     as a Mac, hence the touch-point check. */
+  const ua=navigator.userAgent;
+  const ios=isIOS()||(/Macintosh/.test(ua)&&navigator.maxTouchPoints>1);
+  const step=ios
+    ?`<li><b>iPhone (Safari):</b> внизу нажми «Поделиться» (квадрат со стрелкой вверх) → пролистай вниз → «На экран „Домой“» → «Добавить».</li>`
+    :/android/i.test(ua)
+    ?`<li><b>Android (Chrome):</b> меню браузера ⋮ справа сверху → «Установить приложение» (или «Добавить на главный экран»).</li>`
+    :`<li><b>Компьютер (Chrome / Edge):</b> значок установки в правой части адресной строки, либо меню → «Установить…». В Safari и Firefox установки нет — открывай по ссылке в браузере.</li>`;
+  const steps=`<ul class="install-list">${step}</ul>`;
   return quick+steps;
 }
 const HINT_IOS=`<h3>Установить приложение</h3><p class="ih-sub">Safari не умеет устанавливать одной кнопкой, но это займёт 10 секунд:</p><ol><li>Нажми <b>«Поделиться»</b> — кнопка <i class="ih-icon">⬆ квадрат со стрелкой</i> внизу Safari</li><li>Пролистай список вниз и выбери <b>«На экран "Домой"»</b></li><li>Нажми <b>«Добавить»</b> в правом верхнем углу</li></ol><button class="sheet-go">Понятно</button>`;
@@ -2898,33 +2905,34 @@ function render(){
 function escapeHtml(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 function renderHelp(){
   setBack(true);statsEl.innerHTML='';
+  const HELP_MARKS={g:'справлюсь сам, время не трачу',o:'решу, но нужно освежить',b:'пока не умею'};
+  const legend=MARKS.map(([m,short,,path])=>`<li><span class="lg-ic ${m}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg></span><span><b>${short}</b> — ${HELP_MARKS[m]}</span></li>`).join('');
   appEl.innerHTML=`<div class="help">
     <h2>Как пользоваться</h2>
     <p class="help-lead">Три вещи, которые стоит знать. Минута на чтение.</p>
 
     <div class="help-step">
       <h3><span class="nm">1.</span> Только реальные задачи ЕГЭ</h3>
-      <p>Все задачи здесь — из открытого банка ФИПИ. Последние 10 лет на ЕГЭ встречаются только они, никаких сборников Ященко и прочего.</p>
-      <p>Значит, всё, что может попасться на экзамене, уже есть в тренажёре. А если прототипа здесь нет — на ЕГЭ он и не появится.</p>
+      <p>Все задачи здесь — из открытого банка ФИПИ. В первой части (задания 1–13) последние 10 лет на ЕГЭ встречаются только они, никаких сборников Ященко и прочего.</p>
+      <p>Значит, к первой части можно подготовиться полностью: на экзамене будут те же прототипы. Во второй части (14–20) задачи каждый год новые, но тех же типов — их здесь тоже можно тренировать.</p>
     </div>
 
     <div class="help-step">
       <h3><span class="nm">2.</span> Решать всё не обязательно</h3>
-      <p>Прочитай условие и честно реши, к какой кнопке относится задача:</p>
-      <ul class="help-legend">
-        <li><span class="dot g"></span><b>Умею решать</b> — справлюсь сам, время не трачу</li>
-        <li><span class="dot o"></span><b>Надо повторить</b> — решу, но нужно освежить</li>
-        <li><span class="dot b"></span><b>Надо разобраться</b> — пока не умею</li>
-      </ul>
+      <p>У каждой задачи одна из трёх отметок:</p>
+      <ul class="help-legend">${legend}</ul>
       <p>Два способа пройти тренажёр:</p>
-      <div class="help-way"><b>Быстро.</b> Тратишь на задачу 10–30 секунд и выбираешь одну из трёх кнопок по своим ощущениям. Потом возвращаешься только к «надо разобраться» и «надо повторить».</div>
-      <div class="help-way"><b>Подробно.</b> Идёшь по порядку и каждую непонятную задачу сразу разбираешь.</div>
+      <div class="help-way"><b>Быстро.</b> Читаешь условие, тратишь на задачу 10–30 секунд и сам ставишь отметку по ощущениям. Потом возвращаешься только к «Повторить» и «Разобраться».</div>
+      <div class="help-way"><b>Подробно.</b> Идёшь по порядку и решаешь. Вводишь ответ, жмёшь «Проверить» — отметка ставится сама: верно — «Умею», неверно — «Разобраться». Не получилось — открой «Решение» с разбором по шагам и закрепи на «Похожих задачах».</div>
+      <p>Вернуться к отложенному просто: над списком задач есть фильтры «Надо повторить» и «Надо разобраться».</p>
+      <p>В заданиях 14–20 поля ответа нет: реши на бумаге, открой «Ответ» и поставь отметку сам.</p>
     </div>
 
     <div class="help-step">
       <h3><span class="nm">3.</span> В конце — полная картина</h3>
-      <p>Когда пройдёшь все задачи, сразу видно: какие номера делаешь идеально, а где прототипы западают. Останется повторить только их.</p>
-      <p>А когда всё зелёное — ты готов. На ЕГЭ попадётся то, что ты уже точно умеешь.</p>
+      <p>На главной по каждому номеру видно, сколько прототипов освоено: какие задания делаешь уверенно, а где пробелы. Останется повторить только их.</p>
+      <p>Хочешь проверить себя как на экзамене — нажми «Собрать вариант» на главной: таймер, ввод ответов, в конце первичный и тестовый балл.</p>
+      <p>А когда вся первая часть зелёная — она готова: на ЕГЭ попадётся то, что ты уже точно умеешь.</p>
     </div>
 
     <div class="help-step">
