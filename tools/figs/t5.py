@@ -5,39 +5,40 @@ from annotate_figs import Fig, ACCENT, INK
 
 
 def _tree(dst, p_bad, p_rej_bad, p_rej_good, prod_bad, prod_good, total):
-    """Two-level tree: faulty / fine battery, then rejected / passed. Rejected branches are highlighted."""
-    f = Fig.blank(250, 150)
-    root, bad, good = (18, 75), (95, 38), (95, 112)
-    ends = {'bb': (170, 16), 'bp': (170, 58), 'gb': (170, 92), 'gp': (170, 134)}
+    """Two-level tree, drawn top-down (the owner's convention for probability trees):
+    faulty / fine battery, then rejected / passed. Rejected branches are highlighted."""
+    f = Fig.blank(260, 150)
+    root, bad, good = (130, 16), (71, 62), (189, 62)
+    ends = {'bb': (38, 112), 'bp': (104, 112), 'gb': (156, 112), 'gp': (222, 112)}
     c = lambda x: str(x).replace('.', ',')
-    q_bad, q_good = round(1 - p_bad, 4), None
-    f.segment(root, bad, color=ACCENT, width=1.6)
-    f.segment(root, good, color=ACCENT, width=1.6)
-    f.segment(bad, ends['bb'], color=ACCENT, width=1.6)
+    q_bad = round(1 - p_bad, 4)
+    assert abs(p_bad * p_rej_bad - prod_bad) < 1e-12 and abs(q_bad * p_rej_good - prod_good) < 1e-12
+    assert abs(prod_bad + prod_good - total) < 1e-12
+    f.segment(root, bad, width=1.6)
+    f.segment(root, good, width=1.6)
+    f.segment(bad, ends['bb'], width=1.6)
     f.segment(bad, ends['bp'], color=INK, width=0.9)
-    f.segment(good, ends['gb'], color=ACCENT, width=1.6)
+    f.segment(good, ends['gb'], width=1.6)
     f.segment(good, ends['gp'], color=INK, width=0.9)
     for pt in (root, bad, good):
         f.point(pt, r=1.8)
-    # edge probabilities
-    f.label((54, 50), c(p_bad), dy=-3, size=7.5)
-    f.label((54, 100), c(q_bad), dy=9, size=7.5)
-    f.label((130, 22), c(p_rej_bad), dy=-2, size=7.5)
-    f.label((130, 52), c(round(1 - p_rej_bad, 4)), dy=7, size=7.5, color=INK, bold=False)
-    f.label((130, 98), c(p_rej_good), dy=-2, size=7.5)
-    f.label((130, 128), c(round(1 - p_rej_good, 4)), dy=7, size=7.5, color=INK, bold=False)
+    f.label(root, 'батарейка', dy=-5, size=7, color=INK, bold=False)
+    # edge probabilities: outside the tree on the left and right, between the branches in the middle
+    f.label((100, 39), c(p_bad), dx=-4, dy=0, size=7.5, anchor='end')
+    f.label((160, 39), c(q_bad), dx=4, dy=0, size=7.5, anchor='start')
+    f.label((54, 87), c(p_rej_bad), dx=-4, dy=2, size=7.5, anchor='end')
+    f.label((88, 87), c(round(1 - p_rej_bad, 4)), dx=4, dy=2, size=7.5, color=INK, bold=False, anchor='start')
+    f.label((172, 87), c(p_rej_good), dx=-4, dy=2, size=7.5, anchor='end')
+    f.label((206, 87), c(round(1 - p_rej_good, 4)), dx=4, dy=2, size=7.5, color=INK, bold=False, anchor='start')
     # node names
-    f.label(bad, 'неисправна', dy=-6, size=7, color=INK, bold=False)
-    f.label(good, 'исправна', dy=12, size=7, color=INK, bold=False)
-    f.label(ends['bb'], 'забракована', dx=4, dy=2.5, size=7, anchor='start')
-    f.label(ends['bp'], 'пропущена', dx=4, dy=2.5, size=7, anchor='start', color=INK, bold=False)
-    f.label(ends['gb'], 'забракована', dx=4, dy=2.5, size=7, anchor='start')
-    f.label(ends['gp'], 'пропущена', dx=4, dy=2.5, size=7, anchor='start', color=INK, bold=False)
+    f.label(bad, 'неисправна', dx=-5, dy=-3, size=7, color=INK, bold=False, anchor='end')
+    f.label(good, 'исправна', dx=5, dy=-3, size=7, color=INK, bold=False, anchor='start')
+    for k, name in (('bb', 'забракована'), ('bp', 'пропущена'), ('gb', 'забракована'), ('gp', 'пропущена')):
+        hot = k in ('bb', 'gb')
+        f.label(ends[k], name, dy=10, size=7, color=ACCENT if hot else INK, bold=hot)
     # products along the highlighted branches
-    f.label(ends['bb'], f'{c(p_bad)} · {c(p_rej_bad)} = {c(prod_bad)}', dx=4, dy=11.5, size=6.5, anchor='start')
-    f.label(ends['gb'], f'{c(q_bad)} · {c(p_rej_good)} = {c(prod_good)}', dx=4, dy=11.5, size=6.5, anchor='start')
-    assert abs(p_bad * p_rej_bad - prod_bad) < 1e-12 and abs(q_bad * p_rej_good - prod_good) < 1e-12
-    assert abs(prod_bad + prod_good - total) < 1e-12
+    f.label(ends['bb'], f'{c(p_bad)} · {c(p_rej_bad)} = {c(prod_bad)}', dy=20, size=6.5)
+    f.label(ends['gb'], f'{c(q_bad)} · {c(p_rej_good)} = {c(prod_good)}', dy=20, size=6.5)
     f.save(dst, width=320)
 
 
