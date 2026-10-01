@@ -721,6 +721,12 @@
   .tex .sol-steps{margin:0;padding-left:1.4em;}
   .tex .sol-steps li{margin:0 0 .5em;padding-left:.2em;}
   .tex .sol-steps li:last-child{margin-bottom:0;}
+  /* Рисунок из условия с пометками (tools/annotate_figs.py) и таблица
+     внутри шага: таблице на телефоне нужна своя прокрутка вбок. */
+  .tex .sol-fig{margin:var(--s3) 0;}
+  .tex .sol-steps .table-wrapper{margin:.5em 0;}
+  .tex .sol-steps table th,.tex .sol-steps table td{padding:var(--s2);}
+  .tex .sol-steps table th:first-child,.tex .sol-steps table td:first-child{min-width:0;}
   /* ---- таблицы в условии ----
      Их приносят «Случайные величины» и финансовые задачи: там таблица —
      не оформление, а сами данные задачи, без неё условие нечитаемо.

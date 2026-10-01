@@ -16,7 +16,7 @@ globalThis.window = {};
 const cfg = fs.readFileSync('config.js', 'utf8');
 const protoList = new Function(cfg + ';return protoList;')();
 
-const ALLOWED = new Set(['p', 'ol', 'li', 'b', 'br', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'ul', 'i', 'em', 'strong', 'sub', 'sup']);
+const ALLOWED = new Set(['img', 'p', 'ol', 'li', 'b', 'br', 'div', 'span', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'ul', 'i', 'em', 'strong', 'sub', 'sup']);
 const norm = s => String(s).replace(/<[^>]+>/g, '').replace(/[\s\\$,{}]| |&thinsp;|&nbsp;/g, '').replace(/−|&minus;/g, '-');
 let errors = 0, warns = 0, total = 0;
 const err = (n, id, m) => { errors++; console.log(`ERROR t${n} #${id}: ${m}`); };
@@ -32,7 +32,14 @@ for (let n = 1; n <= 13; n++) {
     const id = +k, html = S[k];
     total++;
     if (!reps.includes(id)) { err(n, id, 'solution on a non-prototype task'); continue; }
-    if (/<img|base64/.test(html)) err(n, id, 'inline image');
+    if (/base64/.test(html)) err(n, id, 'inline image');
+    // the only images allowed are annotated figures made by tools/annotate_figs.py
+    for (const m of html.matchAll(/<img\b[^>]*>/g)) {
+      const src = (/src="([^"]+)"/.exec(m[0]) || [])[1] || '';
+      if (!new RegExp(`^img/t${n}/sol/[\\w-]+\\.svg$`).test(src)) err(n, id, `image src "${src}" is not a solution figure`);
+      else if (!fs.existsSync(src)) err(n, id, `figure file ${src} is missing`);
+      if (!/alt="[^"]+"/.test(m[0])) err(n, id, 'figure without alt text');
+    }
     for (const m of html.matchAll(/<\/?([a-zA-Z][\w-]*)/g))
       if (!ALLOWED.has(m[1].toLowerCase())) err(n, id, `tag <${m[1]}> is not allowed`);
     if (n <= 12) {
