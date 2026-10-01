@@ -23,6 +23,8 @@ import re
 ACCENT = '#1d4e89'          # interface blue; warm colours are student status
 HALO = '#ffffff'
 INK = '#000000'             # the colour of the statement drawings; for diagrams drawn from scratch
+BLANK_SCALE = 2             # px per pt for diagrams drawn from scratch
+BLANK_MAX = 520             # px; same ceiling as the widest statement figures (task 9 graphs)
 
 
 def grid_of(svg):
@@ -57,6 +59,7 @@ class Fig:
         if grid:
             self.ox, self.oy, self.cell = grid_of(self.svg)
         self.grid = grid
+        self.is_blank = False
 
     @classmethod
     def blank(cls, w, h):
@@ -65,7 +68,7 @@ class Fig:
         self = cls.__new__(cls)
         self.svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
                     f'viewBox="0 0 {w} {h}"></svg>')
-        self.items, self.grid = [], False
+        self.items, self.grid, self.is_blank = [], False, True
         return self
 
     def p(self, pt):
@@ -106,9 +109,15 @@ class Fig:
         """Anything the helpers do not cover (arcs, right-angle marks); units are pt."""
         self.items.append(svg_fragment)
 
-    def save(self, dst, width=300):
-        """width — displayed width in px; the trainer shows the file at its own size."""
+    def save(self, dst, width=None):
+        """width — displayed width in px; the trainer shows the file at its own size
+        (narrow screens shrink it to the column). A copy of a statement drawing should
+        be passed the width the statement shows it at. Diagrams drawn from scratch get
+        2 px per pt, so that 6.5-7.5 pt labels come out at 13-15 px next to 18 px body
+        text; BLANK_MAX is the widest any figure is shown."""
         vb = [float(v) for v in re.search(r'viewBox="([^"]+)"', self.svg).group(1).split()]
+        if width is None:
+            width = min(BLANK_MAX, round(vb[2] * BLANK_SCALE)) if self.is_blank else 300
         head = re.search(r'<svg\b[^>]*>', self.svg).group(0)
         sized = re.sub(r'\swidth="[^"]+"', f' width="{width}"', head, count=1)
         sized = re.sub(r'\sheight="[^"]+"', f' height="{round(width * vb[3] / vb[2])}"', sized, count=1)

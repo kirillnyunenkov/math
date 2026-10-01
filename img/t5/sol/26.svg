@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="250" height="250" viewBox="0 0 150 150"><g id="sol-overlay">
+<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 150 150"><g id="sol-overlay">
 <polygon points="121.00,26.00 140.00,26.00 140.00,140.00 121.00,140.00" fill="#000000" fill-opacity="0.28" stroke="none"/>
 <polygon points="26.00,121.00 121.00,121.00 121.00,140.00 26.00,140.00" fill="#000000" fill-opacity="0.28" stroke="none"/>
 <polygon points="64.00,102.00 83.00,102.00 83.00,121.00 64.00,121.00" fill="#1d4e89" fill-opacity="0.45" stroke="none"/>

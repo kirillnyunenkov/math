@@ -66,7 +66,7 @@ def t10_67():
         f.raw(f'<path d="M {x + 4 * s:.2f} {ya - 2.5:.2f} L {x:.2f} {ya:.2f} L {x + 4 * s:.2f} {ya + 2.5:.2f}" fill="none" stroke="{ACCENT}" stroke-width="1"/>')
     f.label(((p.X(0.4) + p.X(2.2)) / 2, ya), '1,8 с', dy=9.5, size=8.5)
     f.label((p.X(1.3), p.Y(8.4)), 'выше 6 м', size=7.5)
-    f.save('img/t10/sol/67.svg', width=320)
+    f.save('img/t10/sol/67.svg')
 
 
 def t10_43():
@@ -86,7 +86,7 @@ def t10_43():
     f.label((p.X(7.5), p.Y(56.25)), 'остановка', dy=-5, size=7.5, color=INK, bold=False)
     f.label((p.X(11.2), p.Y(52)), 'формула уже', size=6.5, color=INK, bold=False)
     f.label((p.X(11.2), p.Y(52)), 'не действует', dy=7.5, size=6.5, color=INK, bold=False)
-    f.save('img/t10/sol/43.svg', width=320)
+    f.save('img/t10/sol/43.svg')
 
 
 def t10_73():
@@ -105,7 +105,7 @@ def t10_73():
     f.circle((p.X(18), p.Y(1870)), 2.0, width=0.9, opacity=0)
     f.label((p.X(10.5), p.Y(2010)), 'выше 1870 К —', size=7.5)
     f.label((p.X(10.5), p.Y(2010)), 'прибор портится', dy=8.5, size=7.5)
-    f.save('img/t10/sol/73.svg', width=320)
+    f.save('img/t10/sol/73.svg')
 
 
 def t10_49():
@@ -119,7 +119,7 @@ def t10_49():
     p.tick(24, '24')
     f.point((p.X(24), p.Y(0)))
     f.label((p.X(24), p.Y(0)), 'бак пуст', dy=-7, size=7.5)
-    f.save('img/t10/sol/49.svg', width=320)
+    f.save('img/t10/sol/49.svg')
 
 
 FIGS = [t10_43, t10_49, t10_67, t10_73]
