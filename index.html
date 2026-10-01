@@ -697,8 +697,12 @@
   /* ============================================================
      МАТЕМАТИКА
      ============================================================ */
+  /* Fixed line-height, not `normal`: with `normal` a line holding an inline
+     formula came out 1-3px taller than a line of plain text (KaTeX is set
+     slightly larger), so line spacing wobbled inside a paragraph. 1.4 is the
+     smallest value at which an ordinary formula no longer stretches its line. */
   .tex{font-family:'Times New Roman',serif;font-size:var(--fs-lg);color:var(--ink);
-    line-height:normal;overflow-wrap:break-word;}
+    line-height:1.4;overflow-wrap:break-word;}
   .tex .katex{font-size:1.06em;}
   /* Inline \dfrac is taller than the line; without a margin two such lines
      stack flush and the denominator of one touches the numerator of the next
