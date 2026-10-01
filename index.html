@@ -967,6 +967,13 @@
     padding:var(--s5) var(--s6);margin-bottom:var(--s4);}
   .sk-line{border-radius:6px;background:linear-gradient(90deg,var(--sk-base) 25%,var(--sk-shine) 50%,var(--sk-base) 75%);
     background-size:200% 100%;animation:sk-wave 1.5s ease-in-out infinite;}
+  /* ожидание сборки варианта: кольцо в цвете интерфейса и подпись */
+  @keyframes vwait-spin{to{transform:rotate(360deg)}}
+  .vwait{display:flex;flex-direction:column;align-items:center;gap:var(--s4);
+    padding:var(--s16) 0;color:var(--ink-3);animation:ans-flash .28s var(--ease);}
+  .vwait p{margin:0;}
+  .vwait-ring{width:36px;height:36px;border-radius:50%;border:3px solid var(--line);
+    border-top-color:var(--accent);animation:vwait-spin .8s linear infinite;}
 
   @media (prefers-reduced-motion:reduce){
     html{scroll-behavior:auto;}
@@ -2943,7 +2950,7 @@ function buildVariant(){
   const sel=activeTasks().filter(t=>(builder.counts[t.n]||0)>0).map(t=>t.n);
   if(!sel.length)return;
   const mode=builder.mode;
-  appEl.innerHTML='<div class="vbox"><p style="color:var(--muted)">Собираю вариант…</p></div>';
+  appEl.innerHTML='<div class="vbox"><div class="vwait" role="status"><div class="vwait-ring" aria-hidden="true"></div><p>Собираю вариант…</p></div></div>';
   ensureAll(sel,()=>{
     const items=[];
     sel.forEach(n=>{if(!Array.isArray(window.TASKDATA[n]))return;
