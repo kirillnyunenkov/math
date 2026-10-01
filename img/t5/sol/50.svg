@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="185" viewBox="0 0 260 150"><g id="sol-overlay">
+<line x1="130.00" y1="16.00" x2="71.00" y2="62.00" stroke="#1d4e89" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="130.00" y1="16.00" x2="189.00" y2="62.00" stroke="#1d4e89" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="71.00" y1="62.00" x2="38.00" y2="112.00" stroke="#1d4e89" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="71.00" y1="62.00" x2="104.00" y2="112.00" stroke="#000000" stroke-width="0.9" stroke-linecap="round"/>
+<line x1="189.00" y1="62.00" x2="156.00" y2="112.00" stroke="#1d4e89" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="189.00" y1="62.00" x2="222.00" y2="112.00" stroke="#000000" stroke-width="0.9" stroke-linecap="round"/>
+<circle cx="130.00" cy="16.00" r="1.8" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<circle cx="71.00" cy="62.00" r="1.8" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<circle cx="189.00" cy="62.00" r="1.8" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<text x="130.00" y="11.00" font-family="Times New Roman, Times, serif" font-size="7" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">батарейка</text>
+<text x="96.00" y="39.00" font-family="Times New Roman, Times, serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">0,2</text>
+<text x="164.00" y="39.00" font-family="Times New Roman, Times, serif" font-size="7.5" font-weight="bold" text-anchor="start" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">0,8</text>
+<text x="50.00" y="89.00" font-family="Times New Roman, Times, serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">0,95</text>
+<text x="92.00" y="89.00" font-family="Times New Roman, Times, serif" font-size="7.5" font-weight="normal" text-anchor="start" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">0,05</text>
+<text x="168.00" y="89.00" font-family="Times New Roman, Times, serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">0,05</text>
+<text x="210.00" y="89.00" font-family="Times New Roman, Times, serif" font-size="7.5" font-weight="normal" text-anchor="start" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">0,95</text>
+<text x="66.00" y="59.00" font-family="Times New Roman, Times, serif" font-size="7" font-weight="normal" text-anchor="end" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">неисправна</text>
+<text x="194.00" y="59.00" font-family="Times New Roman, Times, serif" font-size="7" font-weight="normal" text-anchor="start" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">исправна</text>
+<text x="38.00" y="122.00" font-family="Times New Roman, Times, serif" font-size="7" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">забракована</text>
+<text x="104.00" y="122.00" font-family="Times New Roman, Times, serif" font-size="7" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">пропущена</text>
+<text x="156.00" y="122.00" font-family="Times New Roman, Times, serif" font-size="7" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">забракована</text>
+<text x="222.00" y="122.00" font-family="Times New Roman, Times, serif" font-size="7" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">пропущена</text>
+<text x="38.00" y="132.00" font-family="Times New Roman, Times, serif" font-size="6.5" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">0,2 · 0,95 = 0,19</text>
+<text x="156.00" y="132.00" font-family="Times New Roman, Times, serif" font-size="6.5" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">0,8 · 0,05 = 0,04</text>
+</g>
+</svg>

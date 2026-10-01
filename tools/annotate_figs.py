@@ -22,6 +22,7 @@ import re
 
 ACCENT = '#1d4e89'          # interface blue; warm colours are student status
 HALO = '#ffffff'
+INK = '#000000'             # the colour of the statement drawings; for diagrams drawn from scratch
 
 
 def grid_of(svg):
@@ -57,32 +58,48 @@ class Fig:
             self.ox, self.oy, self.cell = grid_of(self.svg)
         self.grid = grid
 
+    @classmethod
+    def blank(cls, w, h):
+        """An empty canvas w x h pt for diagrams that have no statement drawing
+        (probability trees, Euler circles). Draw the structure in INK, highlights in ACCENT."""
+        self = cls.__new__(cls)
+        self.svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
+                    f'viewBox="0 0 {w} {h}"></svg>')
+        self.items, self.grid = [], False
+        return self
+
     def p(self, pt):
         """Grid coordinates -> SVG units (identity for geometry figures)."""
         if not self.grid:
             return pt
         return (self.ox + pt[0] * self.cell, self.oy - pt[1] * self.cell)
 
-    def polygon(self, pts, opacity=0.22):
+    def polygon(self, pts, opacity=0.22, color=ACCENT):
         s = ' '.join('%.2f,%.2f' % self.p(q) for q in pts)
-        self.items.append(f'<polygon points="{s}" fill="{ACCENT}" fill-opacity="{opacity}" stroke="none"/>')
+        self.items.append(f'<polygon points="{s}" fill="{color}" fill-opacity="{opacity}" stroke="none"/>')
 
-    def segment(self, a, b, width=1.3, dash=None):
+    def circle(self, c, r, opacity=0.0, width=1.0, color=INK, fill=ACCENT):
+        """r is in pt even on a grid figure."""
+        x, y = self.p(c)
+        self.items.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{fill}" fill-opacity="{opacity}" '
+                          f'stroke="{color}" stroke-width="{width}"/>')
+
+    def segment(self, a, b, width=1.3, dash=None, color=ACCENT):
         (x1, y1), (x2, y2) = self.p(a), self.p(b)
         d = f' stroke-dasharray="{dash}"' if dash else ''
         self.items.append(f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" '
-                          f'stroke="{ACCENT}" stroke-width="{width}" stroke-linecap="round"{d}/>')
+                          f'stroke="{color}" stroke-width="{width}" stroke-linecap="round"{d}/>')
 
     def point(self, a, r=2.2):
         x, y = self.p(a)
         self.items.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{r}" fill="{ACCENT}" stroke="{HALO}" stroke-width="0.6"/>')
 
-    def label(self, a, text, dx=0, dy=0, size=8, anchor='middle'):
+    def label(self, a, text, dx=0, dy=0, size=8, anchor='middle', color=ACCENT, bold=True):
         """dx, dy — offset in pt from the anchor point (y grows downward)."""
         x, y = self.p(a)
         self.items.append(
             f'<text x="{x + dx:.2f}" y="{y + dy:.2f}" font-family="Times New Roman, Times, serif" '
-            f'font-size="{size}" font-weight="bold" text-anchor="{anchor}" fill="{ACCENT}" '
+            f'font-size="{size}" font-weight="{"bold" if bold else "normal"}" text-anchor="{anchor}" fill="{color}" '
             f'stroke="{HALO}" stroke-width="2" stroke-linejoin="round" paint-order="stroke">{text}</text>')
 
     def raw(self, svg_fragment):

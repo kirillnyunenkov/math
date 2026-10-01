@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="121" viewBox="0 0 246 106"><g id="sol-overlay">
+<line x1="142.00" y1="12.00" x2="90.00" y2="46.00" stroke="#1d4e89" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="142.00" y1="12.00" x2="194.00" y2="46.00" stroke="#1d4e89" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="90.00" y1="46.00" x2="64.00" y2="80.00" stroke="#000000" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="90.00" y1="46.00" x2="116.00" y2="80.00" stroke="#1d4e89" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="194.00" y1="46.00" x2="168.00" y2="80.00" stroke="#1d4e89" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="194.00" y1="46.00" x2="220.00" y2="80.00" stroke="#000000" stroke-width="0.8" stroke-linecap="round"/>
+<circle cx="142.00" cy="12.00" r="1.6" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<circle cx="90.00" cy="46.00" r="1.6" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<text x="85.00" y="44.00" font-family="Times New Roman, Times, serif" font-size="7.5" font-weight="bold" text-anchor="end" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">О</text>
+<circle cx="194.00" cy="46.00" r="1.6" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<text x="199.00" y="44.00" font-family="Times New Roman, Times, serif" font-size="7.5" font-weight="bold" text-anchor="start" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">Р</text>
+<circle cx="64.00" cy="80.00" r="1.1" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<circle cx="116.00" cy="80.00" r="1.6" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<circle cx="168.00" cy="80.00" r="1.6" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<circle cx="220.00" cy="80.00" r="1.1" fill="#1d4e89" stroke="#ffffff" stroke-width="0.6"/>
+<text x="64.00" y="91.00" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">ОО</text>
+<text x="116.00" y="91.00" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">ОР</text>
+<text x="168.00" y="91.00" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="bold" text-anchor="middle" fill="#1d4e89" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">РО</text>
+<text x="220.00" y="91.00" font-family="Times New Roman, Times, serif" font-size="8.5" font-weight="normal" text-anchor="middle" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">РР</text>
+<text x="2.00" y="31.50" font-family="Times New Roman, Times, serif" font-size="6.5" font-weight="normal" text-anchor="start" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">1-й бросок</text>
+<text x="2.00" y="65.50" font-family="Times New Roman, Times, serif" font-size="6.5" font-weight="normal" text-anchor="start" fill="#000000" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" paint-order="stroke">2-й бросок</text>
+</g>
+</svg>
