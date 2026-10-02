@@ -180,6 +180,8 @@
   .list .it{display:flex;gap:var(--s3);justify-content:space-between;align-items:baseline;
     padding:var(--s2) 0;border-bottom:1px solid var(--line);font-size:var(--fs-sm);}
   .list .it:last-child{border-bottom:none;}
+  .list .it .vres{flex:1;text-align:right;}
+  .list .it .btn{min-height:32px;padding:0 var(--s3);}
   .wrong .it{display:block;}
   .wrong .meta{display:flex;justify-content:space-between;gap:var(--s3);color:var(--ink-3);font-size:var(--fs-xs);}
   .wrong .cond{margin:6px 0;font-size:var(--fs-sm);color:var(--ink-2);}
@@ -439,7 +441,8 @@ function renderStudent(id){
     </div>
     <div class="grid2">
       <div class="panel"><h3>Пробники</h3>
-        ${vs.length?`<div class="list">${vs.map(v=>`<div class="it"><span>${fmtDate(v.t)}</span><span><b>${v.s}</b> <span class="muted">тест. · ${v.p} из ${v.m||v.total} перв. · ${Math.round((v.ms||0)/60000)} мин</span></span></div>`).join('')}</div>`:'<p class="muted">Пробников пока не было.</p>'}</div>
+        ${vs.length?`<div class="list">${vs.map(v=>`<div class="it"><span>${fmtDate(v.t)}</span><span class="vres"><b>${v.s}</b> <span class="muted">тест. · ${v.p} из ${v.m||v.total} перв. · ${Math.round((v.ms||0)/60000)} мин</span></span>
+          <button class="btn danger" data-act="vdel" data-id="${esc(v.id)}" data-user="${id}">Удалить</button></div>`).join('')}</div>`:'<p class="muted">Пробников пока не было.</p>'}</div>
       <div class="panel"><h3>Последние неверные ответы</h3>
         ${s.wrong.length?`<div class="list wrong">${s.wrong.map(w=>`<div class="it" data-cond="${w.n}:${w.pid}">
           <div class="meta"><span>Задание ${w.n} · задача ${w.pid}</span><span>${fmtDate(w.ts)}</span></div>
@@ -501,6 +504,25 @@ async function setMine(pid,on){
   if(!on)location.hash='#/leads';
   await refresh();
 }
+// Пробник стираем одной транзакцией вместе с пометкой об удалении: по ней
+// тренажёр уберёт его из истории на устройствах ученика (sync-core.js).
+function delVariant(uid,vid){
+  const v=data.byUser[uid].variants.find(x=>x.id===vid);if(!v)return;
+  sheet(`<h3>Удалить пробник?</h3><p>${esc(fmtDate(v.t))}, тестовый балл <b>${esc(v.s)}</b>. Он пропадёт из панели и из истории ученика на всех его устройствах. Вернуть его будет нельзя.</p>
+    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn danger" data-act="vdel-go" data-id="${esc(vid)}" data-user="${esc(uid)}">Удалить</button></div>`);
+}
+async function delVariantGo(uid,vid){
+  const v=data.byUser[uid].variants.find(x=>x.id===vid);if(!v)return;
+  const fail=why=>sheet(`<h3>Не получилось</h3><p>${why} Пробник не удалён.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);
+  let r;
+  try{r=await api('/batch',{method:'POST',body:{requests:[
+    {method:'POST',url:'/api/collections/variant_deletes/records',body:{user:uid,uid:v.uid}},
+    {method:'DELETE',url:'/api/collections/variants/records/'+vid}]}});}
+  catch(e){if(e.message!=='401')fail('Нет связи с сервером.');return;}
+  if(r.status!==200){fail(`Сервер ответил ${esc(r.status)}.`);return;}
+  closeSheet();
+  await refresh();
+}
 async function setActive(uid,on){
   await api('/collections/users/records/'+uid,{method:'PATCH',body:{active:on}});
   await refresh();
@@ -539,6 +561,8 @@ document.addEventListener('click',e=>{
   else if(a==='rotate-go')rotateGo(id);
   else if(a==='mine')setMine(id,b.dataset.v==='1');
   else if(a==='active')setActive(id,b.dataset.v==='1');
+  else if(a==='vdel')delVariant(b.dataset.user,id);
+  else if(a==='vdel-go')delVariantGo(b.dataset.user,id);
 });
 document.getElementById('sheet-ov').addEventListener('click',e=>{if(e.target.id==='sheet-ov')closeSheet();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});

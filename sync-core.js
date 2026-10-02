@@ -96,12 +96,14 @@
   }
 
   // Mock-exam history: union by uid (legacy records without uid: by t),
-  // minus records older than the newest clear, oldest first, last 50.
-  function mergeVariants(local, incoming, clears) {
+  // minus records older than the newest clear and records the teacher deleted
+  // (uids), oldest first, last 50.
+  function mergeVariants(local, incoming, clears, deleted) {
     const cut = Math.max(-Infinity, ...(clears || []).map(c => c.ts));
+    const gone = new Set(deleted || []);
     const by = new Map();
     for (const v of [...(local || []), ...(incoming || [])]) by.set(v.uid || 't' + v.t, v);
-    return [...by.values()].filter(v => v.t >= cut).sort((a, b) => a.t - b.t).slice(-50);
+    return [...by.values()].filter(v => v.t >= cut && !gone.has(v.uid)).sort((a, b) => a.t - b.t).slice(-50);
   }
 
   const api = { uid, newStamps, markEvent, resetEvent, applyEvents, snapshotEvents, importEvents, mergeVariants, statusOf };
