@@ -125,6 +125,14 @@
   .toolbar .grow{flex:1;}
   .muted{color:var(--ink-3);font-size:var(--fs-sm);}
   .center{text-align:center;padding:var(--s12) var(--s4);}
+  .tabs{display:flex;gap:var(--s2);margin-bottom:var(--s5);flex-wrap:wrap;}
+  .tabs a{display:inline-flex;align-items:center;gap:var(--s2);min-height:40px;padding:0 var(--s4);
+    border:1px solid var(--line-strong);border-radius:var(--r-full);color:var(--ink-2);
+    text-decoration:none;font-size:var(--fs-sm);font-weight:600;}
+  .tabs a.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line);}
+  .tabs a span{font-weight:500;color:var(--ink-3);}
+  td.acts{text-align:right;white-space:nowrap;}
+  td.acts .btn{min-height:32px;padding:0 var(--s3);}
 
   table{width:100%;border-collapse:collapse;font-size:var(--fs-sm);}
   th{text-align:left;font-weight:600;color:var(--ink-3);font-size:var(--fs-xs);text-transform:uppercase;
@@ -272,16 +280,25 @@ async function loginFromHash(){
 
 // ---- данные ----
 let data=null;   // {students, links, byUser:{id:{events,variants,clears}}}
+/* Student = role "student" with no bot profile (old link accounts) or with a
+   profile marked `mine`. Everyone else who came through the bot is a lead:
+   only the summary from /ege/leads is loaded for them, never their journals. */
 async function load(){
-  const [users,links,events,variants,clears]=await Promise.all([
-    all('users','role="student"'),all('links'),all('events'),all('variants'),all('variant_clears')]);
+  const [users,links,pr]=await Promise.all([all('users','role="student"'),all('links'),api('/ege/leads')]);
+  if(pr.status!==200)throw new Error('leads '+pr.status);
+  const profOf={};pr.json.items.forEach(p=>profOf[p.user]=p);
+  const students=users.filter(u=>!profOf[u.id]||profOf[u.id].mine);
   const byUser={};
-  users.forEach(u=>byUser[u.id]={events:[],variants:[],clears:[]});
+  students.forEach(u=>byUser[u.id]={events:[],variants:[],clears:[]});
+  const ids=students.map(u=>u.id),filters=[];
+  for(let i=0;i<ids.length;i+=30)filters.push(ids.slice(i,i+30).map(id=>`user="${id}"`).join('||'));
+  const own=async c=>(await Promise.all(filters.map(f=>all(c,f)))).flat();
+  const [events,variants,clears]=await Promise.all([own('events'),own('variants'),own('variant_clears')]);
   events.forEach(e=>byUser[e.user]&&byUser[e.user].events.push(e));
   variants.forEach(v=>byUser[v.user]&&byUser[v.user].variants.push(v));
   clears.forEach(c=>byUser[c.user]&&byUser[c.user].clears.push(c));
   const linkOf={};links.forEach(l=>linkOf[l.user]=l);
-  data={students:users,linkOf,byUser,loaded:Date.now()};
+  data={students,leads:pr.json.items.filter(p=>!p.mine),profOf,linkOf,byUser,loaded:Date.now()};
 }
 const cfg={
   protoOf(n,pid){const pl=protoList(n);if(!pl)return null;const g=pl.find(g=>g.ids.includes(pid));return g?g.p:null;},
@@ -304,6 +321,13 @@ function ago(ts){
 const fmtDate=ts=>new Date(ts).toLocaleString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 const fmtDay=ts=>new Date(ts).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short'});
 
+const tabs=cur=>`<div class="tabs">
+  <a href="#/" class="${cur==='s'?'on':''}">Ученики <span>${data.students.length}</span></a>
+  <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a></div>`;
+/* Telegram usernames are [A-Za-z0-9_]; anything else is shown as plain text. */
+const tgLink=un=>/^[A-Za-z0-9_]{1,64}$/.test(un||'')?`<a href="https://t.me/${un}" target="_blank" rel="noopener">@${un}</a>`:'<span class="muted">—</span>';
+const pbTime=s=>s?Date.parse(String(s).replace(' ','T')):null;
+
 // ---- список учеников ----
 let sortKey='last',sortDir=-1;
 function rowData(u){const s=summaryOf(u),lastV=s.variants[s.variants.length-1];
@@ -317,13 +341,12 @@ function renderList(){
     return (x<y?-1:x>y?1:0)*sortDir;});
   rows.sort((a,b)=>(a.u.active===false)-(b.u.active===false));
   const th=(k,label,cls)=>`<th data-sort="${k}" class="${cls||''}">${label}<span class="arr">${sortKey===k?(sortDir>0?'↑':'↓'):''}</span></th>`;
-  app.innerHTML=`
+  app.innerHTML=`${tabs('s')}
     <h2>Ученики</h2>
     <p class="lead">Активных учеников: ${data.students.filter(u=>u.active!==false).length}. Нажми на ученика, чтобы открыть его карточку.</p>
     <div class="panel">
       <div class="toolbar"><div class="grow muted">Обновлено ${fmtDate(data.loaded)}</div>
-        <button class="btn quiet" data-act="reload">Обновить</button>
-        <button class="btn" data-act="add">Добавить ученика</button></div>
+        <button class="btn quiet" data-act="reload">Обновить</button></div>
       ${rows.length?`<div class="table-wrap"><table>
         <thead><tr>${th('name','Ученик')}${th('last','Последняя активность')}${th('week','Решено за 7 дней','num')}${th('mastered','Умею','num hide-m')}${th('mock','Последний пробник','num')}</tr></thead>
         <tbody>${rows.map(r=>`<tr class="row${r.u.active===false?' off':''}" data-open="${r.u.id}">
@@ -333,7 +356,30 @@ function renderList(){
           <td class="num hide-m">${r.mastered}</td>
           <td class="num">${r.mock==null?'<span class="muted">—</span>':`<b>${r.mock}</b> <span class="muted">· ${fmtDay(r.mockT)}</span>`}</td>
         </tr>`).join('')}</tbody></table></div>`
-      :'<p class="center muted">Учеников пока нет. Нажми «Добавить ученика» — получишь ссылку для входа.</p>'}
+      :'<p class="center muted">Учеников пока нет. Открой вкладку «Из канала» и нажми «В мои ученики» у нужного человека.</p>'}
+    </div>`;
+}
+
+// ---- пришедшие из канала ----
+function renderLeads(){
+  const rows=data.leads;
+  app.innerHTML=`${tabs('l')}
+    <p class="lead">Зарегистрировались через бота: ${rows.length}. «В мои ученики» переносит человека в основной список с полной статистикой.</p>
+    <div class="panel">
+      <div class="toolbar"><div class="grow muted">Обновлено ${fmtDate(data.loaded)}</div>
+        <button class="btn quiet" data-act="reload">Обновить</button></div>
+      ${rows.length?`<div class="table-wrap"><table>
+        <thead><tr><th>Имя</th><th>Telegram</th><th class="hide-m">Регистрация</th><th class="num">Отметок</th><th>Последняя активность</th><th></th></tr></thead>
+        <tbody>${rows.map(p=>`<tr class="${p.active?'':'off'}">
+          <td><span class="name">${esc(p.name)}</span>${p.active?'':' <span class="chip off">отключён</span>'}</td>
+          <td>${tgLink(p.username)}</td>
+          <td class="hide-m">${fmtDay(pbTime(p.created))}</td>
+          <td class="num">${Number(p.marks)||0}</td>
+          <td>${ago(pbTime(p.last))}</td>
+          <td class="acts"><button class="btn" data-act="mine" data-id="${esc(p.id)}" data-v="1">В мои ученики</button>
+            <button class="btn quiet" data-act="active" data-id="${esc(p.user)}" data-v="${p.active?0:1}">${p.active?'Отключить':'Включить'}</button></td>
+        </tr>`).join('')}</tbody></table></div>`
+      :'<p class="center muted">Пока никто не зарегистрировался через бота.</p>'}
     </div>`;
 }
 
@@ -353,9 +399,12 @@ function renderStudent(id){
   app.innerHTML=`
     <p><a href="#/">← Все ученики</a></p>
     <div class="toolbar"><h2 class="grow">${esc(u.name||u.login)}${u.active===false?' <span class="chip off">отключён</span>':''}</h2>
-      <button class="btn quiet" data-act="link" data-id="${id}">Ссылка для входа</button>
-      <button class="btn quiet" data-act="rotate" data-id="${id}">Новая ссылка</button>
-      <button class="btn ${u.active===false?'quiet':'danger'}" data-act="toggle" data-id="${id}">${u.active===false?'Включить':'Отключить'}</button></div>
+      ${data.profOf[id]
+        ?`<span class="muted">${tgLink(data.profOf[id].username)}</span>
+          <button class="btn quiet" data-act="mine" data-id="${esc(data.profOf[id].id)}" data-v="0">Убрать из учеников</button>`
+        :`<button class="btn quiet" data-act="link" data-id="${id}">Ссылка для входа</button>
+          <button class="btn quiet" data-act="rotate" data-id="${id}">Новая ссылка</button>`}
+      <button class="btn ${u.active===false?'quiet':'danger'}" data-act="active" data-id="${id}" data-v="${u.active===false?1:0}">${u.active===false?'Включить':'Отключить'}</button></div>
     <div class="kpis">
       <div class="kpi"><b>${s.lastActive==null?'—':fmtDay(s.lastActive)}</b><span>последняя активность</span></div>
       <div class="kpi"><b>${s.solved7d}</b><span>решено за 7 дней</span></div>
@@ -417,21 +466,6 @@ function showLink(u,secret,title){
     <div class="linkbox">${esc(url)}</div>
     <div class="acts"><button class="btn quiet" data-act="close">Закрыть</button><button class="btn" data-act="copy" data-url="${esc(url)}">Скопировать</button></div>`);
 }
-async function addStudent(){
-  sheet(`<h3>Новый ученик</h3><p>Как подписать ученика — решаешь ты: хватит имени. Если имена совпадают, добавь пометку. Подпись видишь только ты и сам ученик.</p>
-    <input class="field" id="new-name" maxlength="80" placeholder="Например, Маша или Маша (10 кл.)" autocomplete="off">
-    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="create">Создать</button></div>`);
-  setTimeout(()=>document.getElementById('new-name').focus(),50);
-}
-async function createStudent(){
-  const name=document.getElementById('new-name').value.trim();if(!name)return;
-  const login='s'+rnd(6,'abcdefghijklmnopqrstuvwxyz0123456789'),secret=rnd(32,ALNUM);
-  const r=await api('/collections/users/records',{method:'POST',body:{login,name,role:'student',active:true,password:secret,passwordConfirm:secret}});
-  if(r.status!==200){sheet(`<h3>Не получилось</h3><p>${esc(JSON.stringify(r.json&&r.json.data||r.status))}</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
-  await api('/collections/links/records',{method:'POST',body:{user:r.json.id,secret}});
-  await refresh();
-  showLink(r.json,secret,'Ученик создан');
-}
 async function rotate(id){
   const u=data.students.find(x=>x.id===id);
   sheet(`<h3>Выпустить новую ссылку?</h3><p>Старая ссылка перестанет работать, и все устройства, где ${esc(u.name)} вошёл по ней, выйдут из аккаунта. Прогресс не пропадёт.</p>
@@ -447,9 +481,14 @@ async function rotateGo(id){
   await refresh();
   showLink(u,secret,'Новая ссылка');
 }
-async function toggle(id){
-  const u=data.students.find(x=>x.id===id);
-  await api('/collections/users/records/'+id,{method:'PATCH',body:{active:u.active===false}});
+async function setMine(pid,on){
+  const r=await api('/collections/tg_profiles/records/'+pid,{method:'PATCH',body:{mine:on}});
+  if(r.status!==200){sheet(`<h3>Не получилось</h3><p>Сервер ответил ${esc(r.status)}.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
+  if(!on)location.hash='#/leads';
+  await refresh();
+}
+async function setActive(uid,on){
+  await api('/collections/users/records/'+uid,{method:'PATCH',body:{active:on}});
   await refresh();
 }
 
@@ -457,7 +496,7 @@ async function toggle(id){
 async function refresh(){await load();for(const k in summaries)delete summaries[k];route();}
 function route(){
   const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
-  if(m)renderStudent(m[1]);else renderList();
+  if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else renderList();
   window.scrollTo(0,0);
 }
 function render(msg){
@@ -474,20 +513,17 @@ document.addEventListener('click',e=>{
   const b=e.target.closest('[data-act]');if(!b)return;
   const a=b.dataset.act,id=b.dataset.id;
   if(a==='reload')refresh();
-  else if(a==='add')addStudent();
-  else if(a==='create')createStudent();
   else if(a==='close')closeSheet();
   else if(a==='copy')navigator.clipboard.writeText(b.dataset.url).then(()=>{b.textContent='Скопировано';});
   else if(a==='link'){const l=data.linkOf[id],u=data.students.find(x=>x.id===id);
     if(l)showLink(u,l.secret,'Ссылка для входа');else rotate(id);}
   else if(a==='rotate')rotate(id);
   else if(a==='rotate-go')rotateGo(id);
-  else if(a==='toggle')toggle(id);
+  else if(a==='mine')setMine(id,b.dataset.v==='1');
+  else if(a==='active')setActive(id,b.dataset.v==='1');
 });
 document.getElementById('sheet-ov').addEventListener('click',e=>{if(e.target.id==='sheet-ov')closeSheet();});
-document.addEventListener('keydown',e=>{
-  if(e.key==='Escape')closeSheet();
-  if(e.key==='Enter'&&e.target.id==='new-name')createStudent();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});
 document.getElementById('home').addEventListener('click',()=>{location.hash='#/';});
 document.getElementById('logout').addEventListener('click',()=>logout('Ты вышел. Чтобы войти снова, открой свою ссылку.'));
 document.getElementById('theme').addEventListener('click',()=>{
