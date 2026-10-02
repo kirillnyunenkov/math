@@ -1878,13 +1878,17 @@ function nextTaskWithWork(n){
 
 // ответы нигде не сохраняются — в прогресс/ссылку попадает только итоговый статус
 function plainAnswer(html){if(!html)return'';const t=document.createElement('div');t.innerHTML=html;return(t.textContent||'').trim();}
-/* The iPhone decimal keypad has no minus key. type="number" is the only way
-   to get its "numbers and punctuation" keyboard, which has one. Such a field
-   reports a dot as the separator and '' while the text is not a number. */
-const ANS_ATTRS=/iphone|ipod/i.test(navigator.userAgent)?'type="number" step="any"':'type="text" inputmode="decimal"';
-function ansVal(inp){return inp.value.trim().replace('.',',');}
-function ansBad(inp,msg){if(!inp.validity.badInput)return;
-  msg.textContent='Введи число';msg.className='ans-msg no';reanim(inp,'shake');reanim(msg,'flash');}
+/* The iPhone decimal keypad has no minus key, and no numeric keypad there
+   has one. So on iPhone, tasks whose bank contains negative answers get the
+   regular text keyboard (minus and comma sit under "123"); the rest keep the
+   keypad. Decided per task, not per answer, so the keyboard is not a hint. */
+const IS_IPHONE=/iphone|ipod/i.test(navigator.userAgent);
+const negAnsCache={};
+function hasNegAns(n){const d=window.TASKDATA[n];if(!d)return false;
+  if(!(n in negAnsCache))negAnsCache[n]=d.some(t=>/^[-\u2212]/.test(plainAnswer(t.a)));
+  return negAnsCache[n];}
+function ansAttrs(n){return IS_IPHONE&&hasNegAns(n)
+  ?'type="text" autocapitalize="off" autocorrect="off" spellcheck="false"':'type="text" inputmode="decimal"';}
 function normAns(s){return(s||'').toLowerCase().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.');}
 function parseNum(s){let t=(s||'').toString().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.').replace(/\.$/,'');
   if(t===''||!/^-?\d*\.?\d+$/.test(t))return null;const n=parseFloat(t);return isFinite(n)?n:null;}
@@ -2770,7 +2774,7 @@ function renderTask(n){
   const pl=protoList(n);
   const acHTML=id=>{const ansTxt=task.mode==='html'&&!isLongAns(n)?plainAnswer((data[id-1]||{}).a):'';
     return ansTxt?`<div class="answer-check">
-          <input class="ans-input" ${ANS_ATTRS} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
+          <input class="ans-input" ${ansAttrs(n)} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
           <button class="btn check" data-check="${id}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span>
         </div>`:'';};
@@ -2865,7 +2869,7 @@ function renderTask(n){
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
   const ansTxt=isLongAns(n)?'':plainAnswer(d.a);
   const ac=ansTxt?`<div class="answer-check">
-      <input class="ans-input" ${ANS_ATTRS} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
+      <input class="ans-input" ${ansAttrs(n)} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
       <button class="btn check" data-check="${id}" data-nostatus="1">Проверить</button>
       <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
   return `<div class="subcard">
@@ -3024,7 +3028,7 @@ function finishVariant(){
   variant.items.forEach((it,i)=>{
     if(isLongAns(it.n)){it.pts=0;return;}                 // part 2: graded by the student next
     const inp=document.querySelector('.v-input[data-vi="'+i+'"]');
-    const given=inp?ansVal(inp):'';it.given=given;
+    const given=inp?inp.value.trim():'';it.given=given;
     const d=(window.TASKDATA[it.n]||[])[it.id-1]||{};
     it.ok = given!=='' && answersEqual(given, plainAnswer(d.a));it.pts=it.ok?1:0;
   });
@@ -3126,7 +3130,7 @@ function renderTraining(){
       const st=(state[it.n]||{})[it.id]||'',c=st?'is-'+st:'';
       const ansTxt=isLongAns(it.n)?'':plainAnswer(d.a);
       const ac=ansTxt?`<div class="answer-check">
-          <input class="ans-input" ${ANS_ATTRS} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off">
+          <input class="ans-input" ${ansAttrs(it.n)} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off">
           <button class="btn check" data-tcheck="${i}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
       return `<div class="vcard ${c}" id="tcard-${i}" data-n="${it.n}">
@@ -3161,7 +3165,7 @@ function renderVariant(){
           <div class="vlabel">Задание ${it.n}${long?`<span class="vlabel-art"> · максимум ${mx} ${ballWord(mx)}</span>`:''}</div>
           <div class="cond"><div class="tex">${d.c||''}</div></div>
           ${long?'<p class="vlong-hint">Решение записывай на листе. Баллы поставишь себе сам по критериям после завершения.</p>'
-            :`<input class="v-input" ${ANS_ATTRS} placeholder="Ответ" data-vi="${i}" autocomplete="off">`}
+            :`<input class="v-input" ${ansAttrs(it.n)} placeholder="Ответ" data-vi="${i}" autocomplete="off">`}
         </div>`;}).join('')}
       <div style="text-align:center;margin-top:8px"><button class="btn primary" data-vfinish>Завершить вариант</button></div>
     </div>`;
@@ -3237,7 +3241,7 @@ appEl.addEventListener('click',e=>{
   const tch=e.target.closest('[data-tcheck]');
   if(tch){const i=+tch.dataset.tcheck,it=variant.items[i];
     const wrap=tch.closest('.answer-check'),input=wrap.querySelector('.ans-input'),msg=wrap.querySelector('.ans-msg');
-    const raw=ansVal(input);if(!raw){ansBad(input,msg);return;}
+    const raw=input.value.trim();if(!raw)return;
     const correct=plainAnswer(((window.TASKDATA[it.n]||[])[it.id-1]||{}).a),cur=(state[it.n]||{})[it.id];
     if(answersEqual(raw,correct)){
       input.classList.remove('wrong');input.classList.add('correct');reanim(input,'pop');
@@ -3312,7 +3316,7 @@ appEl.addEventListener('click',e=>{
   if(chk){const r=parseRoute();if(r.view!=='task')return;const id=+chk.dataset.check,n=r.n;
     const noStatus=chk.dataset.nostatus==='1';
     const wrap=chk.closest('.answer-check'),input=wrap.querySelector('.ans-input'),msg=wrap.querySelector('.ans-msg');
-    const rawGiven=ansVal(input);if(!rawGiven){ansBad(input,msg);return;}
+    const rawGiven=input.value.trim();if(!rawGiven)return;
     const correctRaw=plainAnswer(((window.TASKDATA[n]||[])[id-1]||{}).a);
     if(answersEqual(rawGiven,correctRaw)){
       input.classList.remove('wrong');input.classList.add('correct');
@@ -3352,8 +3356,8 @@ appEl.addEventListener('click',e=>{
     return;}
 });
 appEl.addEventListener('input',e=>{const el=e.target;
-  if((el.classList.contains('ans-input')||el.classList.contains('v-input'))&&el.type==='text'){
-    const cleaned=el.value.replace(/\./g,',').replace(/[^0-9,\-]/g,'');
+  if(el.classList.contains('ans-input')||el.classList.contains('v-input')){
+    const cleaned=el.value.replace(/\./g,',').replace(/[\u2212\u2013\u2014]/g,'-').replace(/[^0-9,\-]/g,'');
     if(cleaned!==el.value){const p=el.selectionStart-(el.value.length-cleaned.length);el.value=cleaned;try{el.setSelectionRange(p,p);}catch(_){}}}
 });
 /* Один переключатель на обе кнопки — в шапке и в панели задания.
