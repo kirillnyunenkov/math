@@ -2,9 +2,9 @@
    При выкладке новой версии сайта поднимай VERSION (любое изменение этого файла
    заставит браузер установить новый SW и удалить старый кеш). HTML грузится
    network-first, поэтому онлайн-пользователи всегда получают свежую версию. */
-const VERSION = 'v80';
+const VERSION = 'v81';
 const CACHE = 'ege-' + VERSION;
-const SHELL = ['./', './index.html', './sync-core.js', './config.js', './stats-core.js', './teacher.html', './manifest.webmanifest',
+const SHELL = ['./', './index.html', './sync-core.js', './config.js', './stats-core.js', './teacher.html', './privacy.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
   './logo.svg', './favicon.ico', './favicon-32.png',
   './katex/katex.min.css', './katex/katex.min.js', './katex/auto-render.min.js',
@@ -33,9 +33,11 @@ self.addEventListener('fetch', e => {
 
   // HTML/навигация — свежая версия когда онлайн, кеш когда офлайн.
   // У каждой страницы своя запись: иначе открытая однажды панель учителя
-  // (teacher.html) подменила бы собой тренажёр в офлайне.
+  // (teacher.html) или страница о данных (privacy.html) подменила бы собой
+  // тренажёр в офлайне.
   if (req.mode === 'navigate') {
-    const page = url.pathname.endsWith('/teacher.html') ? './teacher.html' : './index.html';
+    const page = url.pathname.endsWith('/teacher.html') ? './teacher.html'
+      : url.pathname.endsWith('/privacy.html') ? './privacy.html' : './index.html';
     e.respondWith((async () => {
       try {
         const net = await fetch(req);

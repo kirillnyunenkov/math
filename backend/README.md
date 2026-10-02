@@ -9,14 +9,16 @@ Progress sync and the teacher panel talk to a PocketBase instance at
 |---|---|
 | `/opt/ege-api/pocketbase` | binary, v0.40.4 |
 | `/opt/ege-api/pb_migrations/` | copy of `backend/pb_migrations/` |
+| `/opt/ege-api/pb_hooks/` | copy of `backend/pb_hooks/` (Telegram bot) |
 | `/opt/ege-api/pb_data/` | database (SQLite) |
 | `/opt/ege-api/backups/` | nightly `.tgz`, newest 14 kept (`ege-api-backup.timer`) |
 | `/etc/systemd/system/ege-api.service` | listens on `127.0.0.1:8091` |
 | `/etc/caddy/Caddyfile` | block from `deploy/Caddyfile.snippet` |
 | `/root/ege-api-superuser.txt` | admin UI login (`https://api.kirillnyun.space/_/`) |
 | `/root/ege-api-teacher-link.txt` | the teacher's login link |
+| `/etc/ege-api.env` | `TG_BOT_TOKEN`, `TG_WEBHOOK_SECRET` (root-only, mode 600) |
 
-Secrets live only in those two root-only files; never commit them.
+Secrets live only in those three root-only files; never commit them.
 
 ## Tests
 
@@ -24,7 +26,25 @@ Secrets live only in those two root-only files; never commit them.
 PB_BIN=~/.local/pocketbase/pocketbase node --test 'backend/tests/*.test.mjs'
 ```
 
-Spins up a throwaway PocketBase with the migrations and checks access rules.
+Spins up a throwaway PocketBase with the migrations and hooks (plus a stub
+Telegram API) and checks access rules and the bot.
+
+## Telegram bot
+
+Registration and sign-in go through a bot implemented in `pb_hooks/tg.js`
+(texts are at the top of that file). Telegram calls
+`POST /api/tg/webhook`; the call is accepted only with the header
+`X-Telegram-Bot-Api-Secret-Token` equal to `TG_WEBHOOK_SECRET`.
+
+Register the webhook once (run on the server; prints only Telegram's answer):
+
+    set -a; . /etc/ege-api.env; set +a
+    curl -s "https://api.telegram.org/bot$TG_BOT_TOKEN/setWebhook" \
+      -d url=https://api.kirillnyun.space/api/tg/webhook \
+      -d secret_token="$TG_WEBHOOK_SECRET" -d 'allowed_updates=["message"]'
+
+A hook change needs the files copied to `/opt/ege-api/pb_hooks/` and
+`systemctl restart ege-api`.
 
 ## Schema change
 

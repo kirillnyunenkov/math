@@ -2348,7 +2348,7 @@ function histEncode(){
     L.push([dm,20]);L.push([Math.min(r.p|0,63),6]);L.push([Math.min(r.total|0,63),6]);
     L.push([Math.min((r.m||r.total)|0,63),6]);
     L.push([Math.min(Math.round(r.ms/1000),16383),14]);
-    const q=(r.q||[]).slice(0,63);L.push([q.length,6]);
+    const q=qRows(r).slice(0,63);L.push([q.length,6]);
     q.forEach(([n,id,pts])=>{L.push([Math.min(n,31),5]);L.push([Math.min(id,2047),11]);L.push([Math.min(pts,7),3]);});
   });
   return bytesToB64(packBits(L));
@@ -2385,8 +2385,13 @@ function sparkline(hist){
 }
 /* Per-task cell: all copies of task n in one attempt merged into one
    state — ok (full score everywhere), no (nothing anywhere), part otherwise. */
+/* q приходит и с сервера (variants.q — произвольный JSON от любого
+   зарегистрированного пользователя), поэтому перед выводом приводим его
+   к числам и строке: в разметку не должно попасть ничего, кроме них. */
+function qRows(r){return (Array.isArray(r&&r.q)?r.q:[]).filter(Array.isArray)
+  .map(x=>[+x[0]||0,+x[1]||0,+x[2]||0,x[3]==null?'':String(x[3])]);}
 function histCells(r){const by={};
-  (r.q||[]).forEach(([n,,pts])=>{const full=pts>=itemMax(n),c=by[n]||(by[n]={full:0,zero:0,k:0});
+  qRows(r).forEach(([n,,pts])=>{const full=pts>=itemMax(n),c=by[n]||(by[n]={full:0,zero:0,k:0});
     c.k++;if(full)c.full++;else if(!pts)c.zero++;});
   const out={};Object.keys(by).forEach(n=>{const c=by[n];out[n]=c.full===c.k?'ok':c.zero===c.k?'no':'part';});
   return out;}
@@ -2426,11 +2431,12 @@ function histPanel(){
 function toggleHistRow(btn){
   const i=+btn.dataset.vhrow,det=document.getElementById('vhdet-'+i),r=loadHistory()[i];
   if(!det||!r||!r.q)return;
+  const q=qRows(r);
   const open=det.hidden;det.hidden=!open;btn.setAttribute('aria-expanded',open);
   if(!open||det.dataset.ready)return;
   det.innerHTML='<p class="vh-wait">Загружаю…</p>';
-  ensureAll([...new Set(r.q.map(x=>x[0]))],()=>{det.dataset.ready='1';
-    det.innerHTML=r.q.slice().sort((a,b)=>a[0]-b[0]).map(([n,id,pts,given])=>{
+  ensureAll([...new Set(q.map(x=>x[0]))],()=>{det.dataset.ready='1';
+    det.innerHTML=q.slice().sort((a,b)=>a[0]-b[0]).map(([n,id,pts,given])=>{
       const d=(window.TASKDATA[n]||[])[id-1]||{},mx=itemMax(n),full=pts>=mx;
       const tag=isLongAns(n)?`<span class="vtag ${full?'ok':pts?'part':'no'}">${pts} из ${mx}</span>`
         :`<span class="vtag ${full?'ok':'no'}">${full?'верно':'неверно'}</span>`;
