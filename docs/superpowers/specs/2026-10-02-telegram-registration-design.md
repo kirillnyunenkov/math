@@ -33,9 +33,9 @@ being signed in.
    progress). This is also how a person signs in on another device.
 
 A visitor who opens the site without a session sees the wall instead of the
-app: a short pitch, the button "Войти через Telegram" (`t.me/<bot>?start=site`)
-and one discreet line for people with an old personal link ("Есть личная
-ссылка? Открой её"), so that existing students do not create duplicates.
+app: a short pitch and the button "Войти через Telegram"
+(`t.me/<bot>?start=site`). The wall does not mention personal links (owner's
+decision: old link accounts keep working but are not catered for).
 
 ## Components
 
