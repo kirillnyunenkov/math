@@ -79,3 +79,72 @@ test('rate limits trust the proxy header', async () => {
   assert.deepEqual(s.json.trustedProxy.headers, ['X-Forwarded-For']);
   assert.equal(s.json.trustedProxy.useLeftmostIP, false);
 });
+
+test('webhook rejects calls without the Telegram secret', async () => {
+  assert.equal((await hook(update(from(100)), null)).status, 403);
+  assert.equal((await hook(update(from(100)), 'wrong')).status, 403);
+  assert.equal((await req('GET', '/collections/tg_profiles/records', tok.teacher)).json.totalItems, 0);
+  assert.equal(sent.length, 0);
+});
+
+test('first message registers the person and sends a working link', async () => {
+  assert.equal((await hook(update(from(7123456789)))).status, 200);
+  const { login: l, secret } = linkOf(7123456789);
+  assert.equal(l, 'tg7123456789');
+  const a = await login(l, secret);
+  assert.equal(a.record.role, 'student');
+  assert.equal(a.record.name, 'Маша');
+  tok.lead = a.token; tok.leadId = a.record.id;
+  const p = (await req('GET', '/collections/tg_profiles/records', tok.teacher)).json.items;
+  assert.equal(p.length, 1);
+  assert.deepEqual([p[0].tg_id, p[0].username, p[0].mine, p[0].user], ['7123456789', 'masha_k', false, a.record.id]);
+  assert.match(sent.at(-1).text, /privacy\.html/);
+  assert.equal(sent.at(-1).path, '/bottest/sendMessage');
+});
+
+test('second message returns the same link and creates nothing', async () => {
+  const first = linkOf(7123456789);
+  await hook(update(from(7123456789, { username: 'masha_new' })));
+  assert.deepEqual(linkOf(7123456789), first);
+  const p = (await req('GET', '/collections/tg_profiles/records', tok.teacher)).json.items;
+  assert.equal(p.length, 1);
+  assert.equal(p[0].username, 'masha_new');
+  assert.doesNotMatch(sent.at(-1).text, /privacy\.html/);
+});
+
+test('long or missing names are stored safely', async () => {
+  await hook(update(from(200, { first_name: 'Я'.repeat(200), username: undefined })));
+  const a = await login('tg200', linkOf(200).secret);
+  assert.equal(a.record.name.length, 80);
+  await hook(update({ id: 201, is_bot: false }));
+  assert.equal((await login('tg201', linkOf(201).secret)).record.name, 'Ученик');
+});
+
+test('group chats, bots and non-message updates are ignored', async () => {
+  const n = sent.length;
+  assert.equal((await hook(update(from(300), 'group'))).status, 200);
+  assert.equal((await hook(update(from(301, { is_bot: true })))).status, 200);
+  assert.equal((await hook({ update_id: 5, edited_message: {} })).status, 200);
+  assert.equal(sent.length, n);
+  const logins = (await req('GET', '/collections/users/records', tok.teacher)).json.items.map(u => u.login);
+  assert.ok(!logins.includes('tg300') && !logins.includes('tg301'));
+});
+
+test('a disabled account gets no link', async () => {
+  await hook(update(from(400)));
+  const u = (await req('GET', '/collections/users/records?filter=' + encodeURIComponent('login="tg400"'), tok.teacher)).json.items[0];
+  await req('PATCH', `/collections/users/records/${u.id}`, tok.teacher, { active: false });
+  await hook(update(from(400)));
+  assert.equal(sent.at(-1).chat_id, 400);
+  assert.equal(sent.at(-1).reply_markup, undefined);
+});
+
+test('a lead sees no profiles and cannot promote themselves', async () => {
+  assert.equal((await req('GET', '/collections/tg_profiles/records', tok.lead)).json.totalItems, 0);
+  const p = (await req('GET', '/collections/tg_profiles/records', tok.teacher)).json.items.find(x => x.user === tok.leadId);
+  assert.ok([403, 404].includes((await req('PATCH', `/collections/tg_profiles/records/${p.id}`, tok.lead, { mine: true })).status));
+  assert.equal((await req('PATCH', `/collections/tg_profiles/records/${p.id}`, tok.teacher, { mine: true })).status, 200);
+  assert.equal((await req('PATCH', `/collections/tg_profiles/records/${p.id}`, tok.teacher, { mine: false })).status, 200);
+  assert.equal((await req('GET', '/collections/users/records', tok.lead)).json.totalItems, 1);
+  assert.equal((await req('GET', '/collections/links/records', tok.lead)).json?.totalItems ?? 0, 0);
+});
