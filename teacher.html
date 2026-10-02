@@ -298,7 +298,14 @@ async function load(){
   variants.forEach(v=>byUser[v.user]&&byUser[v.user].variants.push(v));
   clears.forEach(c=>byUser[c.user]&&byUser[c.user].clears.push(c));
   const linkOf={};links.forEach(l=>linkOf[l.user]=l);
-  data={students,leads:pr.json.items.filter(p=>!p.mine),profOf,linkOf,byUser,loaded:Date.now()};
+  const userOf={};users.forEach(u=>userOf[u.id]=u);
+  data={students,leads:pr.json.items.filter(p=>!p.mine),profOf,userOf,linkOf,byUser,loaded:Date.now()};
+}
+/* A lead's journal is fetched only when their card is opened. */
+async function loadOne(id){
+  const f=`user="${id}"`;
+  const [events,variants,clears]=await Promise.all([all('events',f),all('variants',f),all('variant_clears',f)]);
+  data.byUser[id]={events,variants,clears};
 }
 const cfg={
   protoOf(n,pid){const pl=protoList(n);if(!pl)return null;const g=pl.find(g=>g.ids.includes(pid));return g?g.p:null;},
@@ -364,13 +371,13 @@ function renderList(){
 function renderLeads(){
   const rows=data.leads;
   app.innerHTML=`${tabs('l')}
-    <p class="lead">Зарегистрировались через бота: ${rows.length}. «В мои ученики» переносит человека в основной список с полной статистикой.</p>
+    <p class="lead">Зарегистрировались через бота: ${rows.length}. Нажми на человека, чтобы открыть его статистику. «В мои ученики» переносит его в основной список.</p>
     <div class="panel">
       <div class="toolbar"><div class="grow muted">Обновлено ${fmtDate(data.loaded)}</div>
         <button class="btn quiet" data-act="reload">Обновить</button></div>
       ${rows.length?`<div class="table-wrap"><table>
         <thead><tr><th>Имя</th><th>Telegram</th><th class="hide-m">Регистрация</th><th class="num">Отметок</th><th>Последняя активность</th><th></th></tr></thead>
-        <tbody>${rows.map(p=>`<tr class="${p.active?'':'off'}">
+        <tbody>${rows.map(p=>`<tr class="row${p.active?'':' off'}" data-open="${esc(p.user)}">
           <td><span class="name">${esc(p.name)}</span>${p.active?'':' <span class="chip off">отключён</span>'}</td>
           <td>${tgLink(p.username)}</td>
           <td class="hide-m">${fmtDay(pbTime(p.created))}</td>
@@ -385,8 +392,15 @@ function renderLeads(){
 
 // ---- карточка ученика ----
 function renderStudent(id){
-  const u=data.students.find(x=>x.id===id);
+  const u=data.userOf[id];
   if(!u){location.hash='#/';return;}
+  if(!data.byUser[id]){
+    app.innerHTML='<p class="center muted">Загружаю данные…</p>';
+    loadOne(id).then(()=>{if(location.hash==='#/s/'+id)renderStudent(id);})
+      .catch(e=>{if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
+    return;
+  }
+  const prof=data.profOf[id],lead=!!prof&&!prof.mine;
   const s=summaryOf(u),d=data.byUser[id];
   const protos=StatsCore.problemPrototypes(d.events,cfg).slice(0,12);
   const maxAct=Math.max(1,...s.activity.map(a=>a.count));
@@ -397,11 +411,11 @@ function renderStudent(id){
       <span title="умею ${c.g} · повторить ${c.o} · разобраться ${c.b} из ${c.total}"><span class="bar"><i class="g" style="width:${p(c.g)}"></i><i class="o" style="width:${p(c.o)}"></i><i class="b" style="width:${p(c.b)}"></i></span></span></div>`);}
   const vs=s.variants.slice().reverse();
   app.innerHTML=`
-    <p><a href="#/">← Все ученики</a></p>
+    <p><a href="${lead?'#/leads':'#/'}">← ${lead?'Из канала':'Все ученики'}</a></p>
     <div class="toolbar"><h2 class="grow">${esc(u.name||u.login)}${u.active===false?' <span class="chip off">отключён</span>':''}</h2>
-      ${data.profOf[id]
-        ?`<span class="muted">${tgLink(data.profOf[id].username)}</span>
-          <button class="btn quiet" data-act="mine" data-id="${esc(data.profOf[id].id)}" data-v="0">Убрать из учеников</button>`
+      ${prof
+        ?`<span class="muted">${tgLink(prof.username)}</span>
+          <button class="btn ${lead?'':'quiet'}" data-act="mine" data-id="${esc(prof.id)}" data-v="${lead?1:0}">${lead?'В мои ученики':'Убрать из учеников'}</button>`
         :`<button class="btn quiet" data-act="link" data-id="${id}">Ссылка для входа</button>
           <button class="btn quiet" data-act="rotate" data-id="${id}">Новая ссылка</button>`}
       <button class="btn ${u.active===false?'quiet':'danger'}" data-act="active" data-id="${id}" data-v="${u.active===false?1:0}">${u.active===false?'Включить':'Отключить'}</button></div>
@@ -509,8 +523,12 @@ function render(msg){
 document.addEventListener('click',e=>{
   const th=e.target.closest('th[data-sort]');
   if(th){const k=th.dataset.sort;if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=k==='name'?1:-1;}renderList();return;}
-  const row=e.target.closest('[data-open]');if(row){location.hash='#/s/'+row.dataset.open;return;}
-  const b=e.target.closest('[data-act]');if(!b)return;
+  const b=e.target.closest('[data-act]');
+  if(!b){
+    /* buttons and the Telegram link inside a row must not open the card */
+    const row=e.target.closest('[data-open]');
+    if(row&&!e.target.closest('a'))location.hash='#/s/'+row.dataset.open;
+    return;}
   const a=b.dataset.act,id=b.dataset.id;
   if(a==='reload')refresh();
   else if(a==='close')closeSheet();
