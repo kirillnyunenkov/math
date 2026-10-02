@@ -73,4 +73,18 @@ function webhook(e) {
   return e.json(200, { ok: true });
 }
 
-module.exports = { webhook: webhook };
+// Everyone registered through the bot, with a cheap activity summary, so the
+// panel does not have to download every lead's journal.
+function leads(e) {
+  if (!e.auth || e.auth.collection().name !== "users" || e.auth.get("role") !== "teacher") return e.json(403, { message: "forbidden" });
+  const rows = arrayOf(new DynamicModel({ id: "", user: "", username: "", mine: false, created: "", name: "", active: false, marks: 0, last: "" }));
+  $app.db().newQuery(
+    "SELECT p.id, p.user, p.username, p.mine, p.created, u.name, u.active, " +
+    "(SELECT COUNT(*) FROM events e WHERE e.user = p.user AND e.kind = 'mark' AND e.source != 'import') AS marks, " +
+    "COALESCE((SELECT MAX(e.created) FROM events e WHERE e.user = p.user), '') AS last " +
+    "FROM tg_profiles p JOIN users u ON u.id = p.user ORDER BY p.created DESC"
+  ).all(rows);
+  return e.json(200, { items: rows });
+}
+
+module.exports = { webhook: webhook, leads: leads };

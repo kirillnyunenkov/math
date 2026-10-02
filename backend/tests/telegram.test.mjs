@@ -148,3 +148,23 @@ test('a lead sees no profiles and cannot promote themselves', async () => {
   assert.equal((await req('GET', '/collections/users/records', tok.lead)).json.totalItems, 1);
   assert.equal((await req('GET', '/collections/links/records', tok.lead)).json?.totalItems ?? 0, 0);
 });
+
+test('leads list is teacher-only and counts real marks', async () => {
+  assert.equal((await req('GET', '/ege/leads')).status, 403);
+  assert.equal((await req('GET', '/ege/leads', tok.lead)).status, 403);
+  assert.equal((await req('GET', '/ege/leads', tok.su)).status, 403);
+  const ev = (uid, source) => ({ user: tok.leadId, uid, ts: 1, kind: 'mark', n: 3, pid: 5, status: 'g', source });
+  for (const [uid, src] of [['a', 'check'], ['b', 'manual'], ['c', 'import']])
+    assert.equal((await req('POST', '/collections/events/records', tok.lead, ev(uid, src))).status, 200);
+  const r = await req('GET', '/ege/leads', tok.teacher);
+  assert.equal(r.status, 200);
+  const me = r.json.items.find(x => x.user === tok.leadId);
+  assert.equal(me.marks, 2);
+  assert.equal(me.name, 'Маша');
+  assert.equal(me.mine, false);
+  assert.equal(me.active, true);
+  assert.match(me.last, /^\d{4}-\d\d-\d\d /);
+  const idle = r.json.items.find(x => x.name === 'Ученик');
+  assert.equal(idle.marks, 0);
+  assert.equal(idle.last, '');
+});
