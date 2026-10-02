@@ -2904,7 +2904,7 @@ function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
    TG_BOT — ник бота без «@» (задаётся при выкладке, пустым быть не должен).
    FREE_CHECKS — сколько отмеченных задач доступно до стены: 0 = стена сразу,
    5 = «сначала пять задач». */
-const TG_BOT='';
+const TG_BOT='kirill_repet_bot';
 const FREE_CHECKS=0;
 const markedCount=()=>Object.values(state).reduce((s,o)=>s+Object.keys(o||{}).length,0);
 const gated=()=>!auth&&markedCount()>=FREE_CHECKS;
