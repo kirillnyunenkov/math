@@ -33,8 +33,7 @@
 | `backend/pb_hooks/tg.js` (new) | bot texts, account creation, webhook and leads handlers |
 | `backend/tests/telegram.test.mjs` (new) | bot, leads and `tg_profiles` rule tests |
 | `backend/deploy/ege-api.service`, `backend/README.md` | hooks dir, env file, runbook |
-| `config.js` | `TG_BOT`, `FREE_CHECKS` |
-| `index.html` | wall, sign-in texts, history hardening |
+| `index.html` | wall (`TG_BOT`, `FREE_CHECKS`), sign-in texts, history hardening |
 | `teacher.html` | tabs, leads table, promote/demote, scoped data loading |
 | `privacy.html` (new), `sw.js` | privacy page, cache mapping, version |
 
@@ -491,7 +490,7 @@ There is no unit-test harness for `index.html`; verification is in the browser (
 
 - [ ] **Step 1: Add config**
 
-Append to `config.js`:
+(Changed during execution: the two constants go to the top of the wall block in `index.html`, not `config.js` — a cached `config.js` broke the page.) Originally: append to `config.js`:
 
 ```js
 /* Sign-in wall (see docs/superpowers/specs/2026-10-02-telegram-registration-design.md).
@@ -923,7 +922,7 @@ git commit -m "Harden mock-exam history rendering; privacy page; sw v81; bot dep
 This task changes production. Do nothing here without the owner saying yes to that step in chat.
 
 - [ ] **Step 1: Owner approvals.** Show the owner the bot texts (`TEXT` in `tg.js`), the wall text and `privacy.html`; apply their edits, re-run tests, commit.
-- [ ] **Step 2: Bot.** The owner creates the bot in BotFather and tells the bot's username (not the token). Set `TG_BOT` in `config.js`; `grep -n "TG_BOT = ''" config.js` must print nothing. Commit.
+- [ ] **Step 2: Bot.** The owner creates the bot in BotFather and tells the bot's username (not the token). Set `TG_BOT` in `index.html`; `grep -n "TG_BOT=''" index.html` must print nothing. Commit.
 - [ ] **Step 3: Secrets on the server (owner runs it; the token must not appear in chat).** Give the owner this command to run over SSH as root:
 
 ```bash

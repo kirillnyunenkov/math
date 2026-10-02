@@ -351,6 +351,15 @@
   /* ============================================================
      ИНСТРУКЦИЯ
      ============================================================ */
+  .wall{max-width:560px;margin:0 auto;padding:var(--s12) var(--s6) var(--s16);text-align:center;}
+  .wall h2{font-size:var(--fs-3xl);margin-bottom:var(--s3);}
+  .wall p{color:var(--ink-2);font-size:var(--fs-md);line-height:1.6;margin:0 0 var(--s6);}
+  .wall .wall-go{display:inline-flex;align-items:center;justify-content:center;min-height:52px;padding:0 var(--s8);
+    border-radius:var(--r-md);background:var(--accent);color:var(--accent-on);font-weight:600;
+    font-size:var(--fs-base);text-decoration:none;}
+  .wall .wall-go:hover{background:var(--accent-hover);}
+  .wall .wall-note{font-size:var(--fs-sm);color:var(--ink-3);margin-top:var(--s5);}
+  .wall .wall-note a{color:var(--accent);}
   .help{max-width:720px;margin:0 auto;padding:var(--s10) var(--s6) var(--s16);}
   .help h2{font-size:var(--fs-3xl);margin-bottom:var(--s2);}
   .help .help-lead{color:var(--ink-2);font-size:var(--fs-base);margin-bottom:var(--s8);}
@@ -1639,7 +1648,7 @@ const shareEl=document.getElementById('share'), resetEl=document.getElementById(
 function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}}
 
 /* ---- аккаунт и синхронизация ----
-   Вход только по личной ссылке от преподавателя (#/login/<login>.<secret>).
+   Вход по личной ссылке (#/login/<login>.<secret>), которую присылает Telegram-бот.
    Без входа тренажёр не делает ни одного сетевого запроса. После входа каждое
    действие ложится в журнал (ege_outbox_v1) и уезжает на сервер пачками;
    встречный журнал с других устройств сливается через SyncCore — порядок
@@ -1749,14 +1758,14 @@ const Sync={
     /* 401 бывает и после новой ссылки, и после смены настроек входа на
        сервере — во втором случае старая ссылка по-прежнему работает. */
     else note('Нужно войти заново',
-      'Открой свою ссылку для входа ещё раз. Если она не сработает — попроси у преподавателя новую. Прогресс на этом устройстве сохранится.');},
+      'Напиши боту в Telegram — он пришлёт ссылку для входа. Прогресс на этом устройстве сохранится.');},
   async login(loginId,secret,link){
     let r;
     try{r=await this.api('/collections/users/auth-with-password',
       {method:'POST',anon:true,body:{identity:loginId,password:secret}});}
     catch(e){note('Нет связи','Не получилось войти: нет интернета. Открой ссылку ещё раз, когда связь появится.');return;}
     if(r.status===403){note('Аккаунт отключён','Преподаватель отключил этот аккаунт.');return;}
-    if(r.status!==200){note('Ссылка не подошла','Возможно, преподаватель выпустил новую. Попроси актуальную ссылку.');return;}
+    if(r.status!==200){note('Ссылка не подошла','Напиши боту в Telegram — он пришлёт актуальную ссылку для входа.');return;}
     const rec=r.json.record,prev=auth;
     if(prev&&prev.userId!==rec.id){
       const y=await ask({title:'Войти другим учеником?',
@@ -1798,7 +1807,7 @@ setInterval(()=>{if(document.visibilityState==='visible')Sync.soon(0);},60000);
 function accountSheet(){
   if(!auth)return;
   return new Promise(res=>{sheetResolve=res;
-    showSheet(`<h3>${escapeHtml(auth.name)}</h3><p class="ih-sub">Прогресс сохраняется на сервере. Чтобы продолжить на другом устройстве, открой там свою ссылку для входа.</p>`+
+    showSheet(`<h3>${escapeHtml(auth.name)}</h3><p class="ih-sub">Прогресс сохраняется на сервере. Чтобы продолжить на другом устройстве, открой там свою ссылку для входа или напиши боту в Telegram.</p>`+
       `<button class="sheet-go" data-sheet="copy">Скопировать ссылку для другого устройства</button>`+
       `<div class="sheet-actions" style="margin-top:10px"><button class="sheet-btn" data-sheet="logout">Выйти</button><button class="sheet-btn" data-sheet="0">Закрыть</button></div>`);
   }).then(v=>{
@@ -1806,7 +1815,7 @@ function accountSheet(){
       ()=>note('Ссылка скопирована','Открой её на другом устройстве. Никому её не пересылай — по ней входят в твой аккаунт.'),
       ()=>prompt('Твоя ссылка для входа:',auth.link));
     else if(v==='logout')ask({title:'Выйти из аккаунта?',
-      text:'Отметки на этом устройстве останутся, но перестанут синхронизироваться.',ok:'Выйти'}).then(y=>{if(y)Sync.logout();});
+      text:'Отметки на этом устройстве останутся. Чтобы вернуться в тренажёр, понадобится снова войти через Telegram.',ok:'Выйти'}).then(y=>{if(y)Sync.logout();});
   });
 }
 /* Где ученик остановился в прошлый раз. Отдельный ключ, а не поле в state:
@@ -2879,9 +2888,37 @@ function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
     <div class="reveal">${revealLnk('sol',id,'Ответ')}</div>
     <div class="solution" id="sol-${id}" data-html="1"></div>
   </div>`;}
+/* ---- стена входа ----
+   Без входа тренажёр закрыт: вход для всех через Telegram-бота, он присылает
+   личную ссылку (#/login/...). FREE_CHECKS>0 пускает попробовать: стена
+   встаёт при следующей смене экрана после N отмеченных задач. Это не защита
+   содержимого (данные задач лежат в открытых файлах), а точка входа. */
+/* Настройки стены живут здесь, а не в config.js: index.html всегда приходит
+   свежим из сети, а config.js service worker отдаёт из кеша и обновляет в
+   фоне — после выкладки новая страница встретилась бы со старым конфигом.
+   TG_BOT — ник бота без «@» (задаётся при выкладке, пустым быть не должен).
+   FREE_CHECKS — сколько отмеченных задач доступно до стены: 0 = стена сразу,
+   5 = «сначала пять задач». */
+const TG_BOT='';
+const FREE_CHECKS=0;
+const markedCount=()=>Object.values(state).reduce((s,o)=>s+Object.keys(o||{}).length,0);
+const gated=()=>!auth&&markedCount()>=FREE_CHECKS;
+function renderWall(){
+  setBack(false);statsEl.innerHTML='';headerEl.style.display='';
+  [shareEl,resetEl,guideEl,accountEl,burgerEl].forEach(el=>{el.style.display='none';});
+  installEl.style.setProperty('display','none','important');
+  appEl.innerHTML=`<div class="wall">
+    <h2>Тренажёр ЕГЭ по математике</h2>
+    <p>Задачи из открытого банка ФИПИ по всем номерам, разборы и пробник с баллами. Войди через Telegram — прогресс сохранится на всех твоих устройствах.</p>
+    <a class="wall-go" href="https://t.me/${TG_BOT}?start=site" target="_blank" rel="noopener">Войти через Telegram</a>
+    <p class="wall-note">Бот пришлёт личную ссылку для входа. <a href="privacy.html">Какие данные хранятся</a></p>
+  </div>`;
+}
 let variant=null, variantTimerId=null;
 function render(){
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
+  if(gated()){if(lastRouteKey!=='wall'){lastRouteKey='wall';scrollTop();}renderWall();return;}
+  burgerEl.style.display='';
   viewFilter='all';filterKeep.clear();
   const r=parseRoute();
   const key=r.view+(r.n||'');
@@ -3433,6 +3470,8 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.s
 window.addEventListener('DOMContentLoaded',()=>{
   if(loginFromHash())return;
   if(auth)Sync.refreshToken().then(()=>Sync.soon(0));
+  /* за стеной ссылку с прогрессом не разбираем: сначала вход */
+  if(gated()){render();return;}
   const params=new URLSearchParams(location.search);
   const sp=params.get('p'),hp=params.get('h');
   if(sp||hp){

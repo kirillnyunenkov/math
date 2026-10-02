@@ -14,7 +14,7 @@ being signed in.
 - Sign-in for everyone is through the bot. Personal links are no longer handed
   out by the teacher; the "Add student" button leaves the panel.
 - The wall is shown immediately (no free tasks), but the threshold is a single
-  number in `config.js` so it can be switched to "after N checked answers".
+  number at the top of the wall block in `index.html` so it can be switched to "after N checked answers".
 - No channel-subscription check, no owner notifications, no broadcasts (the
   subscriber base accumulates anyway; these can be added later).
 - The panel gets a second tab "Из канала". The owner promotes a person to
@@ -87,7 +87,7 @@ audit).
 
 ### 3. Wall — `index.html`, `config.js`
 
-- `config.js`: `TG_BOT` (bot username), `FREE_CHECKS = 0`.
+- `index.html`, wall block: `TG_BOT` (bot username), `FREE_CHECKS = 0`. Not in `config.js`: the service worker serves that file stale-while-revalidate, so right after a deploy a fresh page would meet an old config.
 - `gated()` = no session and number of marked tasks in local state
   `>= FREE_CHECKS`. `render()` shows the wall view instead of any route when
   gated. `#/login/...` is processed before the gate. `teacher.html` is not
@@ -159,7 +159,7 @@ owner's separate decision and out of scope.
 2. Read the live trusted-proxy setting; back up `pb_data`; copy migration and
    hook; update the unit file; restart `ege-api`; register the webhook with
    Telegram (`setWebhook` with `secret_token`).
-3. Set `TG_BOT` in `config.js`, merge the PR to `master` (this is the site
+3. Set `TG_BOT` in `index.html`, merge the PR to `master` (this is the site
    deploy), verify `sw.js` VERSION live, run the real flow once.
 4. Owner tells current students who use the trainer without signing in to
    open their link before the wall goes live.
