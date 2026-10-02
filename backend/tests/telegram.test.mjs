@@ -98,7 +98,7 @@ test('first message registers the person and sends a working link', async () => 
   const p = (await req('GET', '/collections/tg_profiles/records', tok.teacher)).json.items;
   assert.equal(p.length, 1);
   assert.deepEqual([p[0].tg_id, p[0].username, p[0].mine, p[0].user], ['7123456789', 'masha_k', false, a.record.id]);
-  assert.match(sent.at(-1).text, /privacy\.html/);
+  assert.match(sent.at(-1).text, /^Привет/);
   assert.equal(sent.at(-1).path, '/bottest/sendMessage');
 });
 
@@ -109,7 +109,7 @@ test('second message returns the same link and creates nothing', async () => {
   const p = (await req('GET', '/collections/tg_profiles/records', tok.teacher)).json.items;
   assert.equal(p.length, 1);
   assert.equal(p[0].username, 'masha_new');
-  assert.doesNotMatch(sent.at(-1).text, /privacy\.html/);
+  assert.match(sent.at(-1).text, /^Вот твоя ссылка/);
 });
 
 test('long or missing names are stored safely', async () => {

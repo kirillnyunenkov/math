@@ -1,6 +1,6 @@
 // Texts the bot sends. Edit here; no other code depends on the wording.
 const TEXT = {
-  hello: "Привет! Это тренажёр ЕГЭ по математике.\n\nЖми кнопку — откроется тренажёр, прогресс сохранится на всех твоих устройствах. Ссылка личная, никому её не пересылай.\n\nНажимая кнопку, ты соглашаешься с обработкой данных: ",
+  hello: "Привет! Это тренажёр ЕГЭ по математике.\n\nЖми кнопку — откроется тренажёр, прогресс сохранится на всех твоих устройствах. Ссылка личная, никому её не пересылай.",
   again: "Вот твоя ссылка для входа. Прогресс сохранён.",
   off: "Доступ к тренажёру отключён.",
   button: "Открыть тренажёр",
@@ -69,7 +69,7 @@ function webhook(e) {
   if (!user.get("active")) { send(msg.chat.id, TEXT.off); return e.json(200, { ok: true }); }
   const link = $app.findFirstRecordByData("links", "user", user.id);
   const url = site() + "#/login/" + user.get("login") + "." + link.get("secret");
-  send(msg.chat.id, r.created ? TEXT.hello + site() + "privacy.html" : TEXT.again, url);
+  send(msg.chat.id, r.created ? TEXT.hello : TEXT.again, url);
   return e.json(200, { ok: true });
 }
 

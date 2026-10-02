@@ -25,8 +25,7 @@ being signed in.
 ## User flow
 
 1. Channel post -> button `https://t.me/<bot>?start=channel` -> "Start".
-2. The bot replies with a greeting (includes the consent line and a link to
-   the privacy page) and an inline button "Открыть тренажёр" whose URL is
+2. The bot replies with a greeting and an inline button "Открыть тренажёр" whose URL is
    `https://kirillnyunenkov.github.io/math/#/login/<login>.<secret>`.
 3. The trainer opens signed in through the existing `loginFromHash` path.
 4. Any later message to the bot returns the same link (same account, same
@@ -122,12 +121,11 @@ fix every place where user-controlled values reach HTML: `name`, `username`,
 rendering in `index.html` (open item from the 2026-10-02 audit). Add a rules
 test that a lead cannot read another user's records or any `tg_profiles`.
 
-### 6. Privacy page — `privacy.html`
+### 6. Privacy page — dropped
 
-Short static page: what is stored (Telegram id, name, username, progress),
-why, how to ask for deletion. Linked from the bot greeting and the wall. Text
-is drafted for the owner's approval; server relocation to Russia is the
-owner's separate decision and out of scope.
+A `privacy.html` page and a consent line in the bot greeting were built and
+then removed on the owner's decision (2026-10-02): full compliance with the
+personal-data law will be done as a separate task.
 
 ## Error handling
 
