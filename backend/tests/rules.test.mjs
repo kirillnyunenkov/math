@@ -102,6 +102,23 @@ test('variants and clears follow the same ownership rules', async () => {
   assert.equal((await req('POST', '/collections/variant_clears/records', tok.stu1, { user: ids.stu1, uid: 'c1', ts: 2 })).status, 200);
 });
 
+test('only the teacher deletes a mock exam, leaving a tombstone for the owner', async () => {
+  const v = { user: ids.stu1, uid: 'vdel', t: 3, p: 0, s: 0, ms: 1000, total: 12, m: 12, q: [] };
+  const id = (await req('POST', '/collections/variants/records', tok.stu1, v)).json.id;
+  const tomb = { user: ids.stu1, uid: 'vdel' };
+  assert.ok([403, 404].includes((await req('DELETE', `/collections/variants/records/${id}`, tok.stu1)).status));
+  assert.ok([400, 403].includes((await req('POST', '/collections/variant_deletes/records', tok.stu1, tomb)).status));
+  const r = await req('POST', '/batch', tok.teacher, { requests: [
+    { method: 'POST', url: '/api/collections/variant_deletes/records', body: tomb },
+    { method: 'DELETE', url: `/api/collections/variants/records/${id}` }] });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await req('GET', `/collections/variants/records/${id}`, tok.teacher)).status, 404);
+  const own = (await req('GET', '/collections/variant_deletes/records', tok.stu1)).json.items;
+  assert.deepEqual(own.map(d => d.uid), ['vdel']);
+  assert.equal((await req('GET', '/collections/variant_deletes/records', tok.stu2)).json.totalItems, 0);
+  assert.ok([403, 404].includes((await req('DELETE', `/collections/variant_deletes/records/${own[0].id}`, tok.teacher)).status));
+});
+
 test('links are teacher-only', async () => {
   const r = await req('POST', '/collections/links/records', tok.teacher, { user: ids.stu1, secret: PW.stu1 });
   assert.equal(r.status, 200, JSON.stringify(r.json));

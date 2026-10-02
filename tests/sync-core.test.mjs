@@ -106,6 +106,13 @@ test('mergeVariants keeps legacy records without uid, keyed by t', () => {
   assert.equal(m.length, 1);
 });
 
+test('mergeVariants drops records the teacher deleted', () => {
+  const v = (uid, t) => ({ uid, t, p: 1 });
+  const m = S.mergeVariants([v('a', 1), v('b', 2)], [v('c', 3)], [], ['b', 'zz']);
+  assert.deepEqual(m.map(x => x.uid), ['a', 'c']);
+  assert.equal(S.mergeVariants([{ t: 5, p: 1 }], [], [], ['a']).length, 1);
+});
+
 test('uid is 16 base36 chars and unique', () => {
   const a = S.uid(), b = S.uid();
   assert.match(a, /^[0-9a-z]{16}$/);

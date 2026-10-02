@@ -1726,19 +1726,22 @@ const Sync={
     const evs=await this.fetchNew('events',cur);if(!evs||!auth)return;
     const vs=await this.fetchNew('variants',cur);if(!vs)return;
     const cl=await this.fetchNew('variant_clears',cur);if(!cl)return;
+    /* Пробники, удалённые преподавателем. Сбой именно здесь не должен
+       останавливать остальную синхронизацию — просто «новых нет». */
+    const dl=await this.fetchNew('variant_deletes',cur)||[];
     let changed=false;
     if(evs.length){
       const r=SyncCore.applyEvents(state,loadJ(STAMPS_KEY,SyncCore.newStamps()),evs);
       saveJ(STAMPS_KEY,r.stamps);
       if(r.changed){state=r.state;save();changed=true;}
     }
-    if(vs.length||cl.length){
+    if(vs.length||cl.length||dl.length){
       let vclear=+(localStorage.getItem(VCLEAR_KEY)||0);
       cl.forEach(c=>{if(c.ts>vclear)vclear=c.ts;});
       try{localStorage.setItem(VCLEAR_KEY,String(vclear));}catch(e){}
       const inc=vs.map(v=>{const o={};HIST_FIELDS.forEach(k=>{if(v[k]!=null)o[k]=v[k];});return o;});
       const before=JSON.stringify(loadHistory());
-      const merged=SyncCore.mergeVariants(loadHistory(),inc,vclear?[{ts:vclear}]:[]);
+      const merged=SyncCore.mergeVariants(loadHistory(),inc,vclear?[{ts:vclear}]:[],dl.map(d=>d.uid));
       if(JSON.stringify(merged)!==before){saveHistory(merged);changed=true;}
     }
     saveJ(CURSOR_KEY,cur);
