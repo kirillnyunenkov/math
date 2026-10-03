@@ -1226,15 +1226,12 @@
     -webkit-mask-image:linear-gradient(to bottom,#000,transparent);
     mask-image:linear-gradient(to bottom,#000,transparent);}
 
-  .hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.install-bar{
+  .hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.sheet,.install-bar{
     background:var(--glass);
     -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-line);
     box-shadow:var(--rim),var(--e2);}
   .install-bar{border-left:3px solid var(--accent);}
-  /* The sheet is modal and carries text: it stays opaque. As glass it let the
-     page's accent button bleed through as a blurred blot behind the copy. */
-  .sheet{border:1px solid var(--glass-line);box-shadow:var(--rim),var(--e3);}
 
   /* контент задач — плотный: под формулами прозрачности нет */
   /* Карточки контента: плотный полупрозрачный фон, но БЕЗ backdrop-filter.
