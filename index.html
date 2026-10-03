@@ -189,7 +189,11 @@
      видно в подсказке и в самом листе аккаунта. */
   @media (min-width:761px) and (max-width:1279px){
     #account{padding:0;width:38px;justify-content:center;flex:none;}
-    #account .acc-label{display:none;}}
+    #account .acc-label{display:none;}
+    /* гостю нужна надпись «Войти»: значок человечка не читается как вход */
+    #account.guest{width:auto;padding:0 var(--s3);}
+    #account.guest .acc-label{display:inline;}}
+  a.sheet-go{display:block;text-align:center;text-decoration:none;box-sizing:border-box;}
   @media(max-width:760px){.install-mobile-only{display:inline-flex!important;}}
   @media(max-width:760px){:root{--card-base:330px;}}
   .burger{display:none;font:inherit;background:transparent;border:1px solid var(--line-strong);
@@ -2910,7 +2914,25 @@ function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
 const TG_BOT='kirill_repet_bot';
 const FREE_CHECKS=0;
 const markedCount=()=>Object.values(state).reduce((s,o)=>s+Object.keys(o||{}).length,0);
-const gated=()=>!auth&&markedCount()>=FREE_CHECKS;
+/* Гостевая ссылка #/free: её владелец раздаёт знакомым, чтобы они попробовали
+   тренажёр без Telegram. Устройство запоминает гостя — стены больше не будет;
+   прогресс живёт только в браузере, пока гость сам не войдёт через бота. */
+const GUEST_KEY='ege_guest_v1';
+let guest=false;
+try{guest=localStorage.getItem(GUEST_KEY)==='1';}catch(e){}
+function guestFromHash(){
+  if(location.hash!=='#/free')return false;
+  guest=true;
+  try{localStorage.setItem(GUEST_KEY,'1');}catch(e){}
+  history.replaceState(null,'',location.pathname+location.search);
+  return true;
+}
+guestFromHash();
+const gated=()=>!auth&&!guest&&markedCount()>=FREE_CHECKS;
+function guestLoginSheet(){
+  showSheet(`<h3>Войти через Telegram</h3><p class="ih-sub">Бот пришлёт личную ссылку для входа. Открой её в этом же браузере — решённые задачи перенесутся в аккаунт и будут доступны на всех твоих устройствах.</p>`+
+    `<a class="sheet-go" href="https://t.me/${TG_BOT}?start=site" target="_blank" rel="noopener">Открыть бота</a>`);
+}
 function renderWall(){
   setBack(false);statsEl.innerHTML='';headerEl.style.display='';
   [shareEl,resetEl,guideEl,accountEl,burgerEl].forEach(el=>{el.style.display='none';});
@@ -2941,8 +2963,10 @@ function render(){
   shareEl.style.display=progCtrls&&!auth?'':'none';
   resetEl.style.display=progCtrls?'':'none';
   guideEl.style.display=(r.view==='help')?'none':'';
-  accountEl.style.display=auth?'':'none';
+  accountEl.style.display=auth||guest?'':'none';
+  accountEl.classList.toggle('guest',!auth&&guest);
   if(auth){accountEl.querySelector('.acc-label').textContent=auth.name;accountEl.title=auth.name;}
+  else if(guest){accountEl.querySelector('.acc-label').textContent='Войти';accountEl.title='Войти через Telegram';}
   if(r.view==='help'||isStandalone()){installEl.style.setProperty('display','none','important');}else{installEl.style.removeProperty('display');}
   if(r.view==='help')renderHelp();
   else if(r.view==='variant')renderVariant();
@@ -3417,7 +3441,7 @@ function toggleTheme(){
 }
 document.getElementById('theme').addEventListener('click',toggleTheme);
 document.getElementById('install').addEventListener('click',()=>doInstall());
-accountEl.addEventListener('click',()=>accountSheet());
+accountEl.addEventListener('click',()=>auth?accountSheet():guestLoginSheet());
 const hintOv=document.getElementById('sheet-ov');
 hintOv.addEventListener('click',e=>{
   const b=e.target.closest('[data-sheet]');
@@ -3469,7 +3493,7 @@ function loginFromHash(){
   history.replaceState(null,'',location.pathname);
   render();Sync.login(lm[1],lm[2],link);return true;
 }
-window.addEventListener('hashchange',()=>{if(!loginFromHash())render();});
+window.addEventListener('hashchange',()=>{guestFromHash();if(!loginFromHash())render();});
 // PWA
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;
   const r=parseRoute();if(r.view==='hub'||r.view==='help')render();});
