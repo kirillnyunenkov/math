@@ -450,6 +450,7 @@
   .sheet-actions .sheet-btn{flex:1;}
   .sheet-btn,.sheet-go{width:100%;font:inherit;font-size:var(--fs-base);font-weight:600;
     min-height:48px;cursor:pointer;border-radius:var(--r-md);
+    padding:var(--s2) var(--s4);line-height:1.3;text-align:center;
     display:inline-flex;align-items:center;justify-content:center;
     border:1px solid var(--line-strong);background:var(--glass-strong);color:var(--ink-2);
     transition:background var(--dur) var(--ease),border-color var(--dur) var(--ease),color var(--dur) var(--ease);}
@@ -1225,12 +1226,15 @@
     -webkit-mask-image:linear-gradient(to bottom,#000,transparent);
     mask-image:linear-gradient(to bottom,#000,transparent);}
 
-  .hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.sheet,.install-bar{
+  .hub-prog,.grid-panel,.vbar,.vintro,.vhist-card,.nav-menu,.install-bar{
     background:var(--glass);
     -webkit-backdrop-filter:var(--glass-blur);backdrop-filter:var(--glass-blur);
     border:1px solid var(--glass-line);
     box-shadow:var(--rim),var(--e2);}
   .install-bar{border-left:3px solid var(--accent);}
+  /* The sheet is modal and carries text: it stays opaque. As glass it let the
+     page's accent button bleed through as a blurred blot behind the copy. */
+  .sheet{border:1px solid var(--glass-line);box-shadow:var(--rim),var(--e3);}
 
   /* контент задач — плотный: под формулами прозрачности нет */
   /* Карточки контента: плотный полупрозрачный фон, но БЕЗ backdrop-filter.
@@ -1831,7 +1835,7 @@ function accountSheet(){
   if(!auth)return;
   return new Promise(res=>{sheetResolve=res;
     showSheet(`<h3>${escapeHtml(auth.name)}</h3><p class="ih-sub">Прогресс сохраняется на сервере. Чтобы продолжить на другом устройстве, открой там свою ссылку для входа или напиши боту в Telegram.</p>`+
-      `<button class="sheet-go" data-sheet="copy">Скопировать ссылку для другого устройства</button>`+
+      `<button class="sheet-go" data-sheet="copy">Скопировать ссылку</button>`+
       `<div class="sheet-actions" style="margin-top:10px"><button class="sheet-btn" data-sheet="logout">Выйти</button><button class="sheet-btn" data-sheet="0">Закрыть</button></div>`);
   }).then(v=>{
     if(v==='copy')navigator.clipboard.writeText(auth.link).then(
