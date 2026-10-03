@@ -4,7 +4,9 @@ const TEXT = {
   again: "Вот твоя ссылка для входа. Прогресс сохранён.",
   off: "Доступ к тренажёру отключён.",
   button: "Открыть тренажёр",
+  code: (c) => "\n\nНужен вход на компьютере, где нет Telegram? Открой там тренажёр и введи код: " + c + "\nКод действует 10 минут и срабатывает один раз.",
 };
+const CODE_TTL = 600;   // seconds
 const env = (k) => $os.getenv(k);
 const site = () => env("SITE_URL") || "https://kirillnyunenkov.github.io/math/";
 
@@ -58,6 +60,40 @@ function ensure(from) {
   return { profile: findProfile(tgId), created: true };
 }
 
+// A fresh one-time code for the user; the previous one stops working.
+// Returns "" if no free code was found (the link still works on its own).
+function newCode(userId) {
+  const now = Math.floor(Date.now() / 1000);
+  $app.db().newQuery("DELETE FROM login_codes WHERE user = {:u} OR expires < {:now}").bind({ u: userId, now: now }).execute();
+  const coll = $app.findCollectionByNameOrId("login_codes");
+  for (let i = 0; i < 5; i++) {
+    const code = $security.randomStringWithAlphabet(6, "0123456789");
+    try {
+      const rec = new Record(coll);
+      rec.set("user", userId); rec.set("code", code); rec.set("expires", now + CODE_TTL);
+      $app.save(rec);
+      return code;
+    } catch (_) { /* the code is taken by someone else: try another */ }
+  }
+  return "";
+}
+
+// Exchanges a code for the sign-in pair of the personal link. The code dies
+// on the first hit, valid or expired. Public, rate limited per address.
+function claim(e) {
+  const bad = () => e.json(400, { message: "bad code" });
+  const code = String((e.requestInfo().body || {}).code || "").replace(/\D/g, "");
+  if (code.length !== 6) return bad();
+  let rec;
+  try { rec = $app.findFirstRecordByData("login_codes", "code", code); } catch (_) { return bad(); }
+  $app.delete(rec);
+  if (rec.get("expires") < Math.floor(Date.now() / 1000)) return bad();
+  const user = $app.findRecordById("users", rec.get("user"));
+  if (!user.get("active")) return e.json(403, { message: "disabled" });
+  const link = $app.findFirstRecordByData("links", "user", user.id);
+  return e.json(200, { login: user.get("login"), secret: link.get("secret") });
+}
+
 function webhook(e) {
   const secret = env("TG_WEBHOOK_SECRET");
   if (!secret || !env("TG_BOT_TOKEN")) return e.json(503, { message: "bot is not configured" });
@@ -69,7 +105,8 @@ function webhook(e) {
   if (!user.get("active")) { send(msg.chat.id, TEXT.off); return e.json(200, { ok: true }); }
   const link = $app.findFirstRecordByData("links", "user", user.id);
   const url = site() + "#/login/" + user.get("login") + "." + link.get("secret");
-  send(msg.chat.id, r.created ? TEXT.hello : TEXT.again, url);
+  const code = newCode(user.id);
+  send(msg.chat.id, (r.created ? TEXT.hello : TEXT.again) + (code ? TEXT.code(code) : ""), url);
   return e.json(200, { ok: true });
 }
 
@@ -87,4 +124,4 @@ function leads(e) {
   return e.json(200, { items: rows });
 }
 
-module.exports = { webhook: webhook, leads: leads };
+module.exports = { webhook: webhook, leads: leads, claim: claim };

@@ -363,6 +363,23 @@
     font-size:var(--fs-base);text-decoration:none;}
   .wall .wall-go:hover{background:var(--accent-hover);}
   .wall .wall-note{font-size:var(--fs-sm);color:var(--ink-3);margin-top:var(--s5);}
+  /* вход по коду из бота — для устройства, где нет Telegram */
+  .code-form{margin:0;text-align:left;}
+  .wall .code-form{max-width:340px;margin:var(--s8) auto 0;padding-top:var(--s6);border-top:1px solid var(--line);}
+  .sheet .code-form{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--line);}
+  .code-form .code-label{display:block;font-size:var(--fs-sm);color:var(--ink-2);line-height:1.5;margin:0 0 var(--s3);}
+  .code-form .code-label b{color:var(--ink);font-weight:600;}
+  .code-row{display:flex;gap:var(--s2);}
+  .code-input{flex:1;min-width:0;font:inherit;font-size:var(--fs-md);letter-spacing:.12em;font-variant-numeric:tabular-nums;
+    padding:0 var(--s3);min-height:48px;border:1px solid var(--line-strong);border-radius:var(--r-md);
+    background:var(--input-bg);color:var(--ink);}
+  .code-input::placeholder{color:var(--ink-3);letter-spacing:0;}
+  .code-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft);outline:none;}
+  .code-go{font:inherit;font-size:var(--fs-base);font-weight:600;min-height:48px;padding:0 var(--s5);cursor:pointer;
+    border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--glass-strong);color:var(--ink);}
+  .code-go:hover{border-color:var(--ink-3);}
+  .code-go:disabled{opacity:.6;cursor:default;}
+  .code-form .code-msg{font-size:var(--fs-sm);color:var(--err-text);margin:var(--s2) 0 0;min-height:1.4em;line-height:1.4;}
   .help{max-width:720px;margin:0 auto;padding:var(--s10) var(--s6) var(--s16);}
   .help h2{font-size:var(--fs-3xl);margin-bottom:var(--s2);}
   .help .help-lead{color:var(--ink-2);font-size:var(--fs-base);margin-bottom:var(--s8);}
@@ -2929,9 +2946,40 @@ function guestFromHash(){
 }
 guestFromHash();
 const gated=()=>!auth&&!guest&&markedCount()>=FREE_CHECKS;
+/* Вход по коду: бот в каждом сообщении присылает код на 10 минут. Его вводят
+   на устройстве, где Telegram нет, — сервер меняет код на ту же пару, что
+   зашита в личную ссылку, дальше обычный вход. */
+function codeFormHtml(){
+  return `<form class="code-form" novalidate>
+    <label class="code-label" for="code-input"><b>Telegram на другом устройстве?</b><br>Напиши боту там — он пришлёт код. Введи его здесь:</label>
+    <div class="code-row"><input class="code-input" id="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6 цифр">
+    <button class="code-go" type="submit">Войти</button></div>
+    <p class="code-msg" role="status" aria-live="polite"></p></form>`;
+}
+document.addEventListener('submit',async e=>{
+  const f=e.target.closest('.code-form');if(!f)return;
+  e.preventDefault();
+  const inp=f.querySelector('.code-input'),btn=f.querySelector('.code-go'),msg=f.querySelector('.code-msg');
+  const code=inp.value.replace(/\D/g,'');
+  if(code.length!==6){msg.textContent='В коде 6 цифр.';inp.focus();return;}
+  msg.textContent='';btn.disabled=true;
+  let r=null;
+  try{r=await Sync.api('/tg/code',{method:'POST',anon:true,body:{code:code}});}catch(err){}
+  btn.disabled=false;
+  if(!r){msg.textContent='Нет связи. Попробуй ещё раз.';return;}
+  if(r.status===200&&r.json&&r.json.login){
+    inp.value='';
+    Sync.login(r.json.login,r.json.secret,location.origin+location.pathname+'#/login/'+r.json.login+'.'+r.json.secret);
+    return;
+  }
+  msg.textContent=r.status===403?'Аккаунт отключён преподавателем.'
+    :r.status===429?'Слишком много попыток. Подожди минуту.'
+    :r.status===400?'Код не подошёл или устарел. Напиши боту — он пришлёт новый.'
+    :'Не получилось войти. Попробуй позже.';
+});
 function guestLoginSheet(){
   showSheet(`<h3>Войти через Telegram</h3><p class="ih-sub">Бот пришлёт личную ссылку для входа. Открой её в этом же браузере — решённые задачи перенесутся в аккаунт и будут доступны на всех твоих устройствах.</p>`+
-    `<a class="sheet-go" href="https://t.me/${TG_BOT}?start=site" target="_blank" rel="noopener">Открыть бота</a>`);
+    `<a class="sheet-go" href="https://t.me/${TG_BOT}?start=site" target="_blank" rel="noopener">Открыть бота</a>`+codeFormHtml());
 }
 function renderWall(){
   setBack(false);statsEl.innerHTML='';headerEl.style.display='';
@@ -2942,6 +2990,7 @@ function renderWall(){
     <p>Задачи из открытого банка ФИПИ по всем номерам, разборы и пробник с баллами. Войди через Telegram — прогресс сохранится на всех твоих устройствах.</p>
     <a class="wall-go" href="https://t.me/${TG_BOT}?start=site" target="_blank" rel="noopener">Войти через Telegram</a>
     <p class="wall-note">Бот пришлёт личную ссылку для входа.</p>
+    ${codeFormHtml()}
   </div>`;
 }
 let variant=null, variantTimerId=null;

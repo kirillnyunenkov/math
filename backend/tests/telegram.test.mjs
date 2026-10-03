@@ -168,3 +168,64 @@ test('leads list is teacher-only and counts real marks', async () => {
   assert.equal(idle.marks, 0);
   assert.equal(idle.last, '');
 });
+
+// ---- one-time sign-in codes (for a device without Telegram) ----
+// Each test claims from its own address: the endpoint is rate limited per IP.
+const codeOf = (chatId) => ([...sent].reverse().find(s => s.chat_id === chatId).text.match(/\b(\d{6})\b/) || [])[1];
+const claim = (code, ip) => req('POST', '/tg/code', null, { code }, { 'X-Forwarded-For': ip });
+
+test('the bot sends a code that signs in once', async () => {
+  await hook(update(from(500)));
+  const code = codeOf(500);
+  assert.match(code, /^\d{6}$/);
+  const r = await claim(code, '10.0.0.1');
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.deepEqual(r.json, linkOf(500));
+  assert.equal((await login(r.json.login, r.json.secret)).record.login, 'tg500');
+  assert.equal((await claim(code, '10.0.0.1')).status, 400);
+});
+
+test('a code typed with spaces works; a wrong or malformed one does not', async () => {
+  await hook(update(from(501)));
+  const code = codeOf(501);
+  const other = String((Number(code) + 1) % 1000000).padStart(6, '0');
+  assert.equal((await claim(other, '10.0.0.2')).status, 400);
+  assert.equal((await claim('12345', '10.0.0.2')).status, 400);
+  assert.equal((await claim(undefined, '10.0.0.2')).status, 400);
+  assert.equal((await claim(code.slice(0, 3) + ' ' + code.slice(3), '10.0.0.2')).status, 200);
+});
+
+test('a new message replaces the previous code', async () => {
+  await hook(update(from(502)));
+  const old = codeOf(502);
+  await hook(update(from(502)));
+  const fresh = codeOf(502);
+  if (old !== fresh) assert.equal((await claim(old, '10.0.0.3')).status, 400);
+  assert.equal((await claim(fresh, '10.0.0.3')).status, 200);
+});
+
+test('an expired code is rejected', async () => {
+  await hook(update(from(503)));
+  const code = codeOf(503);
+  const row = (await req('GET', '/collections/login_codes/records?filter=' + encodeURIComponent(`code="${code}"`), tok.su)).json.items[0];
+  assert.ok(row.expires > Date.now() / 1000 && row.expires <= Date.now() / 1000 + 601);
+  assert.equal((await req('PATCH', `/collections/login_codes/records/${row.id}`, tok.su, { expires: 1 })).status, 200);
+  assert.equal((await claim(code, '10.0.0.4')).status, 400);
+});
+
+test('codes are invisible through the API and a disabled account gets none', async () => {
+  for (const t of [null, tok.lead, tok.teacher]) {
+    const r = await req('GET', '/collections/login_codes/records', t);
+    assert.ok(r.status === 403 || (r.json?.totalItems ?? 0) === 0, String(r.status));
+  }
+  await hook(update(from(400)));   // disabled in an earlier test
+  assert.equal(codeOf(400), undefined);
+});
+
+test('guessing is rate limited per address', async () => {
+  const st = [];
+  for (let i = 0; i < 7; i++) st.push((await claim('000000', '10.0.0.9')).status);
+  assert.deepEqual(st.slice(0, 5), [400, 400, 400, 400, 400]);
+  assert.equal(st[6], 429);
+  assert.equal((await claim('000000', '10.0.0.10')).status, 400);
+});
