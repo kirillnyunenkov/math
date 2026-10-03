@@ -43,6 +43,11 @@ Register the webhook once (run on the server; prints only Telegram's answer):
       -d url=https://api.kirillnyun.space/api/tg/webhook \
       -d secret_token="$TG_WEBHOOK_SECRET" -d 'allowed_updates=["message"]'
 
+Every bot reply also carries a one-time 6-digit code (10 minutes) for signing
+in on a device without Telegram: the page sends it to `POST /api/tg/code` and
+gets the same login pair the personal link holds. Codes live in `login_codes`
+(closed to the API); guessing is capped at 5 requests a minute per address.
+
 A hook change needs the files copied to `/opt/ege-api/pb_hooks/` and
 `systemctl restart ege-api`.
 
