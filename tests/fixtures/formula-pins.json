@@ -526,5 +526,127 @@
  {
   "html": "<p>$&#36x$</p>",
   "formulas": []
+ },
+ {
+  "html": "<table><tr><td><code>x</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><b>x</td><td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><code>x<td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><code>x</td></tr><tr><td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><code>x<tr><td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><th><code>x</th><th>$a$</th></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><code>x</td></tr><tr><td>$a$</td></tr></table>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p><code>x</p><table><tr><td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<div><code>x<table><tr><td>$a$</td></tr></table>$y$</div>",
+  "formulas": []
+ },
+ {
+  "html": "<table><tr><td>$a$</td><td><i>$b$</i></td></tr></table>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><table><tr><td><code>x</td></tr></table>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
  }
 ]

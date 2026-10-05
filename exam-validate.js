@@ -99,33 +99,56 @@
      the text; an end tag the parser ignores creates no node, so the texts around it merge (the
      browser does that, and auto-render joins adjacent text nodes); the content of pre/code is
      marked ignored, also when a code element was implicitly closed and then reconstructed by the
-     parser. This is a compact model of the browser's open-elements stack for the allowed tags
-     (not a full HTML parser, tables are not modelled); the differential check against a real
-     browser (see the report) is what keeps it honest. */
+     parser. This is a compact model of the browser's open-elements stack for the allowed tags,
+     not a full HTML parser: the differential check against a real browser (see the report) is
+     what keeps it honest. TABLE STRUCTURE IS OUTSIDE THAT VERIFIED CORPUS beyond the basics
+     modelled here (a cell hides the formatting elements of its surroundings and drops its own
+     when it ends); foster parenting and stray td/tr are not modelled. Where the model is wrong the
+     only effect is that a formula the browser renders is not checked by KaTeX or for forbidden
+     commands (KaTeX trust is off on the platform, so those commands are inert anyway).
+     Linear time: formatting elements closed implicitly are kept in a list of at most 3 per name
+     (the browser's "Noah's Ark" limit), so no operation depends on how many are open. */
   const VOID = { br: 1, hr: 1, img: 1 };
   const FORMATTING = { b: 1, i: 1, em: 1, strong: 1, u: 1, code: 1 };
   const SPECIAL = { p: 1, div: 1, pre: 1, ul: 1, ol: 1, li: 1, blockquote: 1, table: 1, thead: 1, tbody: 1, tr: 1, th: 1, td: 1, h3: 1, h4: 1 };
   const HEADING = { h3: 1, h4: 1 };
   const CLOSES_P = { p: 1, div: 1, pre: 1, ul: 1, ol: 1, blockquote: 1, hr: 1, table: 1, h3: 1, h4: 1, li: 1 };
   const BLOCK = { p: 1, div: 1, pre: 1, ul: 1, ol: 1, li: 1, blockquote: 1, hr: 1, table: 1, thead: 1, tbody: 1, tr: 1, th: 1, td: 1, h3: 1, h4: 1 };
+  const CELL = { td: 1, th: 1 };
   function textNodes(html) {
     const s = String(html == null ? '' : html), nodes = [];
     let misnested = false; // a formatting tag closed while a block element is still open inside it
     const stack = [], spec = [], pos = Object.create(null); // names; specials counted up to each index; indices per name
-    let pending = [], cur = null; // formatting elements closed implicitly: the parser reopens them at the next text
+    // Formatting elements closed implicitly, which the parser reopens at the next text. One list per
+    // open table cell (a cell hides what was pending outside it and discards its own when it ends).
+    const lists = [[]];
+    let cur = null;
     const open = function (n) {
       const i = stack.length;
       stack.push(n); spec.push((i ? spec[i - 1] : 0) + (SPECIAL[n] ? 1 : 0));
       (pos[n] || (pos[n] = [])).push(i);
     };
     const isOpen = function (n) { return !!(pos[n] && pos[n].length); };
-    const specialAbove = function (n) { const p = pos[n]; return spec[stack.length - 1] - spec[p[p.length - 1]] > 0; };
-    const popTo = function (n) {
-      const gone = [];
-      for (;;) { const x = stack.pop(); spec.pop(); pos[x].pop(); if (x === n) break; if (FORMATTING[x]) gone.push(x); }
-      pending = pending.concat(gone.reverse());
+    const lastIdx = function (n) { return isOpen(n) ? pos[n][pos[n].length - 1] : -1; };
+    const specialAbove = function (n) { return spec[stack.length - 1] - spec[lastIdx(n)] > 0; };
+    const addPending = function (n) {
+      const list = lists[lists.length - 1];
+      let count = 0, first = -1;
+      for (let j = 0; j < list.length; j++) if (list[j] === n) { if (first < 0) first = j; count++; }
+      if (count >= 3) list.splice(first, 1);
+      list.push(n);
     };
-    const reopen = function () { pending.forEach(open); pending = []; };
+    const popTo = function (n) {
+      let gone = [];
+      const flush = function () { for (let j = gone.length - 1; j >= 0; j--) addPending(gone[j]); gone = []; };
+      for (;;) {
+        const x = stack.pop(); spec.pop(); pos[x].pop();
+        if (CELL[x]) { flush(); lists.pop(); } else if (x !== n && FORMATTING[x]) gone.push(x);
+        if (x === n) break;
+      }
+      flush();
+    };
+    const reopen = function () { const list = lists[lists.length - 1]; lists[lists.length - 1] = []; list.forEach(open); };
     const boundary = function () { if (cur) { nodes.push(cur); cur = null; } };
     const text = function (raw) {
       if (raw === '') return;
@@ -143,18 +166,24 @@
         const at = i + (closing ? 2 : 1);
         let name = /^[A-Za-z][A-Za-z0-9]*/.exec(s.slice(at, at + 16))[0].toLowerCase();
         if (closing && HEADING[name]) { // </h3> and </h4> close whichever heading is open
-          const a = pos.h3 && pos.h3.length ? pos.h3[pos.h3.length - 1] : -1, b = pos.h4 && pos.h4.length ? pos.h4[pos.h4.length - 1] : -1;
+          const a = lastIdx('h3'), b = lastIdx('h4');
           if (a !== b) name = a > b ? 'h3' : 'h4';
         }
         if (!closing) {
           boundary();
           if (HEADING[name] && HEADING[stack[stack.length - 1]]) popTo(stack[stack.length - 1]);
           if (CLOSES_P[name] && isOpen('p')) popTo('p');
+          if (name === 'td' || name === 'th' || name === 'tr') { // a new cell or row ends the open cell (of the same table)
+            const cell = lastIdx('td') > lastIdx('th') ? 'td' : 'th';
+            if (lastIdx(cell) > lastIdx('table')) popTo(cell);
+            if (name === 'tr' && lastIdx('tr') > lastIdx('table')) popTo('tr');
+          }
           if (!BLOCK[name]) reopen();
           if (!VOID[name]) open(name);
+          if (CELL[name]) lists.push([]);
         } else if (!isOpen(name)) {
-          const k = pending.lastIndexOf(name);
-          if (k !== -1) pending.splice(k, 1);
+          const list = lists[lists.length - 1], k = list.lastIndexOf(name);
+          if (k !== -1) list.splice(k, 1);
           else if (name === 'p' || name === 'br') boundary();
         } else if (name === 'p' || SPECIAL[name]) { popTo(name); boundary(); }
         else if (specialAbove(name)) { if (FORMATTING[name]) { boundary(); misnested = true; } }
@@ -228,7 +257,7 @@
       const m = BAD_COMMANDS.exec(f.tex);
       if (m && !seenCmd[m[1]]) { seenCmd[m[1]] = true; errors.push(where + label + ' команда \\' + m[1] + ' не поддерживается.'); }
     });
-    if (shown && sc.misnested) warnings.push(where + 'теги ' + label + ' вложены неправильно (формат закрыт, пока внутри открыт блок): формулы рядом могут отобразиться не так, как проверено.');
+    if (shown && sc.misnested) warnings.push(where + 'теги ' + label + ' вложены неправильно (например, <b> закрыт раньше, чем вложенный в него <p>): формулы рядом могут отобразиться не так, как проверено.');
     if (shown && sc.unbalanced) warnings.push(where + 'непарный $ ' + label + ': формула не закрыта. Чтобы показать знак доллара, пиши его внутри формулы: $\\$5$ (или слово «руб.»).');
   }
 

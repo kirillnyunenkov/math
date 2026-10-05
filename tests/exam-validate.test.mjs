@@ -283,12 +283,45 @@ test('extraction stays linear on adversarial input (the old closing search was q
   assert.ok(Date.now() - t0 < 2000);
 });
 
+test('worst-case tag soup stays linear (open-elements bookkeeping, every input passes the gate and the size caps)', () => {
+  const K = 60000;
+  const cases = {
+    // popping tens of thousands of open <b> into the "reopen later" list, once per block
+    'b-list then blocks': '<p>' + '<b>'.repeat(K) + '<div></div>'.repeat(K),
+    // a long reopen list, then many end tags that match nothing open (each one used to scan the list)
+    'b-list then stray </i>': '<p>' + '<b>'.repeat(K) + '<div>' + '</i>'.repeat(3 * K),
+    'b-list then stray </b>': '<p>' + '<b>'.repeat(K) + '<div>' + '</b>'.repeat(3 * K),
+    'nested divs, formatting on top, closed one by one': '<div>'.repeat(K) + '<b>'.repeat(K) + '</div>x'.repeat(K),
+    'many open cells and rows': '<table>' + '<tr><td><code>'.repeat(K),
+    'many cells with formatting': '<table><tr>' + '<td><i>x'.repeat(K) + '</tr>'.repeat(K),
+    'deep <code> inside blocks': '<code>'.repeat(K) + '<ul>'.repeat(K) + '</code>'.repeat(K),
+  };
+  for (const [name, html] of Object.entries(cases)) {
+    let t0 = Date.now();
+    V.scanFormulas(html);
+    const ms = Date.now() - t0;
+    assert.ok(ms < 2000, name + ': scanFormulas ' + ms + ' ms');
+    const x = sample(); x.tasks[0].cond = html;
+    t0 = Date.now();
+    V.validateExam(x);
+    assert.ok(Date.now() - t0 < 2000, name + ': validateExam ' + (Date.now() - t0) + ' ms');
+  }
+});
+
+test('an open <code> that a table cell or row end throws away is not reopened after the table', () => {
+  assert.deepEqual(V.extractFormulas('<table><tr><td><code>x</td></tr></table>$y$'), [{ tex: 'y', display: false }]);
+  assert.deepEqual(V.extractFormulas('<table><tr><td><code>x<td>$a$</td></tr></table>$y$').map((f) => f.tex), ['a', 'y']);
+  assert.deepEqual(V.extractFormulas('<table><tr><td><code>x<tr><td>$a$</td></tr></table>$y$').map((f) => f.tex), ['a', 'y']);
+  // formatting that was open before the table stays hidden inside a cell and comes back after the table
+  assert.deepEqual(V.extractFormulas('<p><code>x</p><table><tr><td>$a$</td></tr></table>$y$').map((f) => f.tex), ['a']);
+});
+
 test('a formatting tag closed while a block is open inside it is a warning (the parser reshuffles the tree)', () => {
   for (const html of ['<div><code>y<ul><li>a</li></code></ul></div>', '<b><p>$x$</b></p>']) {
     const x = sample(); x.tasks[0].cond = html;
     const r = V.validateExam(x);
     assert.deepEqual(r.errors, [], html);
-    assert.ok(r.warnings.some((w) => /задание 1/i.test(w) && /вложены неправильно/.test(w)), html);
+    assert.ok(r.warnings.some((w) => /задание 1/i.test(w) && /вложены неправильно/.test(w) && /например, <b> закрыт раньше, чем вложенный в него <p>/.test(w)), html);
   }
   const ok = sample(); ok.tasks[0].cond = '<p><b>a</b> <code>b</code></p><ul><li><i>c</i></li></ul>';
   assert.deepEqual(V.validateExam(ok).warnings, []);
@@ -298,7 +331,7 @@ test('the unpaired-dollar warning does not advise an escaped dollar outside a fo
   const x = sample(); x.tasks[0].cond = '<p>цена $5</p>';
   const w = V.validateExam(x).warnings.find((m) => /непарный \$/.test(m));
   assert.ok(w && w.includes('$\\$5$'));
-  assert.ok(!/пиши\S* \\\$/.test(w));
+  assert.ok(!w.split('$\\$5$').join('').includes('\\$'), 'no "\\$" advice outside the formula example: ' + w);
 });
 
 test('validateExam never throws on garbage and reports errors', () => {

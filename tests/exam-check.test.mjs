@@ -51,3 +51,13 @@ test('the unsafe-HTML gate is part of the check', () => {
   const x = sample(); x.tasks[0].cond = '<!-- <a title="--><img src=x onerror=alert(1)> "> -->';
   assert.ok(checkExam(x).errors.some((e) => /html/i.test(e)));
 });
+
+test('broken formulas are reported for the first 30 only, plus a summary line', () => {
+  const x = sample(); x.tasks[0].cond = '<p>' + '$\\badmacro{1}$ '.repeat(100) + '</p>';
+  const r = checkExam(x);
+  assert.equal(r.errors.length, 31);
+  assert.equal(r.errors.filter((e) => /не рисуется/.test(e)).length, 30);
+  assert.match(r.errors[30], /…и ещё 70 формул не рисуются/);
+  const y = sample(); y.tasks[0].cond = '<p>' + '$\\badmacro{1}$ '.repeat(30) + '</p>';
+  assert.equal(checkExam(y).errors.length, 30);
+});
