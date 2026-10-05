@@ -48,21 +48,25 @@ Assumptions the owner accepted with the design:
 ## Amendments (owner, 2026-10-05, after the server part was merged and rolled out)
 
 1. **Photos go to the bot, not to the teacher's chat.** The "send it in Telegram"
-   route is replaced: a student who finds the site inconvenient sends photos of
-   part 2 to the same bot that signs them in (`@kirill_repet_bot`). The bot
-   attaches them to the student's exam, so everything is in one place and the
-   teacher never has to search a private chat. Rules:
-   - Accepted only while the exam is `open` or `photos` (the server clock), at
-     most 5 per task, 10 MB each, JPEG/PNG/WebP (a photo or an image sent as a file).
-   - The task is taken from the caption ("13", "задание 14"); photos sent within
-     5 minutes after a captioned one (an album, a follow-up) go to the same task;
-     if the exam has exactly one part 2 task, it is that one; otherwise nothing
-     is stored and the bot asks to resend the photo with a caption.
-   - The bot answers once per album: "Принял фото к заданию 13 (всего 2)", or why
-     it did not accept (no open exam, time is up, too many, unsupported file).
-   - Photos sent to the bot show up in the trainer next to the ones attached on
-     the site (the page polls a small photo-list route), and on the teacher's
-     check page under the task.
+   route is replaced: a student who finds the site inconvenient simply sends
+   photos of part 2 to the same bot that signs them in (`@kirill_repet_bot`),
+   with no caption and no task number. The bot attaches them to the exam that
+   started last, so everything is in one place and the teacher never has to
+   search a private chat. The teacher sorts out what is where on the check page.
+   Rules:
+   - "The last started exam" = the student's assignment with the greatest
+     `start` that is not in the future. It takes photos only while it is `open`
+     or in the 10-minute `photos` phase (the server clock, same hard window as
+     the site); otherwise the bot says the time is over and to write to the
+     teacher (`@kirill_math_tutor`). Nothing is stored then.
+   - A photo, or an image sent as a file (JPEG, PNG, WebP), at most 10 MB, at
+     most 15 bot photos per exam. Photos from the bot have no task (`n` is empty).
+   - The bot answers once per album: "Принял фото (всего K)", or why it did not
+     accept.
+   - Photos sent to the bot show up in the trainer in a separate block "Фото,
+     присланные боту" next to the per-task photos attached on the site (the page
+     polls a small photo-list route), and on the teacher's check page in the same
+     kind of block.
    - The checkbox "Отправлю решения в Telegram" and the `via-tg` flag are no
      longer used by the trainer; the server keeps the route and column.
 2. **No abrupt opening.** On the hub the banner turns from "будет в 18:00" into
@@ -78,8 +82,16 @@ Assumptions the owner accepted with the design:
    never prints secrets. Uploading changes nothing for students; **assigning
    sends a Telegram message to the student**, so the skill must name the
    student, the exam and the time and get an explicit yes before it assigns.
-   The panel keeps: the assignments lists, assign/move/cancel sheets, the
-   student-card block and the check page.
+   The panel keeps — and the catalog is a required part of it: the catalog of
+   uploaded exams (numbered), a form "pick a student, pick an exam from the
+   catalog, set the date and time" (a button on the tab and in the student card),
+   the assignments lists, move/cancel, and the check page.
+4. **Looks like the existing mock-exam generator.** The student's exam screens
+   are built from the generator's exam mode (`renderVariant` in `index.html`):
+   the same card, bar, timer, answer input, result tiles and tags. What differs:
+   the countdown to the end of the window instead of a count-up, the save
+   indicator, photo blocks for part 2, the phases (waiting, photos, result), and
+   the teacher's points and comments. No new visual language.
 
 ## Approach
 
