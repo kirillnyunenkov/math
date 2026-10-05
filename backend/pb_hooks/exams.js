@@ -14,7 +14,7 @@ const TEXT = {
   open: (title, mins) => "Пробник «" + title + "» открыт. На работу " + mins + " мин, время уже идёт.",
   checked: (title, pts, max) => "Пробник «" + title + "» проверен: " + pts + " из " + max + ".\nБаллы и комментарии по второй части — в тренажёре.",
   done: (name, title, p1, max1, how) => name + " сдал(а) пробник «" + title + "».\nПервая часть: " + p1 + " из " + max1 + ".\nВторая часть: " + how + ".",
-  howPhotos: (k) => "фото на сайте — " + k,
+  howPhotos: (k) => "фото — " + k,
   howTg: "решения пришлёт в Telegram",
   howNone: "фото нет",
   btnOpen: "Открыть пробник",
@@ -25,6 +25,8 @@ const TEXT = {
   botBadFile: "Такой файл я не принимаю. Пришли фото или картинку JPEG, PNG или WebP.",
   botTooMany: "К пробнику уже прикреплено 15 фото — больше нельзя. Лишнее можно удалить на сайте.",
   botFail: "Не получилось забрать фото. Пришли его ещё раз.",
+  botNotOpened: "Сначала открой пробник в тренажёре — фото принимаются после этого.",
+  botOkAlbum: (title) => "Принял фото к пробнику «" + title + "». Все присланные фото видны в тренажёре.",
   botOk: (title, k) => "Принял фото к пробнику «" + title + "» (всего " + k + ").",
 };
 const MAX_PHOTOS = 5, MAX_BOT_PHOTOS = 15, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
@@ -491,21 +493,26 @@ function botPhoto(msg) {
 
   // the exam that started last (never one in the future)
   const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u} && start <= {:t}", "-start", 1, 0, { u: user.id, t: t });
-  if (!rows.length) { say(TEXT.botNoExam); return true; }
+  if (!rows.length) {
+    // no assignments at all: this is not an exam student, the sign-in flow answers
+    if (!$app.countRecords("exam_assignments", $dbx.hashExp({ user: user.id }))) return false;
+    say(TEXT.botNoExam); return true;
+  }
   const a = rows[0];
 
   // mark the album first, so every refusal below is also said once per album;
   // the phase is read from the fresh row
-  const group = String(msg.media_group_id || "");
+  const group = String(msg.media_group_id || "").slice(0, 40);   // tg_group holds 40 characters
   const mark = mutate(a.id, (r) => {
     const quiet = group !== "" && group === r.getString("tg_group");
     r.set("tg_group", group);
-    return { quiet: quiet, phase: Core.phase(shape(r), t) };
+    return { quiet: quiet, phase: Core.phase(shape(r), t), opened: r.getInt("opened") };
   });
   if (!mark) { say(TEXT.botNoExam); return true; }
   const refuse = (text) => { if (!mark.quiet) say(text); return true; };
   if (mark.phase === "missed" || mark.phase === "scheduled") return refuse(TEXT.botNoExam);
   if (mark.phase !== "open" && mark.phase !== "photos") return refuse(TEXT.botLate);
+  if (mark.phase === "open" && !mark.opened) return refuse(TEXT.botNotOpened);   // the statements were never seen
 
   const doc = msg.document, f = msg.photo ? msg.photo[msg.photo.length - 1] : doc;
   if (!f || (doc && ["image/jpeg", "image/png", "image/webp"].indexOf(doc.mime_type) < 0) || (f.file_size || 0) > 10485760) {
@@ -530,12 +537,14 @@ function botPhoto(msg) {
   } catch (err) { console.log("exams: bot photo failed"); }       // never log the URL or the error text: they can hold the token
   if (full) return refuse(TEXT.botTooMany);
   if (!stored) {
-    mutate(a.id, (r) => { r.set("tg_group", ""); });              // the next part of this album must not be silent
+    // the next part of this album must not be silent; a DB error here must not fail the webhook
+    try { mutate(a.id, (r) => { r.set("tg_group", ""); }); } catch (_) { console.log("exams: album mark not cleared"); }
     say(TEXT.botFail); return true;
   }
   if (!mark.quiet) {
     const exam = $app.findRecordById("exams", a.getString("exam"));
-    say(TEXT.botOk(exam.getString("title"), botCount(a)));
+    // an album reply states no number: its parts arrive one by one, a count now would be stale
+    say(group !== "" ? TEXT.botOkAlbum(exam.getString("title")) : TEXT.botOk(exam.getString("title"), botCount(a)));
   }
   return true;
 }

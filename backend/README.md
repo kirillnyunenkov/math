@@ -115,7 +115,14 @@ empty task (`exam_photos.n = ''`), at most 15 per exam. Handled in `botPhoto()`
 (`pb_hooks/exams.js`); the webhook (`tg.js`) hands photo messages there. No change to the
 Telegram webhook registration is needed (`message` updates already include photos).
 
-Rollout of this part, on top of the earlier exams rollout:
+Rollout of this part, on top of the earlier exams rollout. Take a backup first (it copies the data
+and the stored files, so a rollback loses nothing):
+
+    ssh root@185.249.154.78 'systemctl start ege-api-backup.service'
+
+Nightly backups (the newest 14 are kept) now also hold the bot photos: up to 15 x 10 MB per exam.
+
+Then the files:
 
     scp backend/pb_migrations/1790800008_exam_tg_photos.js root@185.249.154.78:/opt/ege-api/pb_migrations/
     scp backend/pb_hooks/exams.pb.js backend/pb_hooks/exams.js backend/pb_hooks/tg.js root@185.249.154.78:/opt/ege-api/pb_hooks/

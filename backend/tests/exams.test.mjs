@@ -416,7 +416,7 @@ test('settling grades part 1 and tells the teacher once', async () => {
   await view(id, s.token); await tick();
   const msgs = sent.filter(m => String(m.chat_id) === TEACHER_CHAT && m.text.includes('Первая часть: 1 из 2'));
   assert.equal(msgs.length, 1);
-  assert.ok(msgs[0].text.includes('фото на сайте — 1'));
+  assert.ok(msgs[0].text.includes('фото — 1'));
   assert.ok(msgs[0].reply_markup.inline_keyboard[0][0].url.endsWith('teacher.html#/check/' + id));
 });
 
@@ -701,6 +701,8 @@ test('an album is answered once; the next photo counts on', async () => {
   await botHook(photoUpdate(7000000301, { group: 'g1' }));
   assert.equal((await photosOf(id, s.token)).length, 3);
   assert.equal(said(s.chat, 'Принял фото к пробнику'), 1);
+  assert.equal(said(s.chat, 'всего'), 0);                                            // an album reply states no number
+  assert.equal(said(s.chat, 'Все присланные фото видны в тренажёре'), 1);
   await botHook(photoUpdate(7000000301));
   assert.equal((await photosOf(id, s.token)).length, 4);
   assert.equal(said(s.chat, 'Принял фото к пробнику'), 2);
@@ -727,14 +729,16 @@ test('photos go to the exam that started last, and only while it takes photos', 
   assert.equal(said(s.chat, 'Время пробника вышло'), 1);
 });
 
-test('no started exam at all: a polite refusal and nothing stored', async () => {
+test('no assignment at all: the sign-in flow answers; only a future one: a polite refusal', async () => {
   const s = await student(7000000303);
+  const before = sent.length;
   await botHook(photoUpdate(7000000303));
-  assert.equal(said(s.chat, 'Сейчас нет пробника'), 1);
+  assert.equal(said(s.chat, 'Сейчас нет пробника'), 0);
+  assert.equal(sent.slice(before).filter(m => m.chat_id === 7000000303 && m.reply_markup).length, 1);
   const exam = await mkExam();
   await assign(s.id, exam, nowS() + 7200);
   await botHook(photoUpdate(7000000303));
-  assert.equal(said(s.chat, 'Сейчас нет пробника'), 2);
+  assert.equal(said(s.chat, 'Сейчас нет пробника'), 1);
 });
 
 test('fifteen bot photos per exam, unsupported files refused, a png sent as a file accepted', async () => {
@@ -805,4 +809,27 @@ test('album parts arriving in parallel cannot push the exam over fifteen photos'
   await Promise.all(Array.from({ length: 8 }, () => botHook(photoUpdate(7000000313, { group: 'par' }))));
   assert.equal((await photosOf(id, s.token)).length, 15);
   assert.ok(said(s.chat, 'уже прикреплено 15 фото') <= 1);
+});
+
+test('a photo for an exam never opened on the site is refused until it is opened', async () => {
+  const exam = await mkExam(), s = await student(7000000320);
+  const id = (await assign(s.id, exam, nowS() - 10, 600)).json.id;                  // inside its window, never viewed
+  for (let i = 0; i < 2; i++) await botHook(photoUpdate(7000000320, { group: 'no' }));
+  assert.equal(said(s.chat, 'Сначала открой пробник в тренажёре'), 1);              // album: once
+  assert.equal((await rowOf(id)).opened, 0);
+  await view(id, s.token);
+  assert.equal((await photosOf(id, s.token)).length, 0);
+  await botHook(photoUpdate(7000000320));
+  assert.equal((await photosOf(id, s.token)).length, 1);
+});
+
+test('a disabled student gets the normal "access off" text and nothing is stored', async () => {
+  const { s, id } = await running(7000000321);
+  const r = await req('PATCH', `/collections/users/records/${s.id}`, tok.su, { active: false });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  await botHook(photoUpdate(7000000321));
+  assert.equal(said(s.chat, 'Доступ к тренажёру отключён'), 1);
+  assert.equal(said(s.chat, 'Принял фото'), 0);
+  const ph = await req('GET', `/collections/exam_photos/records?filter=${encodeURIComponent(`assignment = "${id}"`)}`, tok.su);
+  assert.equal(ph.json.totalItems, 0);
 });
