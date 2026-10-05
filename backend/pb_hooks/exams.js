@@ -457,6 +457,16 @@ function tick() {
   });
 }
 
+// The caller's photos for the page to poll while photos can still arrive from the bot.
+function photoList(e) {
+  if (!isStudent(e)) return fail(e, 403, "forbidden");
+  const a = own(e);
+  if (!a) return fail(e, 404, "not found");
+  const p = Core.phase(shape(a.rec), nowS());
+  if (p === "scheduled" || p === "missed") return fail(e, 409, "closed");
+  return e.json(200, { photos: photosOf(a.rec) });
+}
+
 module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get,
   answers: answers, away: away, finish: finish, done: done, viaTg: viaTg,
-  addPhoto: addPhoto, delPhoto: delPhoto, check: check, tick: tick };
+  addPhoto: addPhoto, delPhoto: delPhoto, photoList: photoList, check: check, tick: tick };

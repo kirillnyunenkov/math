@@ -639,3 +639,24 @@ test('no opening message to a student who already opened it, or a quarter of an 
   assert.equal(said(s.chat, '«Пробник О1» открыт'), 0);
   assert.equal(said(s.chat, '«Пробник О2» открыт'), 0);
 });
+
+test('the photo list route returns the own photos and refuses before the start', async () => {
+  const exam = await mkExam(), s = await student(7000000290), other = await student(7000000291);
+  const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
+  assert.equal((await req('GET', `/ege/exams/${id}/photos`, s.token)).status, 409);       // scheduled
+  await shift(id, { start: nowS() - 10, duration: 600 });
+  await view(id, s.token);
+  const up = await upload(id, s.token, 13);
+  assert.equal(up.status, 200);
+  const r = await req('GET', `/ege/exams/${id}/photos`, s.token);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.photos, [{ id: up.json.id, n: '13', file: up.json.file }]);
+  assert.equal((await req('GET', `/ege/exams/${id}/photos`, other.token)).status, 404);
+  assert.equal((await req('GET', `/ege/exams/${id}/photos`, null)).status, 403);
+});
+
+test('migration 1790800008: tg_group exists and starts empty', async () => {
+  const exam = await mkExam(), s = await student(7000000292);
+  const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
+  assert.equal((await rowOf(id)).tg_group, '');
+});
