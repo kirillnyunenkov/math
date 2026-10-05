@@ -71,91 +71,141 @@
   }
 
   // ---- formulas -----------------------------------------------------------
-  /* Formulas are read from the TEXT view (what KaTeX auto-render sees): tags are cut out,
-     entities decoded, then $$…$$ and $…$ found per text segment. */
+  /* The platform finds formulas with KaTeX auto-render (delimiters $$ then $, see typeset() in
+     index.html), so the formulas worth checking are exactly the ones auto-render finds. This
+     section mirrors its algorithm (katex/auto-render.min.js: splitAtDelimiters, findEndOfMath and
+     the DOM walker) over the text nodes the browser builds from the HTML:
+       - the opening delimiter is the first "$" (a plain search: "\$" does NOT escape it);
+       - the closing one is found by findEnd (brace depth, a backslash skips the next character);
+         when there is none, auto-render gives up on the rest of that text node;
+       - the text is the DECODED text node (entities resolved), adjacent text nodes are merged,
+         and the content of pre/code is skipped. */
 
+  // Entities as the browser decodes them in a text node: a few named ones (lt gt amp quot nbsp
+  // also without the semicolon), the ones that can hide a formula delimiter, and numeric ones.
+  const ENTITY = /&(?:(lt|LT|gt|GT|amp|AMP|quot|QUOT|nbsp);?|(apos|dollar|bsol|lbrace|lcub|rbrace|rcub);|#[xX]([0-9a-fA-F]+);?|#([0-9]+);?)/g;
+  const NAMED = { lt: '<', LT: '<', gt: '>', GT: '>', amp: '&', AMP: '&', quot: '"', QUOT: '"', nbsp: ' ', apos: "'",
+    dollar: '$', bsol: '\\', lbrace: '{', lcub: '{', rbrace: '}', rcub: '}' };
   function decodeText(s) {
-    return s.replace(/&(#x[0-9a-f]+|#\d+|lt|gt|amp|quot|apos|nbsp);/gi, function (m, e) {
-      const k = e.toLowerCase();
-      if (k === 'lt') return '<';
-      if (k === 'gt') return '>';
-      if (k === 'amp') return '&';
-      if (k === 'quot') return '"';
-      if (k === 'apos') return "'";
-      if (k === 'nbsp') return ' ';
-      const cp = k.charAt(1) === 'x' ? parseInt(k.slice(2), 16) : parseInt(k.slice(1), 10);
-      return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : '';
+    if (s.indexOf('&') === -1) return s;
+    return s.replace(ENTITY, function (m, n1, n2, hex, dec) {
+      if (n1 || n2) return NAMED[n1 || n2];
+      const cp = hex ? parseInt(hex, 16) : parseInt(dec, 10);
+      return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : '�';
     });
   }
 
-  function textSegments(s) {
-    const segs = [];
-    let start = 0, i = s.indexOf('<');
+  /* The text nodes of an (already gated) HTML string: [{text, ignored}], text decoded. Tags split
+     the text; an end tag the parser ignores creates no node, so the texts around it merge (the
+     browser does that, and auto-render joins adjacent text nodes); the content of pre/code is
+     marked ignored, also when a code element was implicitly closed and then reconstructed by the
+     parser. This is a compact model of the browser's open-elements stack for the allowed tags
+     (not a full HTML parser, tables are not modelled); the differential check against a real
+     browser (see the report) is what keeps it honest. */
+  const VOID = { br: 1, hr: 1, img: 1 };
+  const FORMATTING = { b: 1, i: 1, em: 1, strong: 1, u: 1, code: 1 };
+  const SPECIAL = { p: 1, div: 1, pre: 1, ul: 1, ol: 1, li: 1, blockquote: 1, table: 1, thead: 1, tbody: 1, tr: 1, th: 1, td: 1, h3: 1, h4: 1 };
+  const HEADING = { h3: 1, h4: 1 };
+  const CLOSES_P = { p: 1, div: 1, pre: 1, ul: 1, ol: 1, blockquote: 1, hr: 1, table: 1, h3: 1, h4: 1, li: 1 };
+  const BLOCK = { p: 1, div: 1, pre: 1, ul: 1, ol: 1, li: 1, blockquote: 1, hr: 1, table: 1, thead: 1, tbody: 1, tr: 1, th: 1, td: 1, h3: 1, h4: 1 };
+  function textNodes(html) {
+    const s = String(html == null ? '' : html), nodes = [];
+    let misnested = false; // a formatting tag closed while a block element is still open inside it
+    const stack = [], spec = [], pos = Object.create(null); // names; specials counted up to each index; indices per name
+    let pending = [], cur = null; // formatting elements closed implicitly: the parser reopens them at the next text
+    const open = function (n) {
+      const i = stack.length;
+      stack.push(n); spec.push((i ? spec[i - 1] : 0) + (SPECIAL[n] ? 1 : 0));
+      (pos[n] || (pos[n] = [])).push(i);
+    };
+    const isOpen = function (n) { return !!(pos[n] && pos[n].length); };
+    const specialAbove = function (n) { const p = pos[n]; return spec[stack.length - 1] - spec[p[p.length - 1]] > 0; };
+    const popTo = function (n) {
+      const gone = [];
+      for (;;) { const x = stack.pop(); spec.pop(); pos[x].pop(); if (x === n) break; if (FORMATTING[x]) gone.push(x); }
+      pending = pending.concat(gone.reverse());
+    };
+    const reopen = function () { pending.forEach(open); pending = []; };
+    const boundary = function () { if (cur) { nodes.push(cur); cur = null; } };
+    const text = function (raw) {
+      if (raw === '') return;
+      reopen();
+      if (cur) cur.text += decodeText(raw);
+      else cur = { text: decodeText(raw), ignored: isOpen('pre') || isOpen('code') };
+    };
+    let start = 0, i = s.indexOf('<'), cut = false;
     while (i !== -1) {
-      const c = s[i + 1] || '';
-      if (/[A-Za-z]/.test(c) || (c === '/' && /[A-Za-z]/.test(s[i + 2] || ''))) {
-        segs.push(s.slice(start, i));
+      const closing = s[i + 1] === '/';
+      if (/[A-Za-z]/.test(s[i + (closing ? 2 : 1)] || '')) {
+        text(s.slice(start, i));
         const e = s.indexOf('>', i);
-        if (e === -1) { start = s.length; break; }
+        if (e === -1) { cut = true; break; }
+        const at = i + (closing ? 2 : 1);
+        let name = /^[A-Za-z][A-Za-z0-9]*/.exec(s.slice(at, at + 16))[0].toLowerCase();
+        if (closing && HEADING[name]) { // </h3> and </h4> close whichever heading is open
+          const a = pos.h3 && pos.h3.length ? pos.h3[pos.h3.length - 1] : -1, b = pos.h4 && pos.h4.length ? pos.h4[pos.h4.length - 1] : -1;
+          if (a !== b) name = a > b ? 'h3' : 'h4';
+        }
+        if (!closing) {
+          boundary();
+          if (HEADING[name] && HEADING[stack[stack.length - 1]]) popTo(stack[stack.length - 1]);
+          if (CLOSES_P[name] && isOpen('p')) popTo('p');
+          if (!BLOCK[name]) reopen();
+          if (!VOID[name]) open(name);
+        } else if (!isOpen(name)) {
+          const k = pending.lastIndexOf(name);
+          if (k !== -1) pending.splice(k, 1);
+          else if (name === 'p' || name === 'br') boundary();
+        } else if (name === 'p' || SPECIAL[name]) { popTo(name); boundary(); }
+        else if (specialAbove(name)) { if (FORMATTING[name]) { boundary(); misnested = true; } }
+        else { popTo(name); boundary(); }
         start = e + 1; i = s.indexOf('<', start);
       } else i = s.indexOf('<', i + 1);
     }
-    segs.push(s.slice(start));
-    return segs;
+    if (!cut) text(s.slice(start));
+    boundary();
+    nodes.misnested = misnested;
+    return nodes;
   }
 
-  // Closing delimiter dl ("$" or "$$") at brace depth 0; a backslash escapes the next char.
-  // If only a deeper one exists it is returned anyway, so KaTeX can report the broken braces.
-  function findClose(t, from, dl) {
-    let depth = 0, fallback = -1;
-    for (let j = from; j < t.length; j++) {
-      const c = t[j];
-      if (c === '\\') { j++; continue; }
-      if (c === '{') depth++;
-      else if (c === '}') { if (depth > 0) depth--; }
-      else if (c === '$' && t.startsWith(dl, j)) { if (fallback < 0) fallback = j; if (depth === 0) return j; }
+  // auto-render's findEndOfMath: the index of the closing delimiter, or -1.
+  function findEnd(delim, t, from) {
+    let level = 0;
+    for (let r = from; r < t.length; r++) {
+      if (level <= 0 && t.startsWith(delim, r)) return r;
+      const c = t[r];
+      if (c === '\\') r++; else if (c === '{') level++; else if (c === '}') level--;
     }
-    return fallback;
+    return -1;
   }
 
-  // -> { formulas: [{tex, display}], unbalanced: number } (display ones first, then inline).
+  // -> { formulas: [{tex, display}] in document order, unbalanced: number of text nodes where an
+  //      opening delimiter had no closing one }.
   function scanFormulas(html) {
-    const display = [], inline = [];
+    const formulas = [], tn = textNodes(html);
     let unbalanced = 0;
-    textSegments(String(html == null ? '' : html)).forEach(function (seg) {
-      if (seg.indexOf('$') === -1) return;
-      const t = decodeText(seg);
-      let rest = '', i = 0;
-      while (i < t.length) {
-        const c = t[i];
-        if (c === '\\') { rest += t.substr(i, 2); i += 2; continue; }
-        if (c === '$' && t[i + 1] === '$') {
-          const j = findClose(t, i + 2, '$$');
-          if (j < 0) { unbalanced++; rest += '  '; i += 2; continue; }
-          display.push(t.slice(i + 2, j)); rest += ' '; i = j + 2; continue;
-        }
-        rest += c; i++;
-      }
-      i = 0;
-      while (i < rest.length) {
-        const c = rest[i];
-        if (c === '\\') { i += 2; continue; }
-        if (c === '$') {
-          const j = findClose(rest, i + 1, '$');
-          if (j < 0) { unbalanced++; break; }
-          inline.push(rest.slice(i + 1, j)); i = j + 1; continue;
-        }
-        i++;
+    tn.forEach(function (node) {
+      if (node.ignored) return;
+      const t = node.text;
+      let pos = 0;
+      for (;;) {
+        const i = t.indexOf('$', pos);
+        if (i === -1) return;
+        const left = t.charAt(i + 1) === '$' ? '$$' : '$';
+        const j = findEnd(left, t, i + left.length);
+        if (j === -1) { unbalanced++; return; }
+        formulas.push({ tex: t.slice(i + left.length, j), display: left === '$$' });
+        pos = j + left.length;
       }
     });
-    return {
-      formulas: display.map(function (tex) { return { tex: tex, display: true }; })
-        .concat(inline.map(function (tex) { return { tex: tex, display: false }; })),
-      unbalanced: unbalanced,
-    };
+    return { formulas: formulas, unbalanced: unbalanced, misnested: tn.misnested };
   }
 
-  function extractFormulas(html) { return scanFormulas(html).formulas; }
+  // Display formulas first, then inline ones (each group in document order).
+  function extractFormulas(html) {
+    const all = scanFormulas(html).formulas;
+    return all.filter(function (f) { return f.display; }).concat(all.filter(function (f) { return !f.display; }));
+  }
 
   // KaTeX renders these as plain text when trust is off (as on the platform) instead of throwing,
   // so a silent failure would reach the students: refuse them up front.
@@ -178,7 +228,8 @@
       const m = BAD_COMMANDS.exec(f.tex);
       if (m && !seenCmd[m[1]]) { seenCmd[m[1]] = true; errors.push(where + label + ' команда \\' + m[1] + ' не поддерживается.'); }
     });
-    if (shown && sc.unbalanced) warnings.push(where + 'непарный $ ' + label + ' — формула не закрыта или цена записана без \\$.');
+    if (shown && sc.misnested) warnings.push(where + 'теги ' + label + ' вложены неправильно (формат закрыт, пока внутри открыт блок): формулы рядом могут отобразиться не так, как проверено.');
+    if (shown && sc.unbalanced) warnings.push(where + 'непарный $ ' + label + ': формула не закрыта. Чтобы показать знак доллара, пиши его внутри формулы: $\\$5$ (или слово «руб.»).');
   }
 
   function validateInner(x) {
@@ -235,7 +286,7 @@
     catch (e) { return { errors: ['Файл не удалось проверить: ' + String(e && e.message).slice(0, 100)], warnings: [], stats: { short: 0, long: 0 } }; }
   }
 
-  const api = { validateExam: validateExam, extractFormulas: extractFormulas };
+  const api = { validateExam: validateExam, extractFormulas: extractFormulas, scanFormulas: scanFormulas };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamValidate = api;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -67,6 +67,8 @@ for (const t of RAW_TAGS) {
 }
 
 // Checks one HTML snippet in every field that is gated: cond, short sol, long a, long sol.
+// Which task a field belongs to (cond and short sol: task 1; long a and long sol: task 13).
+const FIELD_TASK = { cond: /задание 1\b/i, 'short sol': /задание 1\b/i, 'long a': /задание 13\b/i, 'long sol': /задание 13\b/i };
 const everyField = (html) => {
   const out = {};
   let x = sample(); x.tasks[0].cond = html; out.cond = x;
@@ -79,7 +81,7 @@ const everyField = (html) => {
 test('parser-differential bypass payloads are refused in every HTML field', () => {
   for (const html of BYPASS) {
     for (const [field, x] of Object.entries(everyField(html))) {
-      assert.ok(errs(x).some((e) => /html/i.test(e)), field + ': ' + html);
+      assert.ok(errs(x).some((e) => FIELD_TASK[field].test(e) && /html/i.test(e)), field + ': ' + html);
     }
   }
 });
@@ -96,7 +98,12 @@ test('unsafe HTML: case, data: URIs, svg/math, srcdoc, links, evasion tricks and
     // evasion: no whitespace before the handler, ">" inside a quoted value, entities, tabs and form feeds
     '<img/onerror=alert(1) src=x>', '<img src="data:image/png;base64,AA=="onerror="x()">',
     '<img alt=">" onerror=alert(1) src="data:image/png;base64,AA==">', '<img alt=">" src="data:image/png;base64,AA==">',
-    '<a href="&#106;avascript:alert(1)">a</a>', '<a href="java\tscript:alert(1)">a</a>', '<a href=" JavaScript:alert(1)">a</a>',
+    '<a href="&#x6A;avascript:alert(1)">a</a>', '<a href="&#106;avascript:alert(1)">a</a>',
+    // duplicate attributes are each checked; unusual whitespace between attributes is outside the grammar
+    '<img src="data:image/png;base64,AA==" src="https://example.com/a.png">', '<img src="https://example.com/a.png" src="data:image/png;base64,AA==">',
+    '<img src="data:image/png;base64,AA==" width="1" width="x">', '<img\u00a0src="data:image/png;base64,AA==">',
+    '<img\vsrc="data:image/png;base64,AA==">', '<img\u2028src="data:image/png;base64,AA==">', '<img src="data:image/png;base64,AA=="\u00a0width="1">',
+    '<p\u00a0onclick="x()">a</p>', '<p\u2028onclick="x()">a</p>', '<p\vonclick="x()">a</p>', '<a href="java\tscript:alert(1)">a</a>', '<a href=" JavaScript:alert(1)">a</a>',
     '<p\fonclick=alert(1)>a</p>', '<p/onclick=alert(1)>a</p>', '<p\nonclick=alert(1)>a</p>',
     // quoting and syntax outside the strict grammar
     "<img src='data:image/png;base64,AA=='>", '<img src=data:image/png;base64,AA==>', '<br x>', '<p class>', '</p >', '</p x="1">', '<p',
@@ -121,7 +128,7 @@ test('unsafe HTML: case, data: URIs, svg/math, srcdoc, links, evasion tricks and
   ];
   for (const html of bad) {
     for (const [field, x] of Object.entries(everyField(html))) {
-      assert.ok(errs(x).some((e) => /html/i.test(e)), field + ': ' + JSON.stringify(html));
+      assert.ok(errs(x).some((e) => FIELD_TASK[field].test(e) && /html/i.test(e)), field + ': ' + JSON.stringify(html));
     }
   }
 });
@@ -224,12 +231,74 @@ test('extractFormulas works on the text view: entities, escaped dollars, braces,
     [{ tex: 'a<b', display: false }, { tex: 'a&b', display: false }, { tex: 'x>1', display: false },
       { tex: 'a\u00a0b', display: false }, { tex: '<', display: false }, { tex: '<', display: false }]);
   assert.deepEqual(f('<p>$a=\\$5$</p>'), [{ tex: 'a=\\$5', display: false }]);
-  assert.deepEqual(f('<p>цена \\$5 и \\$6, а $x$</p>'), [{ tex: 'x', display: false }]);
+  // KaTeX auto-render does not treat "\$" as an escaped opening delimiter (verified in a real browser):
+  assert.deepEqual(f('<p>цена \\$5 и \\$6, а $x$</p>'), [{ tex: '5 и \\$6, а ', display: false }]);
   assert.deepEqual(f('<p>$a +\n b$ и $$c\n=d$$</p>'), [{ tex: 'c\n=d', display: true }, { tex: 'a +\n b', display: false }]);
   assert.deepEqual(f('<p>$\\text{a$b}$ и $\\{x\\}$</p>'), [{ tex: '\\text{a$b}', display: false }, { tex: '\\{x\\}', display: false }]);
   assert.deepEqual(f('<p>$x$</p><p>$y$</p><td>$$z$$</td>'), [{ tex: 'z', display: true }, { tex: 'x', display: false }, { tex: 'y', display: false }]);
   assert.deepEqual(f('<img alt="$z$" src="data:image/png;base64,AA==">'), []);
   assert.deepEqual(f('<p>$x$ <b>$y$</b></p>'), [{ tex: 'x', display: false }, { tex: 'y', display: false }]);
+});
+
+test('scanFormulas reproduces what the real KaTeX auto-render renders (browser-verified cases)', () => {
+  const pins = JSON.parse(readFileSync(new URL('./fixtures/formula-pins.json', import.meta.url), 'utf8'));
+  assert.ok(pins.length >= 40);
+  for (const p of pins) {
+    assert.deepEqual(V.scanFormulas(p.html).formulas, p.formulas, JSON.stringify(p.html));
+    // extractFormulas is the same list with display formulas first
+    assert.deepEqual(V.extractFormulas(p.html), p.formulas.filter((f) => f.display).concat(p.formulas.filter((f) => !f.display)), JSON.stringify(p.html));
+  }
+});
+
+test('formulas written with entities for the dollar, braces or backslash are found and checked', () => {
+  for (const d of ['&#36;', '&#x24;', '&dollar;', '&#36']) {
+    const x = sample(); x.tasks[0].cond = '<p>' + d + '\\href{javascript:x}{y}' + d + '</p>';
+    assert.ok(errs(x).some((e) => /задание 1/i.test(e) && /\\href/.test(e) && /не поддерживается/.test(e)), d);
+  }
+  const y = sample(); y.tasks[0].cond = '<p>$&bsol;url{x}$ и $&#92;htmlClass{a}{b}$</p>';
+  assert.equal(errs(y).filter((e) => /не поддерживается/.test(e)).length, 2);
+  // the legacy forms without a semicolon are decoded by the browser, so the validator decodes them too
+  assert.deepEqual(V.extractFormulas('<p>$a&ltb$ $a&gtb$ $a&ampb$ $a&quotb$</p>').map((f) => f.tex), ['a<b', 'a>b', 'a&b', 'a"b']);
+  assert.deepEqual(V.extractFormulas('<p>&amp;dollar;x&amp;dollar;</p>'), []);
+});
+
+test('formulas inside pre and code are not formulas (auto-render skips them)', () => {
+  const x = sample(); x.tasks[0].cond = '<p>Код: <code>$\\frac{1$</code> и <pre>$\\href{x}{y}$</pre>.</p>';
+  const r = V.validateExam(x);
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.warnings, []);
+  const y = sample(); y.tasks[0].cond = '<p><code>$x</code> $y$</p>';
+  assert.deepEqual(V.validateExam(y).warnings, []);
+});
+
+test('extraction stays linear on adversarial input (the old closing search was quadratic)', () => {
+  for (const html of ['${'.repeat(80000), '$${'.repeat(80000), '$'.repeat(160000), '$\\'.repeat(80000), '$a$'.repeat(60000) + '$', '<p>${</p>'.repeat(20000)]) {
+    const t0 = Date.now();
+    V.scanFormulas(html);
+    const ms = Date.now() - t0;
+    assert.ok(ms < 2000, ms + ' ms for ' + html.slice(0, 12));
+  }
+  const x = sample(); x.tasks[0].cond = '${'.repeat(80000);
+  const t0 = Date.now(); V.validateExam(x);
+  assert.ok(Date.now() - t0 < 2000);
+});
+
+test('a formatting tag closed while a block is open inside it is a warning (the parser reshuffles the tree)', () => {
+  for (const html of ['<div><code>y<ul><li>a</li></code></ul></div>', '<b><p>$x$</b></p>']) {
+    const x = sample(); x.tasks[0].cond = html;
+    const r = V.validateExam(x);
+    assert.deepEqual(r.errors, [], html);
+    assert.ok(r.warnings.some((w) => /задание 1/i.test(w) && /вложены неправильно/.test(w)), html);
+  }
+  const ok = sample(); ok.tasks[0].cond = '<p><b>a</b> <code>b</code></p><ul><li><i>c</i></li></ul>';
+  assert.deepEqual(V.validateExam(ok).warnings, []);
+});
+
+test('the unpaired-dollar warning does not advise an escaped dollar outside a formula', () => {
+  const x = sample(); x.tasks[0].cond = '<p>цена $5</p>';
+  const w = V.validateExam(x).warnings.find((m) => /непарный \$/.test(m));
+  assert.ok(w && w.includes('$\\$5$'));
+  assert.ok(!/пиши\S* \\\$/.test(w));
 });
 
 test('validateExam never throws on garbage and reports errors', () => {
