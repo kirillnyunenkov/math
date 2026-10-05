@@ -232,3 +232,74 @@ test('photo phase hides the statements; after it the key is released', async () 
   assert.deepEqual(v.json.key, KEY);
   assert.equal('part2' in v.json, false);
 });
+
+const post = (id, what, token, body) => req('POST', `/ege/exams/${id}/${what}`, token, body);
+const rowOf = async (id) => (await req('GET', `/collections/exam_assignments/records/${id}`, tok.teacher)).json;
+async function started(tgId, duration = 600) {
+  const exam = await mkExam(), s = await student(tgId);
+  const id = (await assign(s.id, exam, nowS() - 10, duration)).json.id;
+  await view(id, s.token);
+  return { id, s, exam };
+}
+
+test('answers are saved while the window is open and come back on reload', async () => {
+  const { id, s } = await started(7000000030);
+  assert.equal((await post(id, 'answers', s.token, { answers: { 1: '5', 2: ' 0,6 ', 13: 'x', 99: '1' } })).status, 200);
+  assert.equal((await post(id, 'answers', s.token, { answers: { 2: '0,5' } })).status, 200);
+  assert.equal((await post(id, 'answers', s.token, { answers: { 2: '0,5' } })).status, 200);   // unchanged
+  const v = await view(id, s.token);
+  assert.deepEqual(v.json.answers, { 1: '5', 2: '0,5' });        // only short tasks, trimmed
+  assert.equal('log' in v.json, false);
+  const log = (await rowOf(id)).log;
+  assert.deepEqual(log.map(x => x.slice(1)), [['a', '1', '5'], ['a', '2', '0,6'], ['a', '2', '0,5']]);
+  assert.ok(log.every(x => Math.abs(x[0] - nowS()) <= 3));
+});
+
+test('nobody else can write, and a very long answer is cut', async () => {
+  const { id, s } = await started(7000000031);
+  const other = await student(7000000032);
+  assert.equal((await post(id, 'answers', other.token, { answers: { 1: '5' } })).status, 404);
+  assert.equal((await post(id, 'answers', null, { answers: { 1: '5' } })).status, 403);
+  await post(id, 'answers', s.token, { answers: { 1: '9'.repeat(500) } });
+  assert.equal((await view(id, s.token)).json.answers[1].length, 40);
+});
+
+test('away intervals go to the journal', async () => {
+  const { id, s } = await started(7000000033);
+  assert.equal((await post(id, 'away', s.token, { n: 2, sec: 42 })).status, 200);
+  assert.equal((await post(id, 'away', s.token, { n: 2, sec: 0 })).status, 400);
+  assert.equal((await post(id, 'away', s.token, { n: 2, sec: 'x' })).status, 400);
+  assert.equal((await post(id, 'away', s.token, { n: 2, sec: 100000 })).status, 400);
+  assert.deepEqual((await rowOf(id)).log.map(x => x.slice(1)), [['w', '2', 42]]);
+});
+
+test('after the window nothing is accepted', async () => {
+  const { id, s } = await started(7000000034);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await shift(id, { start: nowS() - 700, duration: 600 });
+  assert.equal((await post(id, 'answers', s.token, { answers: { 1: '6' } })).status, 409);
+  assert.equal((await post(id, 'away', s.token, { n: 1, sec: 5 })).status, 409);
+  assert.equal((await post(id, 'finish', s.token)).status, 409);
+  assert.deepEqual((await rowOf(id)).answers, { 1: '5' });
+});
+
+test('early finish opens the photo phase; done closes it', async () => {
+  const { id, s } = await started(7000000035);
+  assert.equal((await post(id, 'done', s.token)).status, 409);            // not in the photo phase yet
+  assert.equal((await post(id, 'via-tg', s.token, { on: true })).status, 200);
+  assert.equal((await post(id, 'finish', s.token)).status, 200);
+  assert.equal((await view(id, s.token)).json.phase, 'photos');
+  assert.equal((await post(id, 'answers', s.token, { answers: { 1: '5' } })).status, 409);
+  assert.equal((await post(id, 'via-tg', s.token, { on: false })).status, 200);
+  assert.equal((await post(id, 'done', s.token)).status, 200);
+  const v = await view(id, s.token);
+  assert.equal(v.json.phase, 'submitted');
+  assert.equal(v.json.via_tg, false);
+  assert.equal((await post(id, 'via-tg', s.token, { on: true })).status, 409);
+});
+
+test('an exam that was never opened cannot be finished', async () => {
+  const exam = await mkExam(), s = await student(7000000036);
+  const id = (await assign(s.id, exam, nowS() - 10)).json.id;
+  assert.equal((await post(id, 'finish', s.token)).status, 409);
+});

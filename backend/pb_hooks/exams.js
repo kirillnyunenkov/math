@@ -166,4 +166,72 @@ function get(e) {
   return e.json(200, viewOf(a.rec, a.exam, t));
 }
 
-module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get };
+// The caller's assignment if its phase is one of `phases`; otherwise the
+// handler's error answer is already written and `res` holds it.
+function during(e, phases) {
+  if (!isStudent(e)) return { res: fail(e, 403, "forbidden") };
+  const a = own(e);
+  if (!a) return { res: fail(e, 404, "not found") };
+  a.t = nowS(); a.phase = Core.phase(shape(a.rec), a.t);
+  if (phases.indexOf(a.phase) < 0) return { res: fail(e, 409, "closed") };
+  return a;
+}
+function logPush(rec, entries) {
+  const log = J(rec, "log", []);
+  entries.forEach((x) => { if (log.length < MAX_LOG) log.push(x); });
+  rec.set("log", log);
+}
+
+function answers(e) {
+  const a = during(e, ["open"]);
+  if (a.res) return a.res;
+  const incoming = (e.requestInfo().body || {}).answers || {};
+  const short = {};
+  J(a.exam, "tasks", []).forEach((x) => { if (x.kind === "short") short[String(x.n)] = true; });
+  const cur = J(a.rec, "answers", {}), added = [];
+  // The body arrives as a Go map, whose key order is random: sort so the journal is stable.
+  Object.keys(incoming).sort((x, y) => (Number(x) - Number(y)) || (x < y ? -1 : x > y ? 1 : 0)).forEach((n) => {
+    if (!short[n]) return;
+    const v = String(incoming[n] == null ? "" : incoming[n]).trim().slice(0, 40);
+    if ((cur[n] || "") === v) return;
+    cur[n] = v; added.push([a.t, "a", n, v]);
+  });
+  if (added.length) { a.rec.set("answers", cur); logPush(a.rec, added); $app.save(a.rec); }
+  return e.json(200, { ok: true });
+}
+
+function away(e) {
+  const a = during(e, ["open"]);
+  if (a.res) return a.res;
+  const b = e.requestInfo().body || {}, sec = intOf(b.sec);
+  if (sec === null || sec < 1 || sec > a.rec.getInt("duration")) return fail(e, 400, "bad input");
+  logPush(a.rec, [[a.t, "w", String(b.n == null ? "" : b.n).slice(0, 8), sec]]);
+  $app.save(a.rec);
+  return e.json(200, { ok: true });
+}
+
+function finish(e) {
+  const a = during(e, ["open"]);
+  if (a.res) return a.res;
+  if (!a.rec.getInt("opened")) return fail(e, 409, "closed");
+  a.rec.set("finished", a.t); $app.save(a.rec);
+  return e.json(200, { ok: true });
+}
+
+function done(e) {
+  const a = during(e, ["photos"]);
+  if (a.res) return a.res;
+  a.rec.set("photos_done", a.t); $app.save(a.rec);
+  settle(a.rec, a.exam, a.t);
+  return e.json(200, { ok: true });
+}
+
+function viaTg(e) {
+  const a = during(e, ["open", "photos"]);
+  if (a.res) return a.res;
+  a.rec.set("via_tg", (e.requestInfo().body || {}).on === true); $app.save(a.rec);
+  return e.json(200, { ok: true });
+}
+
+module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get,
+  answers: answers, away: away, finish: finish, done: done, viaTg: viaTg };
