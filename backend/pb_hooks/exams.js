@@ -106,4 +106,64 @@ function cancel(e) {
   return e.json(200, { ok: true });
 }
 
-module.exports = { assign: assign, move: move, cancel: cancel };
+// The caller's own assignment with its exam, or null.
+function own(e) {
+  const rec = byId("exam_assignments", e.request.pathValue("id"));
+  if (!rec || rec.getString("user") !== e.auth.id) return null;
+  return { rec: rec, exam: $app.findRecordById("exams", rec.getString("exam")) };
+}
+
+function meta(rec, exam, t) {
+  return { id: rec.id, title: exam.getString("title"), full: exam.getBool("full"), start: rec.getInt("start"),
+    duration: rec.getInt("duration"), phase: Core.phase(shape(rec), t), via_tg: rec.getBool("via_tg") };
+}
+
+function photosOf(rec) {
+  return each($app.findRecordsByFilter("exam_photos", "assignment = {:a}", "created", 200, 0, { a: rec.id }),
+    (p) => ({ id: p.id, n: p.getString("n"), file: p.getString("file") }));
+}
+
+// Grades part 1 once the photo phase is over. Filled in by a later task.
+function settle(rec, exam, t) {}
+
+// Everything the student may see right now — and nothing more.
+function viewOf(rec, exam, t) {
+  const v = meta(rec, exam, t), tasks = J(exam, "tasks", []);
+  v.now = t;
+  if (v.phase === "open") {
+    v.tasks = tasks; v.answers = J(rec, "answers", {}); v.photos = photosOf(rec);
+  } else if (v.phase === "photos") {
+    v.tasks = tasks.filter((x) => x.kind === "long").map((x) => ({ n: x.n, kind: x.kind, max: x.max }));
+    v.photos = photosOf(rec);
+  } else if (v.phase === "submitted" || v.phase === "checked") {
+    const g = Ans.gradePart1(tasks, {}, {});
+    v.tasks = tasks; v.answers = J(rec, "answers", {}); v.photos = photosOf(rec);
+    v.key = J(exam, "key", {}); v.p1 = rec.getInt("p1"); v.max1 = g.max1; v.ok = J(rec, "ok", {});
+    if (v.phase === "checked") { v.part2 = J(rec, "part2", {}); v.total = Core.total(tasks, v.p1, v.part2); }
+  }
+  return v;
+}
+
+function mine(e) {
+  if (!isStudent(e)) return fail(e, 403, "forbidden");
+  const t = nowS();
+  const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u}", "-start", 50, 0, { u: e.auth.id });
+  const items = each(rows, (rec) => {
+    const exam = $app.findRecordById("exams", rec.getString("exam"));
+    settle(rec, exam, t);
+    return meta(rec, exam, t);
+  });
+  return e.json(200, { now: t, items: items });
+}
+
+function get(e) {
+  if (!isStudent(e)) return fail(e, 403, "forbidden");
+  const a = own(e);
+  if (!a) return fail(e, 404, "not found");
+  const t = nowS();
+  if (Core.phase(shape(a.rec), t) === "open" && !a.rec.getInt("opened")) { a.rec.set("opened", t); $app.save(a.rec); }
+  settle(a.rec, a.exam, t);
+  return e.json(200, viewOf(a.rec, a.exam, t));
+}
+
+module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get };

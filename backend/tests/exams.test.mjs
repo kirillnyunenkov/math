@@ -82,6 +82,9 @@ before(async () => {
     await new Promise(r => setTimeout(r, 100));
   }
   tok.su = (await login('root@test.local', 'rootpassword123', '_superusers')).token;
+  // The auth rate limit (10/min per address) is meant for the real server; this suite logs in many students.
+  const st = await req('PATCH', '/settings', tok.su, { rateLimits: { enabled: false } });
+  assert.equal(st.status, 200, JSON.stringify(st.json));
   const pw = 'T'.repeat(32);
   const r = await req('POST', '/collections/users/records', tok.su,
     { login: 'teacher', role: 'teacher', name: 'T', active: true, password: pw, passwordConfirm: pw });
@@ -164,4 +167,68 @@ test('move and cancel work before the start only, and tell the student', async (
   assert.equal((await req('GET', `/collections/exam_assignments/records/${id}`, tok.teacher)).status, 404);
   assert.equal(said(s.chat, 'отменён'), 1);
   assert.equal((await assign(s.id, exam, nowS() + 7200)).status, 200);   // free to assign again
+});
+
+const view = (id, token) => req('GET', `/ege/exams/${id}`, token);
+
+test('before the start the student sees the time and nothing else', async () => {
+  const exam = await mkExam('Пробник А'), s = await student(7000000020), other = await student(7000000021);
+  const start = nowS() + 7200;
+  const id = (await assign(s.id, exam, start)).json.id;
+  const mine = await req('GET', '/ege/exams/mine', s.token);
+  assert.equal(mine.status, 200);
+  assert.deepEqual(mine.json.items, [{ id, title: 'Пробник А', full: false, start, duration: 600, phase: 'scheduled', via_tg: false }]);
+  assert.ok(Math.abs(mine.json.now - nowS()) <= 2);
+  assert.deepEqual((await req('GET', '/ege/exams/mine', other.token)).json.items, []);
+  assert.equal((await req('GET', '/ege/exams/mine', null)).status, 403);
+
+  const v = await view(id, s.token);
+  assert.equal(v.json.phase, 'scheduled');
+  for (const k of ['tasks', 'key', 'answers', 'photos']) assert.equal(k in v.json, false, k);
+  assert.equal((await view(id, other.token)).status, 404);
+  assert.equal((await view(id, null)).status, 403);
+  // looking early does not count as opening
+  assert.equal((await req('GET', `/collections/exam_assignments/records/${id}`, tok.teacher)).json.opened, 0);
+});
+
+test('during the window: statements without the key; the first look marks it opened', async () => {
+  const exam = await mkExam(), s = await student(7000000022);
+  const id = (await assign(s.id, exam, nowS() - 10)).json.id;
+  const v = await view(id, s.token);
+  assert.equal(v.json.phase, 'open');
+  assert.deepEqual(v.json.tasks, TASKS);
+  assert.deepEqual(v.json.answers, {});
+  assert.deepEqual(v.json.photos, []);
+  assert.equal('key' in v.json, false);
+  assert.equal(JSON.stringify(v.json).includes('2 + 3 = 5'), false);   // a solution text
+  const rec = (await req('GET', `/collections/exam_assignments/records/${id}`, tok.teacher)).json;
+  assert.ok(rec.opened >= nowS() - 2);
+});
+
+test('a window nobody opened is missed and shows nothing', async () => {
+  const exam = await mkExam(), s = await student(7000000023);
+  const id = (await assign(s.id, exam, nowS() - 5000, 60)).json.id;
+  const v = await view(id, s.token);
+  assert.equal(v.json.phase, 'missed');
+  assert.equal('tasks' in v.json, false);
+  assert.equal((await req('GET', `/collections/exam_assignments/records/${id}`, tok.teacher)).json.opened, 0);
+});
+
+test('photo phase hides the statements; after it the key is released', async () => {
+  const exam = await mkExam(), s = await student(7000000024);
+  const id = (await assign(s.id, exam, nowS() - 10)).json.id;
+  await view(id, s.token);
+  await shift(id, { start: nowS() - 700, duration: 600 });               // window ended 100 s ago
+  let v = await view(id, s.token);
+  assert.equal(v.json.phase, 'photos');
+  assert.deepEqual(v.json.tasks, [{ n: 13, kind: 'long', max: 2 }]);
+  assert.equal('key' in v.json, false);
+  assert.equal('answers' in v.json, false);
+
+  await shift(id, { start: nowS() - 1300, duration: 600 });              // photo grace is over too
+  v = await view(id, s.token);
+  assert.equal(v.json.phase, 'submitted');
+  assert.deepEqual(v.json.tasks, TASKS);
+  assert.deepEqual(v.json.key, KEY);
+  assert.equal('part2' in v.json, false);
 });
