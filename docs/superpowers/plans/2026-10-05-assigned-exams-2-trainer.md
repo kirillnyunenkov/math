@@ -16,10 +16,11 @@
 - Nothing about assigned exams is stored in the progress `state`, the event journal, `variants` history or `localStorage` (the only localStorage key allowed is `ege_exam_seen_v1`, the list of checked-exam ids whose result the student already opened, so the banner stops showing).
 - All time decisions come from the server: the page keeps `offset = serverNow*1000 − Date.now()` from the last response and never trusts the device clock for deadlines.
 - Phones are the main device: layout must work at 375 px width; dark theme must work (use tokens from `:root` in `index.html`, never new colors). Colour rule from the design system: warm colours = student status, blue accent = interface; the exam banner and buttons are interface (accent).
+- **Same look as the generator's exam mode.** The exam screens are built from the markup and classes of the existing mock-exam generator (`renderVariant` / `renderScoring` / the result screen in `index.html`): `.vbox`, `.vbar` with `.vtimer`, `.vprog`, `.spacer`, `.vcard`, `.vlabel`, `.cond`, `.v-input`, `.vlong-hint`, `.vresult`, `.vscores`, `.vscore`, `.vtag`, `.vans-row`, `.vactions`, the same buttons. Copy the structure, do not invent a new one. Only what the spec lists differs: a countdown instead of a count-up, the save indicator, photo blocks for part 2, the waiting / photo / result phases, and the teacher's points and comments. Each screen task ends with a side-by-side comparison against the generator (build an exam-mode variant with «Собрать вариант» → «Экзамен»).
 - Text for the student in Russian, on «ты», no emoji. Code comments in English.
 - The numeric answer inputs must give iPhone the text keyboard (minus sign only exists there): use `IS_IPHONE` and the same attributes as `ansAttrs` does for iPhone, regardless of `TASKDATA`.
 - Photos are never uploaded as shot: long side at most 2000 px, JPEG; an image the browser cannot decode is not uploaded, the student gets the message "Этот файл не получается обработать. Прикрепи его с телефона или отправь фото боту в Telegram."
-- Photos of part 2 can also arrive through the bot (Plan 1b): the page lists them with `GET /ege/exams/{id}/photos` (polled every 15 s while the exam or the photo phase is on screen) and shows them next to the ones attached on the site. The old checkbox "Отправлю решения в Telegram" and the `via-tg` call are NOT used any more.
+- Photos of part 2 can also arrive through the bot (Plan 1b): they have no task (`n` is empty): the page lists them with `GET /ege/exams/{id}/photos` (polled every 15 s while the exam or the photo phase is on screen) and shows them in a separate block "Фото, присланные боту" next to the per-task photos attached on the site. The student sends them with no caption. The old checkbox "Отправлю решения в Telegram" and the `via-tg` call are NOT used any more.
 - No abrupt opening: the hub banner turns into the "Открыть" button with a short animation, and the exam screen fades in when the start time comes. Animations are CSS-only and switched off by `prefers-reduced-motion`.
 - Bump `VERSION` in `sw.js` (currently `v86`) in the task that changes shipped files, and add the new files to `SHELL`. API requests are never cached (the service worker already ignores other origins).
 - Commit after every task; never push to `master`; never touch the production server.
@@ -397,9 +398,9 @@ console.log(`\nStack is up. Serve the site:  python3 -m http.server 3456`);
 console.log(`Student: http://localhost:3456/${stud.link}`);
 console.log(`Teacher: http://localhost:3456/teacher.html${teacher.link}`);
 console.log(`Exam ${exam.id}, assignment ${asg.id}, starts in ${START_IN}s, lasts ${DURATION}s. Ctrl+C to stop.`);
-console.log(`Simulate a photo sent to the bot (caption = task number):
+console.log(`Simulate a photo sent to the bot (no caption needed; it attaches to the exam that started last):
   curl -s -X POST http://127.0.0.1:${PORT}/api/tg/webhook -H 'X-Telegram-Bot-Api-Secret-Token: dev' -H 'content-type: application/json' \\
-    -d '{"update_id":1,"message":{"message_id":1,"from":{"id":7000000001,"is_bot":false,"first_name":"Тест"},"chat":{"id":7000000001,"type":"private"},"caption":"13","photo":[{"file_id":"A","file_size":10},{"file_id":"B","file_size":1000}]}}'\n`);
+    -d '{"update_id":1,"message":{"message_id":1,"from":{"id":7000000001,"is_bot":false,"first_name":"Тест"},"chat":{"id":7000000001,"type":"private"},"photo":[{"file_id":"A","file_size":10},{"file_id":"B","file_size":1000}]}}'\n`);
 ```
 
 - [ ] **Step 2: Run it and check it comes up**
@@ -862,6 +863,7 @@ And in the existing click listener add finish handling:
 6. "Завершить" → the confirm sheet → confirm: the screen switches to the photo phase placeholder (Task 6 builds it); the answers stay saved. Reopen: phase is `photos` (placeholder text).
 7. Let a 60-second exam (`DURATION=60`) run to zero with the page open: the timer reaches 00:00 and the page moves to the next phase by itself.
 8. Phone width 375 px: the sticky bar does not wrap badly; dark theme readable. Console: no errors.
+9. **Compare with the generator.** In a second tab build an exam-mode variant (hub → «Собрать вариант» → «Экзамен», two short tasks and one long) and open it next to the assigned exam at the same width (375 px and desktop). The bar, the timer type, the task cards (label, condition, answer input), the buttons and the spacing must look the same; the only differences are the countdown, the save indicator in the bar, and the part 2 blocks. Take one screenshot of each and fix any difference that is not on that list (typically a missing class or a wrong wrapper).
 
 Expected: all pass; fix and re-check otherwise.
 
@@ -900,9 +902,9 @@ Replace the stubs `photoBlockHTML`, `tgBlockHTML`, `mountPhotos` from Task 5 wit
 
   // Photos can also be sent to the sign-in bot; the page picks them up by polling.
   const tgBlockHTML = () => '<div class="vcard ex-tg"><div class="vlabel">Неудобно прикреплять с компьютера?</div>' +
-    '<p class="ex-note">Пришли фото решения боту <a href="https://t.me/' + TG_BOT + '" target="_blank" rel="noopener">@' + TG_BOT + '</a> ' +
-    'и напиши в подписи номер задания, например «13». Если снимков несколько, отправь их одним альбомом с одной подписью. ' +
-    'Фото появятся здесь сами.</p></div>';
+    '<p class="ex-note">Просто отправь фото решений боту <a href="https://t.me/' + TG_BOT + '" target="_blank" rel="noopener">@' + TG_BOT + '</a> — ' +
+    'подпись и номер задания не нужны. Фото появятся ниже, в блоке «Фото, присланные боту».</p></div>' +
+    '<div class="vcard ex-tgph" hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs" id="ex-th-"></div></div>';
 
   // ---- file access: a short-lived token, refreshed when it is about to expire ----
   async function ensureToken() {
@@ -919,15 +921,15 @@ Replace the stubs `photoBlockHTML`, `tgBlockHTML`, `mountPhotos` from Task 5 wit
     const box = document.getElementById('ex-th-' + n);
     if (!box) return;
     if (st.photos.some((p) => !p.local)) await ensureToken();
-    box.innerHTML = st.photos.filter((p) => String(p.n) === String(n)).map((p) =>
-      '<figure class="ex-thumb"><img src="' + esc(thumbSrc(p)) + '" alt="Фото решения, задание ' + n + '" loading="lazy">' +
+    const list = st.photos.filter((p) => String(p.n) === String(n));
+    const card = box.closest('.ex-tgph'); if (card) card.hidden = !list.length;      // the bot block shows only when it has photos
+    box.innerHTML = list.map((p) =>
+      '<figure class="ex-thumb"><img src="' + esc(thumbSrc(p)) + '" alt="' + (n === '' ? 'Фото решения, присланное боту' : 'Фото решения, задание ' + n) + '" loading="lazy">' +
       (st.view && (st.view.phase === 'open' || st.view.phase === 'photos')
         ? '<button class="ex-del" data-ex-del="' + p.id + '" aria-label="Удалить фото">×</button>' : '') + '</figure>').join('');
   }
-  function mountPhotos(v) {
-    (v.tasks || []).filter((t) => t.kind === 'long').forEach((t) => renderThumbs(t.n));
-    pollPhotos(v);
-  }
+  const allThumbs = (v) => { (v.tasks || []).filter((t) => t.kind === 'long').forEach((t) => renderThumbs(t.n)); renderThumbs(''); };
+  function mountPhotos(v) { allThumbs(v); pollPhotos(v); }
 
   // Photos can arrive through the bot: take the server's list as the truth every 15 s while photos are possible.
   function pollPhotos(v) {
@@ -940,7 +942,7 @@ Replace the stubs `photoBlockHTML`, `tgBlockHTML`, `mountPhotos` from Task 5 wit
       const next = r.json.photos.map((p) => (have[p.id] && have[p.id].local) ? Object.assign({}, p, { local: have[p.id].local }) : p);
       if (JSON.stringify(next.map((p) => p.id)) === JSON.stringify(st.photos.map((p) => p.id))) return;
       st.photos = next;
-      (v.tasks || []).filter((t) => t.kind === 'long').forEach((t) => renderThumbs(t.n));
+      allThumbs(v);
     };
     every(tick, 15000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tick(); });
@@ -999,7 +1001,7 @@ Replace the stubs `photoBlockHTML`, `tgBlockHTML`, `mountPhotos` from Task 5 wit
     appEl.innerHTML = shell('<div class="vbar"><span class="vtimer" id="ex-timer" role="timer">--:--</span>' +
       '<span class="vprog">Осталось прикрепить фото</span><span class="spacer"></span>' +
       '<button class="btn primary" data-ex-done>Готово</button></div>' +
-      '<div class="vintro"><p class="lead">Ответы первой части сохранены. Сфотографируй решения второй части и прикрепи к своим заданиям — на это есть 10 минут.</p></div>' +
+      '<div class="vintro"><p class="lead">Ответы первой части сохранены. Сфотографируй решения второй части и прикрепи к своим заданиям или отправь боту — на это есть 10 минут.</p></div>' +
       v.tasks.map((t) => '<div class="vcard" data-n="' + t.n + '"><div class="vlabel">Задание ' + t.n + '<span class="vlabel-art"> · максимум ' + t.max + ' ' + ballWordOf(t.max) + '</span></div>' +
         photoBlockHTML(t.n) + '</div>').join('') + tgBlockHTML(v) +
       '<div style="text-align:center;margin-top:8px"><button class="btn primary" data-ex-done>Готово</button></div>');
@@ -1059,7 +1061,7 @@ Finally in `paint(v)` add, before the placeholder line: `if (v.phase === 'photos
 1. `START_IN=-5 DURATION=900`; open the exam. Each long task shows "Прикрепить фото" and the Telegram checkbox block appears under the tasks.
 2. Attach a real phone-sized photo (a JPEG of at least 3000 px; any test image works) to task 13: the thumbnail appears; in `read_network_requests` the multipart POST is far smaller than the original (long side 2000, a few hundred KB to ~1.5 MB). Attach three more, then a fifth and a sixth: the sixth shows the five-photo message. Delete one: it disappears; reload: the remaining photos still show (they load through the file token).
 3. Attach a non-image renamed `x.png` containing text: the page shows the "не получается обработать" message and nothing is uploaded.
-4. Bot photos (needs Plan 1b's server code): the block "Неудобно прикреплять с компьютера?" under the tasks names the bot. Run the `curl` printed by the dev stack (it posts a photo update from the student's Telegram id with caption `13`): within 15 seconds a thumbnail for task 13 appears on the page without a reload, and it survives a page reload. Send it again without a caption within five minutes: it lands on the same task; after five minutes (or as the very first photo, the seeded exam has two part 2 tasks) nothing is stored. Verify through `GET /api/ege/exams/<id>/photos` (the dev stack's Telegram stub does not show the bot's replies).
+4. Bot photos (needs Plan 1b's server code): the block "Неудобно прикреплять с компьютера?" under the tasks names the bot and says no caption is needed. Run the `curl` printed by the dev stack (it posts a photo update from the student's Telegram id): within 15 seconds the block «Фото, присланные боту» appears with a thumbnail, without a reload, and it survives a page reload. Delete it with × — it disappears from the page and from `GET /api/ege/exams/<id>/photos`. Photos attached on the site to task 13 stay in their own block. (The dev stack's Telegram stub does not show the bot's replies; check the stored photos through the API.)
 5. Away journal: choosing a file must NOT create an away entry (check the row's `log` through the superuser API).
 6. "Завершить" → photo phase: only long tasks, no conditions, the 10-minute timer, the thumbnails, "Готово" → confirm → the screen moves to the results placeholder. Let a `DURATION=60` exam end by itself and check the photo phase appears with a 10-minute timer.
 7. Phone width and dark theme; console clean.
@@ -1128,12 +1130,12 @@ In `paint(v)` add before the placeholder: `if (v.phase === 'submitted' || v.phas
     const note1 = !checked && long.length
       ? '<p class="lead">Первая часть проверена. Вторую часть посмотрит преподаватель — когда она будет проверена, баллы и комментарии появятся здесь, и тебе придёт сообщение в Telegram.</p>'
       : '';
-    const viaTg = v.via_tg && !st.photos.length ? '<p class="ex-note">Решения второй части ты отправляешь в Telegram.</p>' : '';
-    stageAndMount(shell('<div class="vresult"><h2>' + esc(v.title) + '</h2><div class="vscores">' + tiles + '</div>' + note1 + viaTg +
+    stageAndMount(shell('<div class="vresult"><h2>' + esc(v.title) + '</h2><div class="vscores">' + tiles + '</div>' + note1 +
         '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>' +
-        v.tasks.map((t) => resultCard(t, v)).join('')),
+        v.tasks.map((t) => resultCard(t, v)).join('') +
+        '<div class="vcard ex-tgph" hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs" id="ex-th-"></div></div>'),
       () => st.id === id && parseRoute().view === 'exam',
-      () => { long.forEach((t) => renderThumbs(t.n)); if (checked) markSeen(id); });
+      () => { allThumbs(v); if (checked) markSeen(id); });
   }
 ```
 
@@ -1164,6 +1166,7 @@ curl -s -X POST http://127.0.0.1:8090/api/ege/exams/<assignment id>/check -H "Au
 3. Make an exam with `full: true` (edit the stack seed or `curl` PATCH `exams`): the "Тестовый балл" tile appears. Without `full` it does not.
 4. A `missed`-style or someone else's id → the not-found message, no exceptions.
 5. 375 px width, dark theme, long conditions wrap properly, formulas do not overflow; console clean.
+6. **Compare with the generator's result screen.** Finish an exam-mode variant of the generator with the same shape (two short tasks, one long) and put its result next to the assigned exam's result at 375 px and desktop: the tiles (`.vscores`), tags, task cards and the answer row must look the same. Differences allowed: "на проверке" instead of the self-scoring, the teacher's comment block, the thumbnails.
 
 Expected: all pass.
 

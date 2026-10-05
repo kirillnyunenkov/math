@@ -513,6 +513,9 @@ Add after the `fmtDay` helper:
 // ---- пробники от преподавателя ----
 const nowS=()=>Math.floor(Date.now()/1000);
 const examOf=id=>(data.exams||[]).find(e=>e.id===id);
+// the catalog is numbered by upload order: the owner says "пробник 3"
+const examNo=id=>(data.exams||[]).findIndex(e=>e.id===id)+1;
+const examLabel=e=>`№${examNo(e.id)} · ${e.title}`;
 const nameOf=uid=>{const u=data.userOf[uid];return u?(u.name||u.login):'—';};
 const phaseOf=a=>ExamCore.phase({start:a.start,duration:a.duration,opened:a.opened,finished:a.finished,photos_done:a.photos_done,checked:a.checked},nowS());
 const asgOfUser=uid=>(data.asg||[]).filter(a=>a.user===uid);
@@ -538,7 +541,7 @@ function asgRow(a,acts){
   const e=examOf(a.exam),ph=phaseOf(a),ps=photosOfAsg(a.id).length;
   return `<tr class="row" data-act="open-check" data-id="${a.id}">
     <td><span class="name">${esc(nameOf(a.user))}</span></td>
-    <td>${esc(e?e.title:'—')}</td><td>${fmtTs(a.start)}</td><td>${chipFor(ph)}</td>
+    <td>${e?esc(examLabel(e)):'—'}</td><td>${fmtTs(a.start)}</td><td>${chipFor(ph)}</td>
     <td class="num">${a.settled?`${a.p1}`:'—'}</td>
     <td class="hide-m">${ps?ps+' фото':'—'}</td>
     <td class="acts-cell">${acts||''}</td></tr>`;
@@ -551,13 +554,13 @@ function renderExams(){
   const toCheck=by('submitted'),live=[...by('open'),...by('photos'),...by('scheduled')],missed=by('missed'),done=by('checked').slice(0,20);
   const sec=(title,html,empty)=>`<div class="panel"><h3>${title}</h3>${html||`<p class="muted">${empty}</p>`}</div>`;
   app.innerHTML=`${tabs('x')}
-    <h2>Пробники</h2>
-    <p class="lead">Свои пробники лежат в закрытом каталоге. Ученик видит пробник только после того, как ты назначил его на время.</p>
+    <div class="toolbar"><h2 class="grow">Пробники</h2><button class="btn" data-act="assign">Назначить пробник</button></div>
+    <p class="lead">Свои пробники лежат в закрытом каталоге. Ученик видит пробник только после того, как ты назначил его на время: выбери ученика, пробник из каталога, дату и время.</p>
     ${sec('Ждут проверки',table(toCheck),'Работ на проверку нет.')}
     ${sec('Назначены и идут',table(live,true),'Ничего не назначено.')}
     ${missed.length?sec('Пропущены',table(missed,true),''):''}
     <div class="panel"><h3>Каталог</h3>
-      ${(data.exams||[]).length?`<div class="list">${data.exams.map(e=>`<div class="it"><span><b>${esc(e.title)}</b>${e.full?' <span class="chip">полный вариант</span>':''} <span class="muted">· загружен ${fmtDay(pbTime(e.created))}</span></span>
+      ${(data.exams||[]).length?`<div class="list">${data.exams.map(e=>`<div class="it"><span><b>№${examNo(e.id)} · ${esc(e.title)}</b>${e.full?' <span class="chip">полный вариант</span>':''} <span class="muted">· загружен ${fmtDay(pbTime(e.created))}${(data.asg||[]).filter(a=>a.exam===e.id).length?' · назначен '+(data.asg||[]).filter(a=>a.exam===e.id).length+' раз':''}</span></span>
         <span><button class="btn" data-act="assign" data-exam="${e.id}">Назначить</button></span></div>`).join('')}</div>`
         :'<p class="muted">Каталог пуст. Пробники готовятся и загружаются через Claude Code (навык assigned-exam).</p>'}
       <p class="muted">Новый пробник: пришли исходник в чат Claude Code — он соберёт файл, сверит ответы, покажет предпросмотр и загрузит сюда.</p>
@@ -588,7 +591,7 @@ CSS (tokens only):
 - [ ] **Step 2b: Verify in the browser on the local stack**
 
 1. `START_IN=-5 DURATION=300 node tools/exam-dev-stack.mjs`, serve the site (`python3 -m http.server 3456`), open the **teacher link** it prints.
-2. The tab "Пробники" shows the assignment under "Назначены и идут" with the chip "идёт", the catalog lists "Тестовый пробник" with a "Назначить" button (the sheet comes in Task 5). The other tabs (Ученики, Из канала) work as before.
+2. The tab "Пробники" shows the assignment under "Назначены и идут" with the chip "идёт", the catalog lists "№1 · Тестовый пробник" with a "Назначить" button, and the toolbar has "Назначить пробник" (the sheet comes in Task 5). The other tabs (Ученики, Из канала) work as before.
 3. Stop the stack and open the panel against a server that returns 404 for the exam collections? Simulate: in the console run `data.exams=[];data.asg=[];data.photos=[];renderExams()` — the page renders with empty states and no exceptions. Also make sure `load()` itself survives a 404: temporarily rename a collection in the dev stack is overkill; instead read the code path and confirm `soft()` swallows non-401 errors.
 4. Console clean; phone width OK.
 
@@ -929,7 +932,7 @@ and assign it when he asks.
 6. **Upload.** Production write: give him the command to run (bash block):
    `node tools/exam_api.mjs upload ~/math-source/exams/<slug>/exam.json`. After it, `node tools/exam_api.mjs exams` confirms.
    To fix an uploaded exam that was never assigned: `delete --exam "<title>" --yes`, then upload again.
-7. **Assign** only when he asks ("назначь Ивану пробник на пятницу 18:00"): resolve with
+7. **Assign** — he can do it himself in the panel (tab «Пробники» → «Назначить пробник»: student, exam from the numbered catalog, date, time), or ask you ("назначь Ивану пробник 3 на пятницу 18:00"): resolve with
    `node tools/exam_api.mjs students` / `exams`; run `assign … --at "YYYY-MM-DD HH:MM"` **without** `--yes` and show him
    the printed plan; after his explicit yes run it again with `--yes`. Ambiguous name → ask.
    Default duration is 235 minutes; change with `--minutes` if he says so.
@@ -976,7 +979,7 @@ function assignSheet(o){
   const soon=ExamPanelCore.tsToMoscowInput(nowS()+86400);
   sheet(`<h3>Назначить пробник</h3>
     <label class="fld">Ученик<select id="as-user">${personOptions(o.user)}</select></label>
-    <label class="fld">Пробник<select id="as-exam">${data.exams.map(e=>`<option value="${e.id}"${e.id===o.exam?' selected':''}>${esc(e.title)}</option>`).join('')}</select></label>
+    <label class="fld">Пробник из каталога<select id="as-exam">${data.exams.map(e=>`<option value="${e.id}"${e.id===o.exam?' selected':''}>${esc(examLabel(e))}</option>`).join('')}</select></label>
     <label class="fld">Начало (по Москве)<input type="datetime-local" id="as-start" value="${soon.slice(0,11)}18:00"></label>
     <label class="fld">Время на работу, минут<input type="number" id="as-dur" min="1" max="360" value="235"></label>
     <p class="muted" id="as-err" role="alert"></p>
@@ -1044,7 +1047,7 @@ function examBlock(uid){
   return `<div class="panel"><div class="toolbar"><h3 class="grow">Пробники от преподавателя</h3>
       <button class="btn" data-act="assign" data-user="${uid}">Назначить пробник</button></div>
     ${rows.length?`<div class="list">${rows.map(a=>{const ph=phaseOf(a),e=examOf(a.exam);
-      return `<div class="it"><span><b>${esc(e?e.title:'—')}</b> <span class="muted">· ${fmtTs(a.start)}</span> ${chipFor(ph)}${a.settled?` <span class="muted">· 1 часть: ${a.p1}</span>`:''}</span>
+      return `<div class="it"><span><b>${esc(e?examLabel(e):'—')}</b> <span class="muted">· ${fmtTs(a.start)}</span> ${chipFor(ph)}${a.settled?` <span class="muted">· 1 часть: ${a.p1}</span>`:''}</span>
         <span>${ph==='scheduled'||ph==='missed'?`<button class="btn quiet" data-act="move" data-id="${a.id}">Перенести</button> <button class="btn danger" data-act="cancel" data-id="${a.id}">Отменить</button>`:''}
         ${ph==='submitted'||ph==='checked'?`<button class="btn quiet" data-act="open-check" data-id="${a.id}">Открыть</button>`:''}</span></div>`;}).join('')}</div>`
       :'<p class="muted">Своих пробников этому ученику ещё не назначали.</p>'}</div>`;
@@ -1102,6 +1105,7 @@ async function renderCheck(id){
   const P=ExamPanelCore,act=P.activitySummary(a.log,a.start),part2=a.part2||{},answers=a.answers||{},ok=a.ok||{};
   const url=p=>`${API}/files/exam_photos/${p.id}/${p.file}?token=${encodeURIComponent(tok)}`;
   const short=e.tasks.filter(t=>t.kind==='short'),long=e.tasks.filter(t=>t.kind==='long');
+  const botPh=photos.filter(p=>!p.n);   // sent to the bot: no task, the teacher sorts them out
   const ready=!!a.settled;
   const away=act.away.count?`уходил со страницы ${act.away.count} раз(а), всего ${P.fmtSec(act.away.totalSec)}; дольше всего ${P.fmtSec(act.away.longest.sec)} (на задании ${esc(act.away.longest.n)||'—'})`:'со страницы не уходил';
   app.innerHTML=`<p><a href="#/exams">← Пробники</a> · <a href="#/s/${a.user}">${esc(nameOf(a.user))}</a></p>
@@ -1120,9 +1124,12 @@ async function renderCheck(id){
     ${long.map(t=>{const g=part2[t.n]||{},ps=photos.filter(p=>String(p.n)===String(t.n));
       return `<div class="panel" data-ck="${t.n}"><h3>Задание ${t.n} <span class="muted">· максимум ${t.max}</span></h3>
         <details><summary>Условие и ответ</summary><div class="tex">${t.cond}</div><p><b>Ответ:</b> <span class="tex">${(e.key[String(t.n)]||{}).a||''}</span></p></details>
-        <div class="ex-ph">${ps.length?ps.map(p=>`<a href="${esc(url(p))}" target="_blank" rel="noopener"><img src="${esc(url(p))}" alt="Фото решения, задание ${t.n}"></a>`).join(''):'<p class="muted">Фото нет.</p>'}</div>
+        <div class="ex-ph">${ps.length?ps.map(p=>`<a href="${esc(url(p))}" target="_blank" rel="noopener"><img src="${esc(url(p))}" alt="Фото решения, задание ${t.n}"></a>`).join(''):`<p class="muted">${botPh.length?'К этому заданию фото на сайте нет — смотри блок «Фото, присланные боту» ниже.':'Фото нет.'}</p>`}</div>
         <div class="ck-row"><label class="fld">Баллы<select data-ck-pts="${t.n}" ${ready?'':'disabled'}>${pointsOptions(t.max,+g.pts||0)}</select></label>
           <label class="fld grow">Комментарий ученику<textarea data-ck-note="${t.n}" rows="3" maxlength="2000" ${ready?'':'disabled'}>${esc(g.comment||'')}</textarea></label></div></div>`;}).join('')}
+    ${botPh.length?`<div class="panel"><h3>Фото, присланные боту <span class="muted">· ${botPh.length}</span></h3>
+      <p class="muted">Ученик отправил их боту без указания задания. Они в порядке получения.</p>
+      <div class="ex-ph">${botPh.map(p=>`<a href="${esc(url(p))}" target="_blank" rel="noopener"><img src="${esc(url(p))}" alt="Фото, присланное боту"></a>`).join('')}</div></div>`:''}
     <div class="toolbar"><p class="muted grow" id="ck-msg" role="status"></p>
       <button class="btn" data-act="check-send" data-id="${id}" ${ready?'':'disabled'}>${a.checked?'Сохранить изменения':'Проверено, отправить ученику'}</button></div>`;
   if(window.renderMathInElement)try{renderMathInElement(app,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});}catch(err){}
@@ -1157,7 +1164,7 @@ CSS:
 If Plan 2 is merged, use the real trainer for the student part; otherwise drive the student side with `curl` against the server (token from `/api/collections/users/auth-with-password` for `stud1`, the throwaway password is `P` plus 31 `x`): open (`GET /ege/exams/<id>`), `POST answers {"answers":{"1":"5","2":"-1,5"}}`, `POST finish`, upload a photo with `curl -F n=13 -F file=@some.jpg`, `POST done`.
 
 1. Start `START_IN=-5 DURATION=600`. After the student side is done the assignment shows in "Ждут проверки" (open the "Пробники" tab; the badge on the tab counts it).
-2. Open the row: header, "Активность" (e.g. "со страницы не уходил" or the away facts if you posted `/away`), the answer table with верно/неверно, the photo thumbnails of task 13 (click opens the full image), points selects, comment boxes. A work in `open`/`photos` phase shows the "ещё не сдана" note and disabled controls.
+2. If Plan 1b is deployed in the dev stack, send a photo to the bot with the `curl` printed by the dev stack (see Plan 2, Task 3): the check page shows the block «Фото, присланные боту». Open the row: header, "Активность" (e.g. "со страницы не уходил" or the away facts if you posted `/away`), the answer table with верно/неверно, the photo thumbnails of task 13 (click opens the full image), points selects, comment boxes. A work in `open`/`photos` phase shows the "ещё не сдана" note and disabled controls.
 3. Set 13 → 1, 14 → 0 with a comment and press "Проверено": the status says "Готово…", the button becomes "Сохранить изменения", the row moves to "Проверены". As the student (trainer or `GET /ege/exams/<id>`) the phase is `checked` with `part2` and `total`. Change the points and save again: no second bot message (the dev stack's Telegram stub is silent; check the server log or the stub is not needed — rely on the Plan 1 test for exactly-once).
 4. Bad input: edit the select value in devtools to `9` and send: "Проверь баллы…".
 5. The deep link `http://localhost:3456/teacher.html#/check/<assignment id>` opens the page directly after login (the bot's "Проверить" button target).
