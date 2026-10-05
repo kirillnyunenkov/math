@@ -52,38 +52,150 @@ test('unsafe HTML is refused', () => {
   assert.deepEqual(errs(ok), []);
 });
 
-test('unsafe HTML: mixed case, data: URIs, svg/math, srcdoc and filter-evasion tricks are refused', () => {
+// Every raw-text / special element whose parsing differs from the plain tokeniser: a payload hides
+// a tag inside a quoted attribute value that the browser never sees as an attribute.
+const RAW_TAGS = ['noscript', 'textarea', 'xmp', 'title', 'noembed', 'noframes', 'style', 'script', 'iframe', 'plaintext'];
+const BYPASS = [
+  '<!-- <a title="--><img src=x onerror=alert(1)> "> -->',
+  '<![CDATA[ <a title="]]><img src=x onerror=alert(1)>">',
+  '</ <a title="><img src=x onerror=alert(1)>">',
+  '<? <a title="?><img src=x onerror=alert(1)>">',
+];
+for (const t of RAW_TAGS) {
+  BYPASS.push('<' + t + '><p title="</' + t + '><img src=x onerror=alert(1)>">');
+  BYPASS.push('<' + t + '><a title="</' + t + '><img src=x onerror=alert(1)>">');
+}
+
+// Checks one HTML snippet in every field that is gated: cond, short sol, long a, long sol.
+const everyField = (html) => {
+  const out = {};
+  let x = sample(); x.tasks[0].cond = html; out.cond = x;
+  x = sample(); x.key['1'].sol = html; out['short sol'] = x;
+  x = sample(); x.key['13'].a = html; out['long a'] = x;
+  x = sample(); x.key['13'].sol = html; out['long sol'] = x;
+  return out;
+};
+
+test('parser-differential bypass payloads are refused in every HTML field', () => {
+  for (const html of BYPASS) {
+    for (const [field, x] of Object.entries(everyField(html))) {
+      assert.ok(errs(x).some((e) => /html/i.test(e)), field + ': ' + html);
+    }
+  }
+});
+
+test('unsafe HTML: case, data: URIs, svg/math, srcdoc, links, evasion tricks and odd grammar are refused', () => {
   const bad = [
     '<SCRIPT>alert(1)</SCRIPT>', '<ScRiPt src=x></ScRiPt>', '<IFRAME SRC="x"></IFRAME>', '<STYLE>p{}</STYLE>',
-    '<p ONCLICK="x()">a</p>', '<p OnMouseOver=x()>a</p>',
+    '<p ONCLICK="x()">a</p>', '<p OnMouseOver=x()>a</p>', '<P>x</P>', '<p>x</P>', '<Br>', '<IMG SRC="DATA:IMAGE/PNG;BASE64,AA==">',
     '<a href="data:text/html,<b>x</b>">a</a>', '<a href="DATA:text/html;base64,PGI+">a</a>',
     '<img src="data:text/html;base64,PGI+">', '<img src="data:application/javascript;base64,AA==">',
+    '<img src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=">', '<img src="data:image/png;charset=x;base64,AA==">',
     '<svg onload="alert(1)"></svg>', '<svg><circle r="1"/></svg>', '<SVG></SVG>', '<math><mi>x</mi></math>', '<MATH></MATH>',
     '<iframe srcdoc="<b>x</b>"></iframe>', '<p SRCDOC="x">a</p>',
-    // evasion: no whitespace before the handler, ">" inside a quoted value, entities and tabs inside the scheme
-    '<img/onerror=alert(1) src=x>', '<img src="data:image/png;base64,AA"onerror="x()">',
-    '<img alt=">" onerror=alert(1) src="data:image/png;base64,AA">',
-    '<a href="&#106;avascript:alert(1)">a</a>', '<a href="&#x6A;avascript:alert(1)">a</a>', '<a href="java\tscript:alert(1)">a</a>',
-    '<a href=" JavaScript:alert(1)">a</a>',
-    // loading things from outside the page
-    '<img src="data:image/png;base64,AA" srcset="https://example.com/a.png 2x">', '<video src="data:image/png;base64,AA"></video>',
-    '<img>', '<form action="https://example.com"><input></form>', '<base href="https://example.com/">',
+    // evasion: no whitespace before the handler, ">" inside a quoted value, entities, tabs and form feeds
+    '<img/onerror=alert(1) src=x>', '<img src="data:image/png;base64,AA=="onerror="x()">',
+    '<img alt=">" onerror=alert(1) src="data:image/png;base64,AA==">', '<img alt=">" src="data:image/png;base64,AA==">',
+    '<a href="&#106;avascript:alert(1)">a</a>', '<a href="java\tscript:alert(1)">a</a>', '<a href=" JavaScript:alert(1)">a</a>',
+    '<p\fonclick=alert(1)>a</p>', '<p/onclick=alert(1)>a</p>', '<p\nonclick=alert(1)>a</p>',
+    // quoting and syntax outside the strict grammar
+    "<img src='data:image/png;base64,AA=='>", '<img src=data:image/png;base64,AA==>', '<br x>', '<p class>', '</p >', '</p x="1">', '<p',
+    // NUL bytes, comments, doctype, processing instructions
+    '<p>a\u0000b</p>', '<!-- x -->', '<!DOCTYPE html>', '<?xml version="1.0"?>', '</ p>', '</3>', '</>',
+    // links, forms, inputs, buttons and every other tag off the allowlist
+    '<a href="https://example.com/page">a</a>', '<a>a</a>', '<form action="https://example.com"><input></form>', '<base href="https://example.com/">',
+    '<input>', '<button>b</button>', '<textarea>t</textarea>', '<template><p>x</p></template>', '<video src="x"></video>', '<font>x</font>',
+    '<center>x</center>', '<img>', '<img alt="x">', '<link rel="stylesheet" href="x">', '<meta http-equiv="refresh" content="0">',
+    // attributes off the allowlist, on every tag
+    '<p style="color:red">a</p>', '<p id="a">a</p>', '<p class="a">a</p>', '<p title="a">a</p>', '<p name="a">a</p>', '<p href="x">a</p>',
+    '<span style="x">a</span>', '<td style="x">a</td>', '<td colspan="2" id="c">a</td>', '<p data-x="1">a</p>', '<p lang="ru">a</p>',
+    '<img src="data:image/png;base64,AA==" style="width:1px">', '<img src="data:image/png;base64,AA==" class="a">',
+    '<img src="data:image/png;base64,AA==" srcset="https://example.com/a.png 2x">', '<img src="data:image/png;base64,AA==" onerror="x()">',
+    '<img src="data:image/png;base64,AA==" title="t">', '<p width="1">a</p>', '<th src="x">a</th>', '<p onclick="x">a</p>',
+    // attribute values off the allowlist
+    '<img src="data:image/png;base64,AA==" width="10;x">', '<img src="data:image/png;base64,AA==" height="x">',
+    '<img src="data:image/png;base64,AA==" width="-1">', '<td colspan="x">a</td>', '<td rowspan="1px">a</td>', '<td align="justify">a</td>',
+    '<img src="data:image/png;base64,AA== ">', '<img src="https://example.com/a.png">', '<img src="//example.com/a.png">',
+    // a "less than" sign glued to a letter is destroyed by the browser (and would hide formulas)
+    '<p>$a<b$</p>', '<p>$x<y$</p>', '<p>x<y</p>',
   ];
   for (const html of bad) {
-    const x = sample(); x.tasks[0].cond = html;
-    assert.ok(errs(x).some((e) => /задание 1/i.test(e) && /html/i.test(e)), 'cond: ' + html);
-    const y = sample(); y.key['1'].sol = html;
-    assert.ok(errs(y).some((e) => /задание 1/i.test(e) && /html/i.test(e)), 'sol: ' + html);
-    const z = sample(); z.key['13'].a = html;
-    assert.ok(errs(z).some((e) => /задание 13/i.test(e) && /html/i.test(e)), 'long a: ' + html);
+    for (const [field, x] of Object.entries(everyField(html))) {
+      assert.ok(errs(x).some((e) => /html/i.test(e)), field + ': ' + JSON.stringify(html));
+    }
   }
+});
+
+test('allowed HTML passes in every HTML field', () => {
+  const png = 'data:image/png;base64,iVBORw0KGgo=';
   const ok = [
-    '<p>Если one = 1, то on = 1.</p>', '<p>$a<b$ и $x>1$</p>',
-    '<img alt=">" src="data:image/png;base64,AA==">', '<IMG SRC="DATA:IMAGE/PNG;BASE64,AA==">',
-    '<img src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=" width="40" height="40">',
-    '<p><a href="https://example.com/page">ссылка</a></p>', '<table><tr><td>1</td></tr></table>',
+    '<p>Если one = 1, то on = 1.</p>', '<p>Привет, мир: &lt; &gt; &amp; &quot; &nbsp; &#8722; &#x2212;.</p>',
+    '<p>a < b, a <= b, 5 <6, x<3, x <3, 1<2, a<$b$, a<</p>', '<p>$a< b$ и $a \\lt b$ и $a&lt;b$</p>',
+    '<p><b>b</b> <i>i</i> <em>e</em> <strong>s</strong> <u>u</u> x<sup>2</sup> x<sub>1</sub> <span>s</span></p>',
+    '<ul><li>1</li><li>2</li></ul><ol><li>1</li></ol>',
+    '<table><thead><tr><th colspan="2" align="center">h</th></tr></thead><tbody><tr><td colspan="2" rowspan="1" align="left">1</td></tr></tbody></table>',
+    '<p>a<br>b<br/>c<br />d</p><hr><hr/>', '<pre>x\n y</pre><code>z</code><h3>t</h3><h4>t</h4><blockquote>q</blockquote><div><p >s</p></div>',
+    '<p>$a +\n b$</p>', '<p>a</p>\n<p>b</p>',
+    '<img src="' + png + '" width="40" height="40px" alt="рисунок">', '<img src="data:image/jpeg;base64,/9j/4AAQ+Zg==" alt="a &amp; b"/>',
+    '<img alt="x" src="data:image/webp;base64,AAAA" /><img src="data:image/gif;base64,R0lGOD==">',
   ];
-  for (const html of ok) { const x = sample(); x.tasks[0].cond = html; assert.deepEqual(errs(x), [], html); }
+  for (const html of ok) {
+    for (const [field, x] of Object.entries(everyField(html))) {
+      const e = errs(x);
+      assert.deepEqual(e, [], field + ': ' + JSON.stringify(html));
+    }
+  }
+});
+
+test('a "less than" glued to a letter inside a formula tells the author to write \\lt', () => {
+  for (const html of ['<p>$a<b$</p>', '<p>$x<y$</p>']) {
+    const x = sample(); x.tasks[0].cond = html;
+    assert.ok(errs(x).some((e) => /задание 1/i.test(e) && /\\lt/.test(e)), html);
+  }
+});
+
+test('the exam title is plain text', () => {
+  for (const t of ['a<b', '<b>x</b>', 'x>y']) {
+    const x = sample(); x.title = t;
+    assert.ok(errs(x).some((e) => /название/i.test(e)), t);
+  }
+  const ok = sample(); ok.title = 'Пробник 5, вариант 1 &amp; 2';
+  assert.deepEqual(errs(ok), []);
+});
+
+test('a long-task solution is HTML-checked although it is only a warning', () => {
+  const x = sample(); x.key['13'].sol = '<p>ok</p>';
+  const r = V.validateExam(x);
+  assert.deepEqual(r.errors, []);
+  assert.equal(r.warnings.length, 1);
+});
+
+test('formulas with commands that fetch or style things are refused', () => {
+  for (const tex of ['\\href{javascript:alert(1)}{x}', '\\url{https://example.com}', '\\htmlClass{a}{x}', '\\htmlId{a}{x}',
+    '\\htmlStyle{color:red}{x}', '\\htmlData{a=1}{x}', '\\includegraphics{https://example.com/a.png}', 'a+\\href{x}{y}']) {
+    for (const wrap of ['$' + tex + '$', '$$' + tex + '$$']) {
+      const x = sample(); x.tasks[0].cond = '<p>' + wrap + '</p>';
+      assert.ok(errs(x).some((e) => /задание 1/i.test(e) && /не поддерживается/i.test(e)), wrap);
+      const y = sample(); y.key['1'].sol = '<p>' + wrap + '</p>';
+      assert.ok(errs(y).some((e) => /задание 1/i.test(e) && /не поддерживается/i.test(e)), wrap);
+      const z = sample(); z.key['13'].a = '<p>' + wrap + '</p>';
+      assert.ok(errs(z).some((e) => /задание 13/i.test(e) && /не поддерживается/i.test(e)), wrap);
+    }
+  }
+  const ok = sample(); ok.tasks[0].cond = '<p>$\\frac{1}{2}$ и $x\\hspace{1em}y$</p>';
+  assert.deepEqual(errs(ok), []);
+});
+
+test('an unpaired dollar is a warning, not an error', () => {
+  for (const html of ['<p>цена $5</p>', '<p>$a+b</p>', '<p>$$x^2</p>', '<p>$x$ и $</p>']) {
+    const x = sample(); x.tasks[0].cond = html;
+    const r = V.validateExam(x);
+    assert.deepEqual(r.errors, [], html);
+    assert.ok(r.warnings.some((w) => /задание 1/i.test(w) && /непарный \$/.test(w)), html);
+  }
+  const y = sample(); y.key['1'].sol = '<p>$2+3</p>';
+  assert.ok(V.validateExam(y).warnings.some((w) => /задание 1/i.test(w) && /непарный \$/.test(w)));
+  assert.deepEqual(V.validateExam(sample()).warnings, []);
 });
 
 test('the size caps match the server fields', () => {
@@ -104,6 +216,20 @@ test('extractFormulas finds inline and display formulas', () => {
   assert.deepEqual(V.extractFormulas('<p>Найдите $2+3$ и $$x^2$$ и $\\dfrac{1}{2}$.</p>'),
     [{ tex: 'x^2', display: true }, { tex: '2+3', display: false }, { tex: '\\dfrac{1}{2}', display: false }]);
   assert.deepEqual(V.extractFormulas('<p>без формул, цена 5 рублей</p>'), []);
+});
+
+test('extractFormulas works on the text view: entities, escaped dollars, braces, multi-line, tags', () => {
+  const f = (h) => V.extractFormulas(h);
+  assert.deepEqual(f('<p>$a&lt;b$ и $a&amp;b$ и $x&gt;1$ и $a&nbsp;b$ и $&#60;$ и $&#x3c;$</p>'),
+    [{ tex: 'a<b', display: false }, { tex: 'a&b', display: false }, { tex: 'x>1', display: false },
+      { tex: 'a\u00a0b', display: false }, { tex: '<', display: false }, { tex: '<', display: false }]);
+  assert.deepEqual(f('<p>$a=\\$5$</p>'), [{ tex: 'a=\\$5', display: false }]);
+  assert.deepEqual(f('<p>цена \\$5 и \\$6, а $x$</p>'), [{ tex: 'x', display: false }]);
+  assert.deepEqual(f('<p>$a +\n b$ и $$c\n=d$$</p>'), [{ tex: 'c\n=d', display: true }, { tex: 'a +\n b', display: false }]);
+  assert.deepEqual(f('<p>$\\text{a$b}$ и $\\{x\\}$</p>'), [{ tex: '\\text{a$b}', display: false }, { tex: '\\{x\\}', display: false }]);
+  assert.deepEqual(f('<p>$x$</p><p>$y$</p><td>$$z$$</td>'), [{ tex: 'z', display: true }, { tex: 'x', display: false }, { tex: 'y', display: false }]);
+  assert.deepEqual(f('<img alt="$z$" src="data:image/png;base64,AA==">'), []);
+  assert.deepEqual(f('<p>$x$ <b>$y$</b></p>'), [{ tex: 'x', display: false }, { tex: 'y', display: false }]);
 });
 
 test('validateExam never throws on garbage and reports errors', () => {
