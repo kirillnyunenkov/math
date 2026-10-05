@@ -1,8 +1,19 @@
 
 # EGE trainer API (PocketBase), see math repo backend/README.md
 api.kirillnyun.space {
-    request_body {
-        max_size 1MB
+    # Exam photos (up to 10 MB each) and exam uploads from the panel (statements
+    # with figures, up to 5 MB) need more than the 1 MB allowed everywhere else.
+    @big path_regexp ^/api/(ege/exams/[^/]+/photos|collections/exams/records)
+    handle @big {
+        request_body {
+            max_size 12MB
+        }
+        reverse_proxy 127.0.0.1:8091
     }
-    reverse_proxy 127.0.0.1:8091
+    handle {
+        request_body {
+            max_size 1MB
+        }
+        reverse_proxy 127.0.0.1:8091
+    }
 }

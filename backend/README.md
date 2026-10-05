@@ -9,7 +9,7 @@ Progress sync and the teacher panel talk to a PocketBase instance at
 |---|---|
 | `/opt/ege-api/pocketbase` | binary, v0.40.4 |
 | `/opt/ege-api/pb_migrations/` | copy of `backend/pb_migrations/` |
-| `/opt/ege-api/pb_hooks/` | copy of `backend/pb_hooks/` (Telegram bot) |
+| `/opt/ege-api/pb_hooks/` | copy of `backend/pb_hooks/` (Telegram bot, assigned exams) |
 | `/opt/ege-api/pb_data/` | database (SQLite) |
 | `/opt/ege-api/backups/` | nightly `.tgz`, newest 14 kept (`ege-api-backup.timer`) |
 | `/etc/systemd/system/ege-api.service` | listens on `127.0.0.1:8091` |
@@ -102,17 +102,24 @@ repository root. After editing either file:
 
 A cron job inside PocketBase (`exams-tick`, every minute) sends the "one hour
 before" and "exam is open" messages and settles finished work. Messages to the
-teacher go to the chat in `TEACHER_TG_ID`.
+teacher go to the chat in `TEACHER_TG_ID`. A message Telegram refused (the
+person blocked the bot, Telegram was down) is tried again every minute while
+it still makes sense; each one is delivered at most once.
 
 ### Rollout
 
 1. The teacher presses "Старт" in the bot once, from the account that should
    receive "student has submitted" messages.
-2. On the server, find that chat id and add it to the env file (prints only
-   the id):
+2. On the server, find that chat id (prints only the id). Give the Telegram
+   username without "@"; an empty result means no match: the account has no
+   username or has not pressed "Старт" yet.
 
        sqlite3 /opt/ege-api/pb_data/data.db "SELECT tg_id FROM tg_profiles WHERE username = '<telegram username>'"
-       echo 'TEACHER_TG_ID=<id>' >> /etc/ege-api.env
+
+   Then back up the env file and add the id on a line of its own (the leading
+   newline keeps it off the last line if the file does not end with one):
+
+       cp /etc/ege-api.env /etc/ege-api.env.bak-$(date +%Y%m%d-%H%M%S) && printf '\nTEACHER_TG_ID=%s\n' '<id>' >> /etc/ege-api.env
 
 3. Check free disk space (photos): `df -h /opt/ege-api`.
 4. Copy the migration and the hooks, restart:
@@ -123,6 +130,16 @@ teacher go to the chat in `TEACHER_TG_ID`.
 
 5. Verify from anywhere: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/mine`
    must print `403` (the route exists and refuses a signed-out caller).
+6. Before the site or the panel starts using exam photos or exam upload, raise
+   Caddy's 1 MB body limit for those two paths (steps 1-5 do not depend on
+   this). Replace the `api.kirillnyun.space { ... }` block in
+   `/etc/caddy/Caddyfile` with the one from `deploy/Caddyfile.snippet`; back up
+   first and validate before reload (see "Caddy" above):
+
+       cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%Y%m%d-%H%M%S)
+       nano /etc/caddy/Caddyfile        # paste the block from deploy/Caddyfile.snippet
+       set -a; . /etc/avito-crm-caddy.env; set +a
+       caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
 
 The nightly backup archives `pb_data`, which now includes the photos in
 `pb_data/storage/`; watch the size of `/opt/ege-api/backups/`.
