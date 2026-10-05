@@ -72,11 +72,11 @@ shared by the server, the trainer and the panel (`exam-core.js`, unit-tested).
 | `submitted` | after the photo phase | statements, own answers, part 1 result, answers, part 1 solutions; part 2 "на проверке" |
 | `checked` | teacher pressed "Проверено" | the above plus part 2 points, comments and the total |
 | `missed` | window passed and the student never opened the exam | nothing; the teacher may reschedule |
-| `canceled` | teacher canceled before the start | nothing |
 
 `end = start + duration`. The photo deadline is `min(finished, end) + 10 min`.
 A student who never opened the exam has not seen the statements, so `missed`
-keeps the exam reusable for the same student.
+keeps the exam reusable for the same student. Canceling before the start
+deletes the assignment, so the exam can be assigned to that student again.
 
 ### Server
 
@@ -90,13 +90,14 @@ save of `users` would log everyone out).
 - `exam_assignments` — `user`, `exam`, `start`, `duration`, `opened`,
   `finished`, `photos_done`, `answers` (json, part 1 as typed), `via_tg`
   (bool), `p1` (part 1 points), `part2` (json: per task points and comment),
-  `checked`, `canceled`, `log` (json: answer changes and away intervals, see
+  `checked`, `settled`, `ok` (json: right/wrong per part 1 task), `log` (json: answer changes and away intervals, see
   "Activity signals"), and one timestamp per bot message already sent.
   Unique on (`user`, `exam`). All rules teacher-only: students never read the
   collection directly, only through the endpoints below.
 - `exam_photos` — `assignment`, `user`, `n`, `file` (protected file, images
-  only, 10 MB cap). The owner may create and delete while the assignment is in
-  `open` or `photos`; the owner and the teacher may view.
+  only, 10 MB cap). Uploaded and deleted only through endpoints, by the owner, while
+  the assignment is in `open` or `photos`, at most 5 per task; the owner and
+  the teacher may view.
 
 Endpoints in `backend/pb_hooks/exams.js` (registered from a thin
 `exams.pb.js`, same split as the Telegram hook):
@@ -123,8 +124,9 @@ comparison rule (`parseNum`/`answersEqual`) moves from `index.html` into
 A once-a-minute cron job (`cronAdd`) sends the "one hour before" and "exam is
 open" messages, moves overdue assignments to `submitted` or `missed`, and
 messages the teacher about each new submission (part 1 score, photos or
-Telegram route, link to the panel). Assignment, reschedule and cancel messages
-are sent from record hooks. Every message is sent at most once (timestamp
+Telegram route, link to the panel). Assigning, rescheduling and canceling go through teacher-only endpoints
+(`assign`, `move`, `cancel`), which also send the bot message; the collection
+itself is read-only through the API. Every message is sent at most once (timestamp
 flags). The teacher's chat id comes from `TEACHER_TG_ID` in
 `/etc/ege-api.env`. Message texts sit at the top of the file, as in `tg.js`.
 
@@ -207,7 +209,8 @@ released before or after the server keeps working.
 - Wrong device clock: all time decisions use server time; the page keeps the
   offset from the last response.
 - Bot message fails (student blocked the bot): logged without the token, the
-  flag stays unset for one retry on the next cron run, the banner on the site
+  flag stays unset and the next cron runs retry while the message is still
+  relevant, the banner on the site
   still works.
 
 ## Testing
