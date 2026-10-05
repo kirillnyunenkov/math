@@ -2,17 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** In `teacher.html` the teacher can upload a prepared exam to the hidden catalog, preview it, assign it to a student for a date and time (and move or cancel it before the start), and check a submitted work: part 1 results, photos of part 2, points and a comment per task, an activity summary — and send the result to the student. A command-line tool validates an exam file before it is uploaded.
+**Goal:** (1) In `teacher.html` the teacher assigns an exam to a student for a date and time (and moves or cancels it before the start), sees what is running and what waits for a check, and checks a submitted work: part 1 results, photos of part 2, points and a comment per task, an activity summary — and sends the result to the student. (2) Exams are prepared and uploaded **through Claude Code**, not through the panel: a validator, a local preview, an API tool and a project skill standardise that work.
 
-**Architecture:** Two small pure modules (`exam-panel-core.js`, `exam-validate.js`) with Node tests; `tools/exam_check.mjs` wraps the validator and renders every formula with the KaTeX in the repo. `teacher.html` loads the catalog, assignments and photo metadata with the other panel data (tolerating a server that has not been rolled out yet) and gets one new tab "Пробники", a preview page, assign/move/cancel sheets, a block in the student card, and a check page. All writes go through the server routes of Plan 1.
+**Architecture:** Small pure modules (`exam-panel-core.js`, `exam-validate.js`, `tools/exam-cli-lib.mjs`) with Node tests. Command-line tools in `tools/`: `exam_check.mjs` (validate + render every formula with the KaTeX of the repo), `exam_preview.mjs` (a static `preview.html` for the owner's review), `exam_api.mjs` (upload, list, assign, status, delete — logs in with the owner's teacher link file, never prints secrets). A project skill `.claude/skills/assigned-exam/SKILL.md` ties them into one workflow. `teacher.html` loads the catalog, assignments and photo metadata with the other panel data (tolerating a server that has not been rolled out yet) and gets one new tab "Пробники" with lists and assign/move/cancel sheets, a block in the student card, and the check page. All writes go through the server routes of Plan 1.
 
 **Tech Stack:** Vanilla JS in the existing `teacher.html`, KaTeX (already loaded), Node's built-in test runner, the dev stack from Plan 2 (`tools/exam-dev-stack.mjs`) for browser checks.
 
-**Spec:** `docs/superpowers/specs/2026-10-05-assigned-exams-design.md` ("Teacher panel", "Activity signals", "Content pipeline"). Server contract: `backend/pb_hooks/exams.js` (Plan 1, merged). Plan 2 (trainer) is independent of this plan, except for the dev stack it created.
+**Spec:** `docs/superpowers/specs/2026-10-05-assigned-exams-design.md` ("Teacher panel", "Activity signals", "Content pipeline", and "Amendments" item 3: exams are uploaded through Claude Code, the panel has no upload). Server contract: `backend/pb_hooks/exams.js` (Plan 1, merged). Plan 2 (trainer) is independent of this plan, except for the dev stack it created.
 
 ## Global Constraints
 
-- The repository is public. No real exam content in any committed file; fixtures and tests use made-up tasks. Exam source files and typeset exam JSON stay outside the repo (`~/math-source/exams/`).
+- The repository is public. No real exam content in any committed file; fixtures and tests use made-up tasks. Exam source files, typeset exam JSON and previews stay outside the repo (`~/math-source/exams/<slug>/`).
+- Secrets: the teacher link file `~/ege-teacher-link.txt` and the login token are never printed, logged, committed or put in command lines; the tools read the file themselves.
+- Assigning an exam sends a Telegram message to a student (red zone in the owner's rules): the tool refuses to assign without `--yes`, and the skill requires the owner's explicit yes naming student, exam and time first.
 - Teacher-only page: do not weaken the existing login handling. All new network calls use the panel's existing `api()` helper (token in the header, `401` → logout).
 - Every string that comes from data (titles, names, comments, answers) is escaped with the panel's `esc()` before it is put into HTML; exam statements/solutions are teacher-authored HTML and are rendered as HTML, but only after `validateExam` accepted them.
 - Time entered by the teacher is Moscow time regardless of the browser's time zone (the existing panel formats dates with `timeZone:'Europe/Moscow'`).
@@ -32,11 +34,14 @@ Collections API (teacher token): `exams` (`id,title,full,created,tasks,key`), `e
 | File | Responsibility |
 |---|---|
 | `exam-panel-core.js` (new) | Moscow time input conversion, activity summary from `log`, phase labels. |
-| `exam-validate.js` (new) | `validateExam()` for an uploaded exam file; `extractFormulas()`. |
+| `exam-validate.js` (new) | `validateExam()` for an exam file; `extractFormulas()`. Node only: the panel does not upload exams. |
 | `tests/exam-panel-core.test.mjs`, `tests/exam-validate.test.mjs` (new) | Unit tests. |
 | `tests/fixtures/exam-sample.json` (new) | A small made-up valid exam. |
-| `tools/exam_check.mjs` (new) | CLI: validate + render every formula with KaTeX, print a summary. |
-| `teacher.html` (modify) | Data load, tab "Пробники", catalog/preview/assign/check screens, student-card block. |
+| `tools/exam-check-lib.mjs`, `tools/exam_check.mjs` (new) | `checkExam()` (validate + render every formula with KaTeX) and its CLI. |
+| `tools/exam-cli-lib.mjs` (new), `tests/exam-cli-lib.test.mjs` (new) | Pure helpers of the API tool: time parsing, picking one item by name. |
+| `tools/exam_api.mjs`, `tools/exam_preview.mjs` (new) | API tool for Claude Code (upload, exams, students, assign, status, delete); static preview page. |
+| `.claude/skills/assigned-exam/SKILL.md` (new) | The workflow: sources → exam.json → verify → check → preview → upload → assign. |
+| `teacher.html` (modify) | Data load, tab "Пробники" (lists, catalog), assign/move/cancel sheets, student-card block, check page. |
 | `sw.js` (modify) | New files in `SHELL`, version bump. |
 
 ---
@@ -175,16 +180,17 @@ git commit -m "Add exam-panel-core: Moscow time input, activity summary, phase l
 
 ### Task 2: `exam-validate.js`, the sample fixture and `tools/exam_check.mjs`
 
-An exam file is JSON: `{title, full?, tasks:[{n,kind,max,cond}], key:{n:{a,sol?}}}` (see the server contract in Plan 1). This validator is the gate before anything is uploaded: structure, answers, safe HTML, sizes, formulas.
+An exam file is JSON: `{title, full?, tasks:[{n,kind,max,cond}], key:{n:{a,sol?}}}` (see the server contract in Plan 1). This validator is the gate before anything is uploaded (by the API tool of Task 4): structure, answers, safe HTML, sizes, formulas.
 
 **Files:**
-- Create: `exam-validate.js`, `tests/exam-validate.test.mjs`, `tests/fixtures/exam-sample.json`, `tools/exam_check.mjs`
+- Create: `exam-validate.js`, `tests/exam-validate.test.mjs`, `tests/fixtures/exam-sample.json`, `tools/exam-check-lib.mjs`, `tools/exam_check.mjs`
 
 **Interfaces:**
 - Produces (`ExamValidate`, Node `require('../exam-validate.js')`, browser `window.ExamValidate`):
   - `validateExam(x) -> { errors: string[], warnings: string[], stats: {short:number, long:number} }`.
   - `extractFormulas(html) -> [{tex, display}]` — `$$…$$` (display) and `$…$` (inline) segments.
-- Produces CLI: `node tools/exam_check.mjs path/to/exam.json` — exit code `0` when no errors, `1` otherwise.
+- Produces `tools/exam-check-lib.mjs`: `checkExam(exam) -> { errors, warnings, stats }` — `validateExam` plus a KaTeX render of every formula (the KaTeX of the repo, `throwOnError`).
+- Produces CLI: `node tools/exam_check.mjs path/to/exam.json` — prints the summary and the part 1 answers; exit code `0` when no errors, `1` otherwise.
 
 Rules enforced (errors unless marked):
 - `title` non-empty string ≤ 120 chars; `full` boolean if present.
@@ -384,13 +390,10 @@ Expected: FAIL, `Cannot find module '../exam-validate.js'`.
 Run: `node --test 'tests/*.test.mjs'`
 Expected: all pass. If a size test is slow or the `warnings.length === 2` test is off by one, fix the module, not the test (the test pins the rules written above).
 
-- [ ] **Step 5: Write the CLI**
+- [ ] **Step 5: Write the library and the CLI**
 
 ```js
-// Checks an assigned-exam file before it is uploaded in the teacher panel:
-//   node tools/exam_check.mjs ~/math-source/exams/proba-1.json
-// Exit code 1 when there are errors. Formulas are rendered with the KaTeX that ships with the site.
-import { readFileSync } from 'node:fs';
+// tools/exam-check-lib.mjs — validation plus formula rendering, shared by exam_check.mjs and exam_api.mjs.
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -400,33 +403,43 @@ const require = createRequire(import.meta.url);
 const V = require(join(ROOT, 'exam-validate.js'));
 const katex = require(join(ROOT, 'katex/katex.min.js'));
 
+export function checkExam(exam) {
+  const r = V.validateExam(exam), errors = r.errors.slice(), warnings = r.warnings.slice();
+  if (!errors.length) {
+    const bad = (where, html) => V.extractFormulas(html).forEach((f) => {
+      try { katex.renderToString(f.tex, { throwOnError: true, displayMode: f.display }); }
+      catch (e) { errors.push(where + ': формула «' + f.tex.slice(0, 40) + '» не рисуется (' + String(e.message).split('\n')[0] + ')'); }
+    });
+    exam.tasks.forEach((t) => {
+      const k = exam.key[String(t.n)];
+      bad('Задание ' + t.n + ', условие', t.cond);
+      if (t.kind === 'short') bad('Задание ' + t.n + ', решение', k.sol); else bad('Задание ' + t.n + ', ответ', k.a);
+    });
+  }
+  return { errors: errors, warnings: warnings, stats: r.stats };
+}
+```
+
+```js
+// tools/exam_check.mjs — checks an exam file before it is uploaded:
+//   node tools/exam_check.mjs ~/math-source/exams/proba-1/exam.json
+// Exit code 1 when there are errors.
+import { readFileSync } from 'node:fs';
+import { checkExam } from './exam-check-lib.mjs';
+
 const file = process.argv[2];
 if (!file) { console.error('Usage: node tools/exam_check.mjs <exam.json>'); process.exit(2); }
 let exam;
 try { exam = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { console.error('Cannot read JSON: ' + e.message); process.exit(1); }
 
-const r = V.validateExam(exam);
-const errors = r.errors.slice(), warnings = r.warnings.slice();
-
-if (!errors.length) {
-  const bad = (where, html) => V.extractFormulas(html).forEach((f) => {
-    try { katex.renderToString(f.tex, { throwOnError: true, displayMode: f.display }); }
-    catch (e) { errors.push(where + ': формула «' + f.tex.slice(0, 40) + '» не рисуется (' + String(e.message).split('\n')[0] + ')'); }
-  });
-  exam.tasks.forEach((t) => {
-    const k = exam.key[String(t.n)];
-    bad('Задание ' + t.n + ', условие', t.cond);
-    if (t.kind === 'short') bad('Задание ' + t.n + ', решение', k.sol); else bad('Задание ' + t.n + ', ответ', k.a);
-  });
-}
-
+const r = checkExam(exam);
 console.log('«' + exam.title + '»: ' + r.stats.short + ' заданий первой части, ' + r.stats.long + ' второй' + (exam.full ? ', полный вариант' : ''));
 console.log('Ответы первой части (сверь с исходником):');
-(exam.tasks || []).filter((t) => t.kind === 'short').forEach((t) => console.log('  ' + t.n + ': ' + (exam.key[String(t.n)] || {}).a));
-warnings.forEach((w) => console.log('ВНИМАНИЕ: ' + w));
-errors.forEach((e) => console.log('ОШИБКА: ' + e));
-console.log(errors.length ? '\nНе загружать: ' + errors.length + ' ошибок.' : '\nОшибок нет, можно загружать.');
-process.exit(errors.length ? 1 : 0);
+(exam.tasks || []).filter((t) => t.kind === 'short').forEach((t) => console.log('  ' + t.n + ': ' + ((exam.key || {})[String(t.n)] || {}).a));
+r.warnings.forEach((w) => console.log('ВНИМАНИЕ: ' + w));
+r.errors.forEach((e) => console.log('ОШИБКА: ' + e));
+console.log(r.errors.length ? '\nНе загружать: ' + r.errors.length + ' ошибок.' : '\nОшибок нет, можно загружать.');
+process.exit(r.errors.length ? 1 : 0);
 ```
 
 - [ ] **Step 6: Run the CLI on the fixture and on a broken copy**
@@ -443,7 +456,7 @@ Expected: the first run lists answers `1: 5`, `2: -1,5`, ends with "Ошибок
 - [ ] **Step 7: Commit**
 
 ```bash
-git add exam-validate.js tests/exam-validate.test.mjs tests/fixtures/exam-sample.json tools/exam_check.mjs
+git add exam-validate.js tests/exam-validate.test.mjs tests/fixtures/exam-sample.json tools/exam-check-lib.mjs tools/exam_check.mjs
 git commit -m "Add exam-validate and tools/exam_check.mjs: gate for exam files before upload"
 ```
 
@@ -465,7 +478,6 @@ Next to the other `<script src=…>` lines (~237) add:
 ```html
 <script src="exam-core.js"></script>
 <script src="exam-panel-core.js"></script>
-<script src="exam-validate.js"></script>
 ```
 
 Change `all` to accept a field list:
@@ -528,7 +540,7 @@ function asgRow(a,acts){
     <td><span class="name">${esc(nameOf(a.user))}</span></td>
     <td>${esc(e?e.title:'—')}</td><td>${fmtTs(a.start)}</td><td>${chipFor(ph)}</td>
     <td class="num">${a.settled?`${a.p1}`:'—'}</td>
-    <td class="hide-m">${ps?ps+' фото':a.via_tg?'в Telegram':'—'}</td>
+    <td class="hide-m">${ps?ps+' фото':'—'}</td>
     <td class="acts-cell">${acts||''}</td></tr>`;
 }
 function renderExams(){
@@ -544,12 +556,11 @@ function renderExams(){
     ${sec('Ждут проверки',table(toCheck),'Работ на проверку нет.')}
     ${sec('Назначены и идут',table(live,true),'Ничего не назначено.')}
     ${missed.length?sec('Пропущены',table(missed,true),''):''}
-    <div class="panel"><div class="toolbar"><h3 class="grow">Каталог</h3>
-      <button class="btn quiet" data-act="exam-upload">Загрузить пробник</button>
-      <input type="file" id="exam-file" accept=".json,application/json" hidden></div>
+    <div class="panel"><h3>Каталог</h3>
       ${(data.exams||[]).length?`<div class="list">${data.exams.map(e=>`<div class="it"><span><b>${esc(e.title)}</b>${e.full?' <span class="chip">полный вариант</span>':''} <span class="muted">· загружен ${fmtDay(pbTime(e.created))}</span></span>
-        <span><button class="btn quiet" data-act="exam-view" data-id="${e.id}">Просмотр</button> <button class="btn" data-act="assign" data-exam="${e.id}">Назначить</button></span></div>`).join('')}</div>`
-        :'<p class="muted">Каталог пуст. Подготовь файл пробника, проверь его командой <code>node tools/exam_check.mjs файл.json</code> и загрузи кнопкой выше.</p>'}
+        <span><button class="btn" data-act="assign" data-exam="${e.id}">Назначить</button></span></div>`).join('')}</div>`
+        :'<p class="muted">Каталог пуст. Пробники готовятся и загружаются через Claude Code (навык assigned-exam).</p>'}
+      <p class="muted">Новый пробник: пришли исходник в чат Claude Code — он соберёт файл, сверит ответы, покажет предпросмотр и загрузит сюда.</p>
     </div>
     ${done.length?sec('Проверены (последние 20)',table(done),''):''}`;
 }
@@ -572,12 +583,12 @@ CSS (tokens only):
 
 (Check the actual token names in `teacher.html` `:root` — `--warn-soft`, `--ok-soft`, `--err-soft` and `-text` variants; use the ones that exist, add none.)
 
-`sw.js`: add `'./exam-core.js', './exam-panel-core.js', './exam-validate.js'` to `SHELL`; bump `VERSION` (strictly greater than master's — run `git fetch origin && git show origin/master:sw.js | head -6` and compare, and with Plan 2 merged or not).
+`sw.js`: add `'./exam-core.js', './exam-panel-core.js'` to `SHELL`; bump `VERSION` (strictly greater than master's — run `git fetch origin && git show origin/master:sw.js | head -6` and compare, and with Plan 2 merged or not).
 
 - [ ] **Step 2b: Verify in the browser on the local stack**
 
 1. `START_IN=-5 DURATION=300 node tools/exam-dev-stack.mjs`, serve the site (`python3 -m http.server 3456`), open the **teacher link** it prints.
-2. The tab "Пробники" shows the assignment under "Назначены и идут" with the chip "идёт", the catalog lists "Тестовый пробник". The other tabs (Ученики, Из канала) work as before.
+2. The tab "Пробники" shows the assignment under "Назначены и идут" with the chip "идёт", the catalog lists "Тестовый пробник" with a "Назначить" button (the sheet comes in Task 5). The other tabs (Ученики, Из канала) work as before.
 3. Stop the stack and open the panel against a server that returns 404 for the exam collections? Simulate: in the console run `data.exams=[];data.asg=[];data.photos=[];renderExams()` — the page renders with empty states and no exceptions. Also make sure `load()` itself survives a 404: temporarily rename a collection in the dev stack is overkill; instead read the code path and confirm `soft()` swallows non-401 errors.
 4. Console clean; phone width OK.
 
@@ -595,136 +606,350 @@ git commit -m "Panel: exam data load, the Пробники tab with assigned, mi
 
 ---
 
-### Task 4: Upload an exam and preview it
+### Task 4: Command-line tools and the `assigned-exam` skill (exams are prepared in Claude Code)
+
+The owner uploads exams through a chat with Claude Code, not through the panel. This task builds the tools and the skill that make that work the same every time.
 
 **Files:**
-- Modify: `teacher.html`
+- Create: `tools/exam-cli-lib.mjs`, `tests/exam-cli-lib.test.mjs`, `tools/exam_api.mjs`, `tools/exam_preview.mjs`, `.claude/skills/assigned-exam/SKILL.md`
 
 **Interfaces:**
-- Consumes: `ExamValidate`, `window.katex`, `api()`, `sheet()`, `closeSheet()`, `refresh()`.
-- Produces: `uploadExam(file)`, `renderExamView(id)`, route `#/x/<examId>`, actions `exam-upload`, `exam-up-go`, `exam-view`, `exam-del`, `exam-del-go`.
+- Consumes: `checkExam` (Task 2), `ExamCore` (root `exam-core.js`), `ExamPanelCore.moscowInputToTs`.
+- Produces `tools/exam-cli-lib.mjs`: `parseWhen("2026-10-09 18:00" | "2026-10-09T18:00") -> unix seconds | null` (Moscow time), `pickOne(items, query, getName) -> {item} | {error}` (case-insensitive: an exact name wins, otherwise a unique substring; none or several → an error text listing the candidates), `linkFromText(text) -> {login, secret} | null` (reads `#/login/<login>.<secret>`).
+- Produces `node tools/exam_api.mjs <command>` (options `--api <url>` default `https://api.kirillnyun.space/api`, `--link-file <path>` default `~/ege-teacher-link.txt`):
+  - `exams` — the catalog; `students` — accounts that can be assigned (name, login, student or "из канала"); `status` — all assignments with phase, first-part score and photo count.
+  - `upload <exam.json>` — runs `checkExam` first (refuses on errors), refuses a title that already exists, then creates the exam. Does not notify anybody.
+  - `assign --student <name> --exam <title> --at "YYYY-MM-DD HH:MM" [--minutes 235] [--yes]` — resolves names with `pickOne`, prints the plan ("Назначу: … Ученику уйдёт сообщение в Telegram."), and without `--yes` exits with code 3 without doing anything.
+  - `delete --exam <title> [--yes]` — removes an exam that was never assigned (the server refuses otherwise); without `--yes` it only prints what it would do.
+  - Never prints the link file, the secret or the token.
+- Produces `node tools/exam_preview.mjs <exam.json> [out.html]` — a self-contained static page (default `preview.html` next to the JSON) with all tasks, answers and solutions, formulas rendered with the repo's KaTeX, and a table of the part 1 answers on top.
 
-- [ ] **Step 1: Upload flow**
-
-Add:
-
-```js
-// ---- загрузка и просмотр пробника ----
-let pendingExam=null;
-function formulaFailures(exam){
-  const out=[];if(!window.katex)return out;
-  const chk=(where,html)=>ExamValidate.extractFormulas(html).forEach(f=>{
-    try{katex.renderToString(f.tex,{throwOnError:true,displayMode:f.display});}
-    catch(e){out.push(where+': формула «'+f.tex.slice(0,40)+'» не рисуется');}});
-  exam.tasks.forEach(t=>{const k=exam.key[String(t.n)]||{};
-    chk('Задание '+t.n+', условие',t.cond);chk('Задание '+t.n+(t.kind==='short'?', решение':', ответ'),t.kind==='short'?k.sol:k.a);});
-  return out;
-}
-function sheetList(items,cls){return `<ul class="${cls||''}" style="margin:var(--s3) 0 var(--s3) var(--s5)">${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`;}
-async function uploadExam(file){
-  let exam;
-  try{exam=JSON.parse(await file.text());}
-  catch(e){sheet(`<h3>Файл не прочитан</h3><p>Это не похоже на JSON: ${esc(e.message)}</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
-  const r=ExamValidate.validateExam(exam),errors=r.errors.slice();
-  if(!errors.length)errors.push(...formulaFailures(exam));
-  if(errors.length){
-    sheet(`<h3>Пробник не загружен</h3><p>Нужно исправить:</p>${sheetList(errors)}<div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
-  pendingExam=exam;
-  sheet(`<h3>Загрузить «${esc(exam.title)}»?</h3>
-    <p>Заданий первой части: <b>${r.stats.short}</b>, второй: <b>${r.stats.long}</b>${exam.full?', полный вариант (покажу и тестовый балл)':''}. Условия и ответы будут храниться только на сервере, ученики их не увидят, пока ты не назначишь пробник.</p>
-    ${r.warnings.length?`<p>Внимание:</p>${sheetList(r.warnings)}`:''}
-    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="exam-up-go">Загрузить</button></div>`);
-}
-async function uploadExamGo(){
-  const exam=pendingExam;if(!exam)return;
-  const fail=why=>sheet(`<h3>Не получилось</h3><p>${why}</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);
-  let r;
-  try{r=await api('/collections/exams/records',{method:'POST',body:{title:exam.title,full:!!exam.full,tasks:exam.tasks,key:exam.key}});}
-  catch(e){if(e.message!=='401')fail('Нет связи с сервером.');return;}
-  if(r.status!==200){fail(r.status===413?'Файл слишком большой для сервера. Проверь, что на сервере выложена настройка Caddy из backend/README.md.':`Сервер ответил ${esc(r.status)}.`);return;}
-  pendingExam=null;closeSheet();
-  await refresh();
-  location.hash='#/x/'+r.json.id;
-}
-```
-
-- [ ] **Step 2: Preview page**
+- [ ] **Step 1: Write the failing test**
 
 ```js
-async function renderExamView(id){
-  const meta=examOf(id);
-  if(!meta){location.hash='#/exams';return;}
-  app.innerHTML='<p class="center muted">Загружаю пробник…</p>';
-  let r;
-  try{r=await api('/collections/exams/records/'+id);}catch(e){return;}
-  if(r.status!==200){app.innerHTML=`<p class="center muted">Не удалось открыть: сервер ответил ${esc(r.status)}.</p>`;return;}
-  const e=r.json,assigned=(data.asg||[]).filter(a=>a.exam===id).length;
-  app.innerHTML=`<p><a href="#/exams">← Пробники</a></p>
-    <div class="toolbar"><h2 class="grow">${esc(e.title)}${e.full?' <span class="chip">полный вариант</span>':''}</h2>
-      <button class="btn" data-act="assign" data-exam="${id}">Назначить</button>
-      <button class="btn danger" data-act="exam-del" data-id="${id}">Удалить</button></div>
-    <p class="lead">Так видишь только ты. Ответы и решения ниже ученик увидит после сдачи. Назначен ${assigned} раз.</p>
-    ${e.tasks.map(t=>{const k=(e.key||{})[String(t.n)]||{};
-      return `<div class="panel"><h3>Задание ${t.n} <span class="muted">· ${t.kind==='short'?'первая часть':'вторая часть, максимум '+t.max}</span></h3>
-        <div class="tex">${t.cond}</div>
-        <p class="ex-key"><b>Ответ:</b> ${t.kind==='short'?esc(k.a):`<span class="tex">${k.a}</span>`}</p>
-        ${k.sol&&t.kind==='short'?`<details><summary>Решение</summary><div class="tex">${k.sol}</div></details>`:''}</div>`;}).join('')}`;
-  if(window.renderMathInElement)try{renderMathInElement(app,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});}catch(err){}
-}
-function delExam(id){
-  const e=examOf(id);if(!e)return;
-  const used=(data.asg||[]).some(a=>a.exam===id);
-  if(used){sheet(`<h3>Нельзя удалить</h3><p>Пробник «${esc(e.title)}» уже назначали ученикам. Сначала отмени назначения, которые не начались; назначенные и проверенные работы удалять нельзя.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
-  sheet(`<h3>Удалить пробник?</h3><p>«${esc(e.title)}» пропадёт из каталога вместе с условиями и ответами.</p>
-    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn danger" data-act="exam-del-go" data-id="${id}">Удалить</button></div>`);
-}
-async function delExamGo(id){
-  let r;try{r=await api('/collections/exams/records/'+id,{method:'DELETE'});}catch(e){return;}
-  closeSheet();
-  if(r.status!==204&&r.status!==200){sheet(`<h3>Не получилось</h3><p>Сервер ответил ${esc(r.status)}.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
-  await refresh();location.hash='#/exams';
-}
-```
+// tests/exam-cli-lib.test.mjs
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { parseWhen, pickOne, linkFromText } from '../tools/exam-cli-lib.mjs';
 
-`api()` parses JSON and returns `json:null` for the empty `204` body, which is fine here.
+test('parseWhen reads Moscow wall time in both spellings', () => {
+  assert.equal(parseWhen('2026-10-09 18:00'), 1791558000);
+  assert.equal(parseWhen('2026-10-09T18:00'), 1791558000);
+  assert.equal(parseWhen('2026-10-10 00:05'), 1791579900);
+  assert.equal(parseWhen('9 октября'), null);
+  assert.equal(parseWhen(''), null);
+});
 
-Wire up: in `route()` add `const mx=location.hash.match(/^#\/x\/([a-z0-9]+)$/);if(mx)return renderExamView(mx[1]);` (before the other branches; keep `window.scrollTo(0,0)` working — put the `return` after calling it or restructure so scroll still happens). In the click handler chain add:
+test('pickOne prefers an exact name, accepts a unique fragment, explains the rest', () => {
+  const people = [{ name: 'Иван Петров' }, { name: 'Иван Сидоров' }, { name: 'Мария' }];
+  const name = (p) => p.name;
+  assert.equal(pickOne(people, 'мария', name).item.name, 'Мария');
+  assert.equal(pickOne(people, 'Иван Петров', name).item.name, 'Иван Петров');
+  assert.equal(pickOne(people, 'сидор', name).item.name, 'Иван Сидоров');
+  const many = pickOne(people, 'иван', name);
+  assert.ok(many.error && /Иван Петров/.test(many.error) && /Иван Сидоров/.test(many.error));
+  const none = pickOne(people, 'Пётр', name);
+  assert.ok(none.error);
+});
 
-```js
-  else if(a==='exam-upload')document.getElementById('exam-file').click();
-  else if(a==='exam-up-go')uploadExamGo();
-  else if(a==='exam-view')location.hash='#/x/'+id;
-  else if(a==='exam-del')delExam(id);
-  else if(a==='exam-del-go')delExamGo(id);
-```
-
-and a change listener (the file input is re-created on every `renderExams`, so delegate):
-
-```js
-document.addEventListener('change',e=>{
-  const f=e.target.closest&&e.target.closest('#exam-file');
-  if(f&&f.files[0]){uploadExam(f.files[0]);f.value='';}
+test('linkFromText finds the login pair in a pasted teacher link', () => {
+  assert.deepEqual(linkFromText('https://x.github.io/math/teacher.html#/login/teacher.AbC123\n'), { login: 'teacher', secret: 'AbC123' });
+  assert.equal(linkFromText('nothing here'), null);
 });
 ```
 
-CSS: `.ex-key{margin-top:var(--s3);}`
+- [ ] **Step 2: Run it and see it fail**
 
-- [ ] **Step 3: Verify in the browser on the local stack**
+Run: `node --test tests/exam-cli-lib.test.mjs`
+Expected: FAIL, `Cannot find module '../tools/exam-cli-lib.mjs'`.
 
-1. Open the panel (teacher link). On "Пробники" press "Загрузить пробник" and choose `tests/fixtures/exam-sample.json`: the sheet reports 2 short + 1 long tasks; confirm → the catalog gets "Пример пробника" and the preview opens with rendered formulas and answers.
-2. Choose a broken file (copy the fixture, delete `"key"`): the sheet lists the errors and nothing is uploaded. A file with `<script>` in `cond`: refused with "небезопасный HTML". A non-JSON file: "Файл не прочитан".
-3. A large file near the Caddy limit cannot be tested locally — confirm instead that the 413 message text is in the code path.
-4. "Удалить" on the unassigned uploaded exam works and the catalog updates; "Удалить" on "Тестовый пробник" (assigned in the stack seed) refuses with the explanation.
-5. Console clean; phone width; dark theme.
+- [ ] **Step 3: Write the library**
 
-- [ ] **Step 4: Commit**
+```js
+// tools/exam-cli-lib.mjs — pure helpers of tools/exam_api.mjs.
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
-```bash
-git add teacher.html
-git commit -m "Panel: upload an exam with validation and preview it from the catalog"
+const require = createRequire(import.meta.url);
+const P = require(join(dirname(fileURLToPath(import.meta.url)), '..', 'exam-panel-core.js'));
+
+// "2026-10-09 18:00" or "2026-10-09T18:00", Moscow time.
+export const parseWhen = (s) => P.moscowInputToTs(String(s || '').trim().replace(' ', 'T'));
+
+// An exact (case-insensitive) name wins; otherwise a unique fragment; otherwise an explanation.
+export function pickOne(items, query, getName) {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return { error: 'Не указано, кого искать.' };
+  const exact = items.filter((x) => getName(x).toLowerCase() === q);
+  if (exact.length === 1) return { item: exact[0] };
+  const part = items.filter((x) => getName(x).toLowerCase().includes(q));
+  if (part.length === 1) return { item: part[0] };
+  if (!part.length) return { error: 'Не нашёл «' + query + '». Есть: ' + items.map(getName).join(', ') + '.' };
+  return { error: 'Подходит несколько: ' + part.map(getName).join(', ') + '. Уточни.' };
+}
+
+export function linkFromText(text) {
+  const m = /#\/login\/([a-z0-9_-]+)\.([A-Za-z0-9]+)/.exec(String(text || ''));
+  return m ? { login: m[1], secret: m[2] } : null;
+}
 ```
 
+- [ ] **Step 4: Run the unit tests**
+
+Run: `node --test 'tests/*.test.mjs'`
+Expected: all pass.
+
+- [ ] **Step 5: Write the API tool**
+
+```js
+// Owner's tool for Claude Code: work with assigned exams on the server.
+//   node tools/exam_api.mjs exams | students | status
+//   node tools/exam_api.mjs upload <exam.json>
+//   node tools/exam_api.mjs assign --student "Иван" --exam "Пробник 1" --at "2026-10-09 18:00" [--minutes 235] --yes
+//   node tools/exam_api.mjs delete --exam "Пробник 1" --yes
+// Logs in with the teacher link file; never prints the link, the secret or the token.
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { checkExam } from './exam-check-lib.mjs';
+import { parseWhen, pickOne, linkFromText } from './exam-cli-lib.mjs';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
+const Core = require(join(ROOT, 'exam-core.js'));
+const P = require(join(ROOT, 'exam-panel-core.js'));
+
+const argv = process.argv.slice(2), cmd = argv.shift();
+const opt = (name, dflt) => { const i = argv.indexOf('--' + name); return i >= 0 ? argv[i + 1] : dflt; };
+const flag = (name) => argv.includes('--' + name);
+const API = opt('api', 'https://api.kirillnyun.space/api');
+const LINK = opt('link-file', join(homedir(), 'ege-teacher-link.txt'));
+const die = (msg, code = 1) => { console.error(msg); process.exit(code); };
+
+let token = '';
+async function call(method, path, body) {
+  const r = await fetch(API + path, { method, headers: { 'content-type': 'application/json', ...(token ? { Authorization: token } : {}) },
+    body: body ? JSON.stringify(body) : undefined });
+  let json = null; try { json = await r.json(); } catch {}
+  return { status: r.status, json };
+}
+async function login() {
+  let text; try { text = readFileSync(LINK, 'utf8'); } catch { die('Не нашёл файл со ссылкой преподавателя (' + LINK + ').'); }
+  const l = linkFromText(text);
+  if (!l) die('В файле со ссылкой нет ссылки вида #/login/<логин>.<секрет>.');
+  const r = await call('POST', '/collections/users/auth-with-password', { identity: l.login, password: l.secret });
+  if (r.status !== 200 || r.json.record.role !== 'teacher') die('Не удалось войти как преподаватель (ответ сервера ' + r.status + ').');
+  token = r.json.token;
+}
+async function all(path) {
+  const out = [];
+  for (let page = 1; ; page++) {
+    const r = await call('GET', path + (path.includes('?') ? '&' : '?') + 'perPage=500&page=' + page + '&skipTotal=1');
+    if (r.status !== 200) die('Сервер ответил ' + r.status + ' на ' + path.split('?')[0] + '.');
+    out.push(...r.json.items); if (r.json.items.length < 500) return out;
+  }
+}
+const fmt = (ts) => new Date(ts * 1000).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+const exams = () => all('/collections/exams/records?fields=id,title,full,created');
+async function people() {
+  const users = await all('/collections/users/records?filter=' + encodeURIComponent('role="student"') + '&fields=id,name,login,active');
+  const leads = await call('GET', '/ege/leads');
+  const prof = {}; (leads.json && leads.json.items || []).forEach((p) => { prof[p.user] = p; });
+  return users.filter((u) => u.active !== false).map((u) => ({ id: u.id, name: u.name || u.login, login: u.login, lead: !!prof[u.id] && !prof[u.id].mine }));
+}
+
+if (!['exams', 'students', 'status', 'upload', 'assign', 'delete'].includes(cmd)) {
+  die('Команды: exams | students | status | upload <exam.json> | assign --student --exam --at [--minutes] [--yes] | delete --exam [--yes]', 2);
+}
+await login();
+
+if (cmd === 'exams') {
+  (await exams()).forEach((e) => console.log('• ' + e.title + (e.full ? ' (полный вариант)' : '')));
+} else if (cmd === 'students') {
+  (await people()).forEach((p) => console.log('• ' + p.name + ' (' + p.login + ')' + (p.lead ? ' — из канала' : '')));
+} else if (cmd === 'status') {
+  const [asg, ex, ph, ppl] = await Promise.all([all('/collections/exam_assignments/records?fields=id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1'),
+    exams(), all('/collections/exam_photos/records?fields=id,assignment'), people()]);
+  const now = Math.floor(Date.now() / 1000);
+  asg.sort((a, b) => b.start - a.start).forEach((a) => {
+    const phase = Core.phase(a, now), who = (ppl.find((p) => p.id === a.user) || {}).name || '—', title = (ex.find((e) => e.id === a.exam) || {}).title || '—';
+    console.log('• ' + who + ' · ' + title + ' · ' + fmt(a.start) + ' · ' + P.PHASE_TEXT[phase] + (a.settled ? ' · 1 часть: ' + a.p1 : '') + ' · фото: ' + ph.filter((x) => x.assignment === a.id).length);
+  });
+  if (!asg.length) console.log('Назначений нет.');
+} else if (cmd === 'upload') {
+  const file = argv[0]; if (!file) die('Укажи файл: upload <exam.json>', 2);
+  let exam; try { exam = JSON.parse(readFileSync(file, 'utf8')); } catch (e) { die('Не прочитал JSON: ' + e.message); }
+  const r = checkExam(exam);
+  r.warnings.forEach((w) => console.log('ВНИМАНИЕ: ' + w));
+  if (r.errors.length) { r.errors.forEach((e) => console.log('ОШИБКА: ' + e)); die('Не загружаю: есть ошибки.'); }
+  if ((await exams()).some((e) => e.title === exam.title)) die('Пробник с названием «' + exam.title + '» уже есть. Смени название.');
+  const res = await call('POST', '/collections/exams/records', { title: exam.title, full: !!exam.full, tasks: exam.tasks, key: exam.key });
+  if (res.status === 413) die('Сервер отклонил размер файла (413): на сервере не применена настройка Caddy из backend/README.md.');
+  if (res.status !== 200) die('Сервер ответил ' + res.status + '.');
+  console.log('Загружено: «' + exam.title + '» (' + r.stats.short + ' + ' + r.stats.long + ' заданий). Ученики его не видят, пока ты не назначишь.');
+} else if (cmd === 'assign') {
+  const [list, ppl] = await Promise.all([exams(), people()]);
+  const s = pickOne(ppl, opt('student'), (p) => p.name), e = pickOne(list, opt('exam'), (x) => x.title);
+  if (s.error) die('Ученик: ' + s.error); if (e.error) die('Пробник: ' + e.error);
+  const start = parseWhen(opt('at')); if (!start) die('Время: укажи --at "ГГГГ-ММ-ДД ЧЧ:ММ" (по Москве).');
+  const minutes = Number(opt('minutes', '235'));
+  if (!(minutes >= 1 && minutes <= 360)) die('Минут на работу: от 1 до 360.');
+  console.log('Назначу: ' + s.item.name + ' · «' + e.item.title + '» · ' + fmt(start) + ' (МСК) · ' + minutes + ' мин.');
+  console.log('Ученику сразу уйдёт сообщение в Telegram, потом напоминание за час.');
+  if (start < Math.floor(Date.now() / 1000)) console.log('ВНИМАНИЕ: это время уже прошло, пробник откроется сразу.');
+  if (!flag('yes')) die('Ничего не сделано. Подтверди и добавь --yes.', 3);
+  const r = await call('POST', '/ege/exams/assign', { user: s.item.id, exam: e.item.id, start, duration: Math.round(minutes * 60) });
+  if (r.status === 400) die('Сервер отказал: такой пробник этому ученику уже назначен, или данные не подошли.');
+  if (r.status !== 200) die('Сервер ответил ' + r.status + '.');
+  console.log('Назначено. Ученик получил сообщение.');
+} else if (cmd === 'delete') {
+  const e = pickOne(await exams(), opt('exam'), (x) => x.title);
+  if (e.error) die('Пробник: ' + e.error);
+  console.log('Удалю из каталога: «' + e.item.title + '» (если его ни разу не назначали).');
+  if (!flag('yes')) die('Ничего не сделано. Подтверди и добавь --yes.', 3);
+  const r = await call('DELETE', '/collections/exams/records/' + e.item.id);
+  if (r.status !== 204 && r.status !== 200) die(r.status === 400 ? 'Нельзя: пробник уже назначали ученикам.' : 'Сервер ответил ' + r.status + '.');
+  console.log('Удалено.');
+}
+```
+
+- [ ] **Step 6: Write the preview tool**
+
+```js
+// Static preview of an exam for the owner's review (no server needed):
+//   node tools/exam_preview.mjs ~/math-source/exams/proba-1/exam.json   -> preview.html next to the file
+import { readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, join, resolve } from 'node:path';
+
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const require = createRequire(import.meta.url);
+const katex = require(join(ROOT, 'katex/katex.min.js'));
+
+const file = process.argv[2];
+if (!file) { console.error('Usage: node tools/exam_preview.mjs <exam.json> [out.html]'); process.exit(2); }
+const exam = JSON.parse(readFileSync(file, 'utf8'));
+const out = process.argv[3] || join(dirname(resolve(file)), 'preview.html');
+const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const render = (html) => String(html || '')
+  .replace(/\$\$([\s\S]+?)\$\$/g, (_, t) => katex.renderToString(t, { throwOnError: false, displayMode: true }))
+  .replace(/\$([^$\n]+?)\$/g, (_, t) => katex.renderToString(t, { throwOnError: false }));
+
+const short = exam.tasks.filter((t) => t.kind === 'short'), long = exam.tasks.filter((t) => t.kind === 'long');
+const html = `<!doctype html><html lang="ru"><meta charset="utf-8"><title>${esc(exam.title)} — предпросмотр</title>
+<link rel="stylesheet" href="${pathToFileURL(join(ROOT, 'katex/katex.min.css')).href}">
+<style>body{font:16px/1.5 system-ui,sans-serif;max-width:820px;margin:24px auto;padding:0 16px;color:#222}
+h1{font-size:24px}.t{border:1px solid #ddd;border-radius:12px;padding:16px;margin:16px 0}.k{background:#f4f7fb;border-radius:8px;padding:8px 12px;margin-top:8px}
+table{border-collapse:collapse}td,th{border:1px solid #ccc;padding:4px 10px}.m{color:#666;font-size:14px}img{max-width:100%}</style>
+<h1>${esc(exam.title)}${exam.full ? ' <span class="m">· полный вариант</span>' : ''}</h1>
+<p class="m">Первая часть: ${short.length}, вторая: ${long.length}. Так видишь только ты; ученик увидит ответы и решения после сдачи.</p>
+<h2>Ответы первой части (сверь с источником)</h2>
+<table><tr><th>Задание</th>${short.map((t) => '<th>' + t.n + '</th>').join('')}</tr><tr><td>Ответ</td>${short.map((t) => '<td>' + esc((exam.key[String(t.n)] || {}).a) + '</td>').join('')}</tr></table>
+${exam.tasks.map((t) => { const k = exam.key[String(t.n)] || {};
+  return `<div class="t"><b>Задание ${t.n}</b> <span class="m">· ${t.kind === 'short' ? 'первая часть' : 'вторая часть, максимум ' + t.max}</span>
+  <div>${render(t.cond)}</div>
+  <div class="k"><b>Ответ:</b> ${t.kind === 'short' ? esc(k.a) : render(k.a)}</div>
+  ${t.kind === 'short' && k.sol ? '<div class="k"><b>Решение</b><div>' + render(k.sol) + '</div></div>' : ''}</div>`; }).join('')}
+</html>`;
+writeFileSync(out, html);
+console.log('Предпросмотр: ' + out);
+```
+
+- [ ] **Step 7: Verify the tools against the dev stack and the fixture**
+
+1. `node tools/exam_preview.mjs tests/fixtures/exam-sample.json "$TMPDIR/preview.html"` then open the file (`open "$TMPDIR/preview.html"`, or the browser pane with a `file://` URL): formulas rendered, answers table on top.
+2. Start `START_IN=3600 node tools/exam-dev-stack.mjs`, write its teacher link into a throwaway file (`printf '%s\n' '<printed teacher link>' > "$TMPDIR/link.txt"`; do not echo it elsewhere) and run, with `--api http://127.0.0.1:8090/api --link-file "$TMPDIR/link.txt"`:
+   - `exams` lists "Тестовый пробник"; `students` lists "Тест Ученик (stud1)".
+   - `upload tests/fixtures/exam-sample.json` → "Загружено…"; the same again → "уже есть".
+   - `assign --student "тест" --exam "Пример" --at "2026-12-01 18:00"` prints the plan and exits with code 3, nothing assigned; the same with `--yes` assigns; `status` shows it as "назначен".
+   - `assign --student "т"` (several or none) prints the explanation; a bad `--at` is refused.
+   - `delete --exam "Пример" --yes` fails while assigned ("Нельзя…"), works for an unassigned one.
+3. Check that no command printed the link, the secret or a token (scroll the output).
+
+- [ ] **Step 8: Write the skill**
+
+`.claude/skills/assigned-exam/SKILL.md`:
+
+```markdown
 ---
+name: assigned-exam
+description: Prepare, upload, assign and check the owner's own mock exams (пробники) for the trainer. Use when Кирилл sends a source of a new пробник (PDF, Word, text, photos), asks to load it, assign it to a student for a time, or asks what is assigned / waiting for a check.
+---
+
+# Assigned mock exams (пробники от преподавателя)
+
+The trainer has a hidden catalog of Кирилл's own exams on the server. He assigns one exam to one
+student for a date and time; the student writes it inside a hard window, photos of part 2 go to the
+site or to the bot, Кирилл checks part 2 in the panel. Design: `docs/superpowers/specs/2026-10-05-assigned-exams-design.md`.
+Your job in this skill: turn his source into a correct `exam.json`, get it approved, upload it,
+and assign it when he asks.
+
+## Hard rules
+
+- The repository is public. Never put exam statements, answers, solutions or figures into the repo
+  or a commit. Work in `~/math-source/exams/<slug>/` (slug: `proba-<n>` or `YYYY-MM-DD-<name>`).
+- Never print, log or paste the contents of `~/ege-teacher-link.txt`, a token or any secret. The tools
+  read the file themselves.
+- Answers are never invented or taken on trust: compute every part 1 answer yourself (Python/sympy)
+  and compare with the source. A mismatch goes to Кирилл as a table, you do not silently pick one.
+- Uploading changes nothing for students. **Assigning sends a Telegram message to a student**
+  (red zone): name the student, the exam and the time, wait for an explicit yes, only then run it with `--yes`.
+- Times are Moscow time.
+
+## Workflow
+
+1. **Collect the source** into `~/math-source/exams/<slug>/` (`source.pdf|docx|md|jpg…`). Ask only for
+   what is missing: exam title, whether it is a full variant (`full: true` only when it has the full
+   task set that matches the 0..33 test-score scale — ask), and the answers if the source has none.
+2. **Typeset `exam.json`** next to the source:
+   ```json
+   { "title": "Пробник 3", "full": false,
+     "tasks": [ {"n": 1, "kind": "short", "max": 1, "cond": "<p>Найдите $2+3$.</p>"},
+                {"n": 13, "kind": "long", "max": 2, "cond": "<p>Решите уравнение …</p>"} ],
+     "key": { "1": {"a": "5", "sol": "<p>…</p>"}, "13": {"a": "<p>$x=\\pm1$</p>"} } }
+   ```
+   - `kind: short` = part 1, one point, answer `a` is **plain text** exactly as a student types it
+     (decimal comma allowed, minus as `-`), plus a solution `sol`.
+   - `kind: long` = part 2, `max` from the criteria, `a` is HTML, **no solution** (not shown).
+   - Formulas in `$…$` / `$$…$$`; HTML only `p`, `b`, `i`, lists, tables, `sup/sub`; no scripts, no
+     handlers, figures only as `data:image/(png|jpeg|webp);base64,…` (crop and shrink to ≤ ~900 px
+     wide with Pillow; check the total size).
+   - Solutions of part 1 follow the approved format: «Идея» → numbered one-action steps with short
+     explanations → «Где ошибаются» (only if a typical mistake really exists) → answer. Plain text with `$…$`,
+     no images of formulas.
+3. **Verify.** Recompute every part 1 answer independently. Show Кирилл a table: task · source answer ·
+   your answer · match. Resolve every mismatch with him before going on.
+4. **Check:** `node tools/exam_check.mjs ~/math-source/exams/<slug>/exam.json` until "Ошибок нет".
+5. **Preview:** `node tools/exam_preview.mjs …/exam.json`, then give him `open <path>/preview.html`
+   as a bash block. Wait for his «ок» (or corrections, then repeat 3–5).
+6. **Upload.** Production write: give him the command to run (bash block):
+   `node tools/exam_api.mjs upload ~/math-source/exams/<slug>/exam.json`. After it, `node tools/exam_api.mjs exams` confirms.
+   To fix an uploaded exam that was never assigned: `delete --exam "<title>" --yes`, then upload again.
+7. **Assign** only when he asks ("назначь Ивану пробник на пятницу 18:00"): resolve with
+   `node tools/exam_api.mjs students` / `exams`; run `assign … --at "YYYY-MM-DD HH:MM"` **without** `--yes` and show him
+   the printed plan; after his explicit yes run it again with `--yes`. Ambiguous name → ask.
+   Default duration is 235 minutes; change with `--minutes` if he says so.
+8. **Status:** `node tools/exam_api.mjs status` answers "что назначено / ждёт проверки". Checking part 2
+   itself happens in the panel: `teacher.html#/check/<assignment id>` (the bot sends him that link when a student submits).
+
+## When something fails
+
+- `exam_check` errors: fix the JSON, never loosen the validator.
+- Upload answers 413: the Caddy body-limit step of `backend/README.md` was not applied on the server; tell Кирилл.
+- Assign answers "уже назначен": that exam was already given to that student; assignments can be moved or
+  canceled in the panel only before the start.
+```
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add tools/exam-cli-lib.mjs tests/exam-cli-lib.test.mjs tools/exam_api.mjs tools/exam_preview.mjs .claude/skills/assigned-exam/SKILL.md
+git commit -m "Add exam_api, exam_preview and the assigned-exam skill: exams are prepared in Claude Code"
+```
 
 ### Task 5: Assign, move and cancel; the student-card block
 
@@ -895,7 +1120,7 @@ async function renderCheck(id){
     ${long.map(t=>{const g=part2[t.n]||{},ps=photos.filter(p=>String(p.n)===String(t.n));
       return `<div class="panel" data-ck="${t.n}"><h3>Задание ${t.n} <span class="muted">· максимум ${t.max}</span></h3>
         <details><summary>Условие и ответ</summary><div class="tex">${t.cond}</div><p><b>Ответ:</b> <span class="tex">${(e.key[String(t.n)]||{}).a||''}</span></p></details>
-        <div class="ex-ph">${ps.length?ps.map(p=>`<a href="${esc(url(p))}" target="_blank" rel="noopener"><img src="${esc(url(p))}" alt="Фото решения, задание ${t.n}"></a>`).join(''):`<p class="muted">${a.via_tg?'Решение в Telegram — посмотри в переписке.':'Фото нет.'}</p>`}</div>
+        <div class="ex-ph">${ps.length?ps.map(p=>`<a href="${esc(url(p))}" target="_blank" rel="noopener"><img src="${esc(url(p))}" alt="Фото решения, задание ${t.n}"></a>`).join(''):'<p class="muted">Фото нет.</p>'}</div>
         <div class="ck-row"><label class="fld">Баллы<select data-ck-pts="${t.n}" ${ready?'':'disabled'}>${pointsOptions(t.max,+g.pts||0)}</select></label>
           <label class="fld grow">Комментарий ученику<textarea data-ck-note="${t.n}" rows="3" maxlength="2000" ${ready?'':'disabled'}>${esc(g.comment||'')}</textarea></label></div></div>`;}).join('')}
     <div class="toolbar"><p class="muted grow" id="ck-msg" role="status"></p>
@@ -959,22 +1184,23 @@ Expected: all pass.
 
 - [ ] **Step 2: Full cycle once more, end to end**
 
-Upload the fixture → assign for 2 minutes ahead → move it → cancel and assign again → (student side, Plan 2 trainer if merged) write it → check it → verify the student sees points and comment. Note any bug and fix it in this task.
+With the dev stack and `tools/exam_api.mjs` (`--api http://127.0.0.1:8090/api --link-file <throwaway file>`): upload the fixture → assign for 2 minutes ahead (without `--yes` first: nothing happens; then with it) → in the panel move it → cancel and assign again → (student side, Plan 2 trainer if merged) write it → check it → verify the student sees points and comment. Note any bug and fix it in this task.
 
-- [ ] **Step 3: Document the exam file**
+- [ ] **Step 3: Document the workflow**
 
 Add to `backend/README.md`, section "Assigned mock exams", a subsection:
 
 ```markdown
-### Preparing an exam file
+### Preparing and assigning exams (Claude Code)
 
-An exam is one JSON file kept outside the repository (`~/math-source/exams/`):
-`{title, full?, tasks:[{n,kind:"short"|"long",max,cond}], key:{n:{a,sol?}}}`.
-Part 1 answers (`a`) are plain text, each with a solution (`sol`); part 2 has `a`
-(HTML allowed) and no solution. Figures are embedded as `data:image/...;base64,`.
-Check it with `node tools/exam_check.mjs file.json` (structure, safe HTML, sizes,
-every formula rendered with KaTeX), then upload it in the panel, tab "Пробники".
-`tests/fixtures/exam-sample.json` is a made-up example.
+Exams are not uploaded through the panel. Work happens in a Claude Code chat with the project
+skill `.claude/skills/assigned-exam/`: source files in `~/math-source/exams/<slug>/` (outside the
+repository), a typeset `exam.json`, answers verified by computation, then
+`node tools/exam_check.mjs`, a local `node tools/exam_preview.mjs` for review,
+`node tools/exam_api.mjs upload`, and — only with an explicit yes, because the student gets a
+Telegram message — `node tools/exam_api.mjs assign … --yes`. `exams`, `students`, `status` and
+`delete` are also there. The tool logs in with `~/ege-teacher-link.txt` and prints no secrets.
+`tests/fixtures/exam-sample.json` is a made-up example of the file format.
 ```
 
 - [ ] **Step 4: Service worker version and commit**
@@ -988,6 +1214,6 @@ git commit -m "Panel: assigned exams end-to-end pass; docs for the exam file; sw
 
 ## Self-Review (done by the plan author)
 
-Spec coverage for the panel and content pipeline: tab "Пробники" with catalog, "На проверку" queue, in-flight and missed lists (Task 3); upload with validation and preview (Tasks 2, 4); assign with date, time and duration, move and cancel before the start, student-card block (Task 5); check screen with part 1 results, photos or the Telegram note, points and comment per task, the activity summary (away journal and time per task), "Проверено" that sends the result (Task 6); `tools/exam_check.mjs` as the gate before upload and the README note (Tasks 2, 7). The bot messages, the time window and the grading are Plan 1; the student screens are Plan 2.
+Spec coverage for the panel and the content pipeline: tab "Пробники" with the lists of assigned, missed and checked works and the catalog (Task 3); assign with date, time and duration, move and cancel before the start, the student-card block (Task 5); the check page with part 1 results, photos of part 2 (from the site and from the bot alike), points and a comment per task, the activity summary (away journal and time per task), and "Проверено" that sends the result (Task 6); validation, preview, upload, assign, status and delete as command-line tools plus the `assigned-exam` skill so that exams are prepared in Claude Code (Tasks 2, 4, 7). Photos arriving through the bot are Plan 1b, the student screens are Plan 2.
 
-Known limits: the catalog list shows no task count (it would need either `tasks` in the list call or a server column); the status line of the check page is reset when the page redraws; the panel's phase labels use the teacher's device clock, which only affects labels, never access.
+Known limits: the catalog list shows no task count (it would need a server column or `tasks` in the list call); the status line of the check page is reset when the page redraws; the panel's phase labels use the teacher's device clock, which only affects labels, never access; `exam_api.mjs` writes to production with the owner's teacher login, so it is meant to be run by the owner or with his approval of each production call.
