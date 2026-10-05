@@ -337,3 +337,115 @@ test('rejected writes leave no handler error behind', async () => {
   assert.deepEqual(bad.map(l => l.data), []);
   assert.deepEqual((await rowOf(id)).log, null);                  // nothing was written either
 });
+
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+async function upload(id, token, n, bytes = PNG, type = 'image/png', name = 'p.png') {
+  const fd = new FormData();
+  fd.append('n', String(n));
+  fd.append('file', new Blob([bytes], { type }), name);
+  const r = await fetch(`${B}/ege/exams/${id}/photos`, { method: 'POST', headers: token ? { Authorization: token } : {}, body: fd });
+  let json = null; try { json = await r.json(); } catch {}
+  return { status: r.status, json };
+}
+const tick = () => req('POST', '/ege/exams/tick', tok.su);
+
+test('photos: long tasks only, five per task, owner and teacher can read the file', async () => {
+  const { id, s } = await started(7000000040);
+  const other = await student(7000000041);
+  assert.equal((await upload(id, other.token, 13)).status, 404);
+  assert.equal((await upload(id, s.token, 1)).status, 400);                 // a short task
+  assert.equal((await upload(id, s.token, 13, Buffer.from('hello'), 'text/plain', 'a.txt')).status, 400);
+  const up = await upload(id, s.token, 13);
+  assert.equal(up.status, 200, JSON.stringify(up.json));
+  assert.deepEqual((await view(id, s.token)).json.photos, [{ id: up.json.id, n: '13', file: up.json.file }]);
+
+  const url = (t) => `${B}/files/exam_photos/${up.json.id}/${up.json.file}?token=${t}`;
+  const ft = async (token) => (await req('POST', '/files/token', token)).json.token;
+  assert.equal((await fetch(url(await ft(s.token)))).status, 200);
+  assert.equal((await fetch(url(await ft(tok.teacher)))).status, 200);
+  // PocketBase refuses a protected file with 403 or 404 depending on the case
+  assert.ok([403, 404].includes((await fetch(url(await ft(other.token)))).status));
+  assert.ok([403, 404].includes((await fetch(`${B}/files/exam_photos/${up.json.id}/${up.json.file}`)).status));
+
+  for (let i = 0; i < 4; i++) assert.equal((await upload(id, s.token, 13)).status, 200);
+  assert.equal((await upload(id, s.token, 13)).status, 400);                // the sixth
+  assert.equal((await req('DELETE', `/ege/exams/${id}/photos/${up.json.id}`, other.token)).status, 404);
+  assert.equal((await req('DELETE', `/ege/exams/${id}/photos/${up.json.id}`, s.token)).status, 200);
+  assert.equal((await view(id, s.token)).json.photos.length, 4);
+});
+
+test('photos are accepted in the photo phase and refused after it', async () => {
+  const { id, s } = await started(7000000042);
+  await post(id, 'finish', s.token);
+  assert.equal((await upload(id, s.token, 13)).status, 200);
+  await post(id, 'done', s.token);
+  assert.equal((await upload(id, s.token, 13)).status, 409);
+});
+
+test('settling grades part 1 and tells the teacher once', async () => {
+  const { id, s } = await started(7000000043);
+  await post(id, 'answers', s.token, { answers: { 1: '5', 2: '0,6' } });
+  await post(id, 'finish', s.token);
+  await upload(id, s.token, 13);
+  await post(id, 'done', s.token);
+  const v = (await view(id, s.token)).json;
+  assert.equal(v.phase, 'submitted');
+  assert.equal(v.p1, 1); assert.equal(v.max1, 2);
+  assert.deepEqual(v.ok, { 1: true, 2: false });
+  await view(id, s.token); await tick();
+  const msgs = sent.filter(m => String(m.chat_id) === TEACHER_CHAT && m.text.includes('Первая часть: 1 из 2'));
+  assert.equal(msgs.length, 1);
+  assert.ok(msgs[0].text.includes('фото на сайте — 1'));
+  assert.ok(msgs[0].reply_markup.inline_keyboard[0][0].url.endsWith('teacher.html#/check/' + id));
+});
+
+test('the tick settles a student who closed the page, and leaves a missed exam alone', async () => {
+  const { id, s } = await started(7000000044);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await post(id, 'via-tg', s.token, { on: true });
+  await shift(id, { start: nowS() - 1300, duration: 600 });
+  const exam = await mkExam(), lazy = await student(7000000045);
+  const missed = (await assign(lazy.id, exam, nowS() - 5000, 60)).json.id;
+  assert.equal((await req('POST', '/ege/exams/tick', tok.teacher)).status, 403);
+  assert.equal((await tick()).status, 200);
+  const row = await rowOf(id);
+  assert.ok(row.settled > 0); assert.equal(row.p1, 1);
+  assert.equal(sent.filter(m => String(m.chat_id) === TEACHER_CHAT && m.text.includes('решения пришлёт в Telegram')).length, 1);
+  assert.equal((await rowOf(missed)).settled, 0);
+});
+
+test('the tick sends the hour reminder and the opening message once each', async () => {
+  const exam = await mkExam('Пробник Ч'), s = await student(7000000046);
+  const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
+  await tick();
+  assert.equal(said(s.chat, 'Через час пробник «Пробник Ч»'), 0);          // two hours away
+  await shift(id, { start: nowS() + 1800 });
+  await tick(); await tick();
+  assert.equal(said(s.chat, 'Через час пробник «Пробник Ч»'), 1);
+  await shift(id, { start: nowS() - 5 });
+  await tick(); await tick();
+  const open = sent.filter(m => String(m.chat_id) === String(s.chat) && m.text.includes('«Пробник Ч» открыт'));
+  assert.equal(open.length, 1);
+  assert.ok(open[0].reply_markup.inline_keyboard[0][0].url.endsWith('#/exam/' + id));
+});
+
+test('check: teacher only, valid points only, the student is told once', async () => {
+  const { id, s } = await started(7000000047);
+  const check = (token, part2) => post(id, 'check', token, { part2 });
+  assert.equal((await check(tok.teacher, { 13: { pts: 1 } })).status, 409);     // not submitted yet
+  await post(id, 'answers', s.token, { answers: { 1: '5', 2: '0,5' } });
+  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  assert.equal((await check(s.token, { 13: { pts: 1 } })).status, 403);
+  assert.equal((await check(tok.teacher, {})).status, 400);                     // task 13 missing
+  assert.equal((await check(tok.teacher, { 13: { pts: 3 } })).status, 400);     // above max
+  assert.equal((await check(tok.teacher, { 13: { pts: 1.5 } })).status, 400);
+  assert.equal((await check(tok.teacher, { 13: { pts: 1, comment: 'Потерян корень' } })).status, 200);
+  const v = (await view(id, s.token)).json;
+  assert.equal(v.phase, 'checked');
+  assert.deepEqual(v.part2, { 13: { pts: 1, comment: 'Потерян корень' } });
+  assert.deepEqual(v.total, { pts: 3, max: 4 });
+  assert.equal(said(s.chat, 'проверен: 3 из 4'), 1);
+  assert.equal((await check(tok.teacher, { 13: { pts: 2, comment: '' } })).status, 200);   // a correction
+  assert.equal((await view(id, s.token)).json.total.pts, 4);
+  assert.equal(said(s.chat, 'проверен:'), 1);
+});

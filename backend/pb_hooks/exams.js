@@ -123,8 +123,20 @@ function photosOf(rec) {
     (p) => ({ id: p.id, n: p.getString("n"), file: p.getString("file") }));
 }
 
-// Grades part 1 once the photo phase is over. Filled in by a later task.
-function settle(rec, exam, t) {}
+// Once the photo phase is over: grade part 1 and tell the teacher. Runs from
+// the student's own requests and from the cron tick, whichever comes first.
+function settle(rec, exam, t) {
+  if (rec.getInt("settled") || Core.phase(shape(rec), t) !== "submitted") return;
+  const g = Ans.gradePart1(J(exam, "tasks", []), J(exam, "key", {}), J(rec, "answers", {}));
+  rec.set("p1", g.p1); rec.set("ok", g.ok); rec.set("settled", t);
+  $app.save(rec);
+  const chat = env("TEACHER_TG_ID");
+  if (!chat) return;
+  const k = photosOf(rec).length;
+  const how = k ? TEXT.howPhotos(k) : rec.getBool("via_tg") ? TEXT.howTg : TEXT.howNone;
+  const name = $app.findRecordById("users", rec.getString("user")).getString("name");
+  tg.send(chat, TEXT.done(name, exam.getString("title"), g.p1, g.max1, how), site() + "teacher.html#/check/" + rec.id, TEXT.btnCheck);
+}
 
 // Everything the student may see right now — and nothing more.
 function viewOf(rec, exam, t) {
@@ -234,5 +246,79 @@ function viaTg(e) {
   return e.json(200, { ok: true });
 }
 
+function addPhoto(e) {
+  const a = during(e, ["open", "photos"]);
+  if (a.res) return;
+  const n = String(e.request.formValue("n") || "");
+  const task = J(a.exam, "tasks", []).filter((x) => String(x.n) === n && x.kind === "long")[0];
+  if (!task) return fail(e, 400, "bad task");
+  const files = e.findUploadedFiles("file");
+  if (!files || files.length !== 1) return fail(e, 400, "one file expected");
+  if ($app.countRecords("exam_photos", $dbx.hashExp({ assignment: a.rec.id, n: n })) >= MAX_PHOTOS) return fail(e, 400, "too many");
+  const p = new Record($app.findCollectionByNameOrId("exam_photos"));
+  p.set("user", e.auth.id); p.set("assignment", a.rec.id); p.set("n", n); p.set("file", files[0]);
+  try { $app.save(p); } catch (_) { return fail(e, 400, "bad file"); }   // size or type refused by the field
+  return e.json(200, { id: p.id, n: n, file: p.getString("file") });
+}
+
+function delPhoto(e) {
+  const a = during(e, ["open", "photos"]);
+  if (a.res) return;
+  const p = byId("exam_photos", e.request.pathValue("pid"));
+  if (!p || p.getString("assignment") !== a.rec.id) return fail(e, 404, "not found");
+  $app.delete(p);
+  return e.json(200, { ok: true });
+}
+
+function check(e) {
+  if (!isTeacher(e)) return fail(e, 403, "forbidden");
+  const rec = byId("exam_assignments", e.request.pathValue("id"));
+  if (!rec) return fail(e, 404, "not found");
+  const exam = $app.findRecordById("exams", rec.getString("exam")), t = nowS();
+  settle(rec, exam, t);
+  if (!rec.getInt("settled")) return fail(e, 409, "not submitted");
+  const incoming = (e.requestInfo().body || {}).part2 || {}, tasks = J(exam, "tasks", []), part2 = {};
+  for (let i = 0; i < tasks.length; i++) {
+    const x = tasks[i];
+    if (x.kind !== "long") continue;
+    const g = incoming[String(x.n)] || {}, pts = intOf(g.pts);
+    if (pts === null || pts < 0 || pts > (x.max || 1)) return fail(e, 400, "bad points for task " + x.n);
+    part2[String(x.n)] = { pts: pts, comment: String(g.comment == null ? "" : g.comment).slice(0, 2000) };
+  }
+  const first = !rec.getInt("checked");
+  rec.set("part2", part2);
+  if (first) rec.set("checked", t);
+  $app.save(rec);
+  if (first) {
+    const sum = Core.total(tasks, rec.getInt("p1"), part2);
+    tell(rec.getString("user"), TEXT.checked(exam.getString("title"), sum.pts, sum.max), examUrl(rec.id), TEXT.btnResult);
+  }
+  return e.json(200, { ok: true });
+}
+
+// Every minute: reminders, the opening message, settling of finished work.
+// A message flag is set only when Telegram accepted the message, so a failed
+// send is retried on the next runs while the message still makes sense.
+function tick() {
+  const t = nowS();
+  const rows = $app.findRecordsByFilter("exam_assignments",
+    "checked = 0 && settled = 0 && start < {:soon} && start > {:old}", "start", 500, 0,
+    { soon: t + 3600, old: t - 7 * 86400 });
+  each(rows, (rec) => {
+    try {
+      const exam = $app.findRecordById("exams", rec.getString("exam"));
+      const start = rec.getInt("start"), duration = rec.getInt("duration"), title = exam.getString("title");
+      if (t < start && !rec.getInt("m_hour")) {
+        if (tell(rec.getString("user"), TEXT.hour(title, when(start)))) { rec.set("m_hour", t); $app.save(rec); }
+      } else if (t >= start && t < start + duration && !rec.getInt("m_open")) {
+        const mins = Math.floor((start + duration - t) / 60);
+        if (tell(rec.getString("user"), TEXT.open(title, mins), examUrl(rec.id), TEXT.btnOpen)) { rec.set("m_open", t); $app.save(rec); }
+      }
+      settle(rec, exam, t);
+    } catch (err) { console.log("exams: tick failed for " + rec.id); }
+  });
+}
+
 module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get,
-  answers: answers, away: away, finish: finish, done: done, viaTg: viaTg };
+  answers: answers, away: away, finish: finish, done: done, viaTg: viaTg,
+  addPhoto: addPhoto, delPhoto: delPhoto, check: check, tick: tick };

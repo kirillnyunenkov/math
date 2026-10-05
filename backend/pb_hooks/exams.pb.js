@@ -11,3 +11,13 @@ routerAdd("POST", "/api/ege/exams/{id}/away", (e) => require(`${__hooks}/exams.j
 routerAdd("POST", "/api/ege/exams/{id}/finish", (e) => require(`${__hooks}/exams.js`).finish(e));
 routerAdd("POST", "/api/ege/exams/{id}/done", (e) => require(`${__hooks}/exams.js`).done(e));
 routerAdd("POST", "/api/ege/exams/{id}/via-tg", (e) => require(`${__hooks}/exams.js`).viaTg(e));
+routerAdd("POST", "/api/ege/exams/{id}/photos", (e) => require(`${__hooks}/exams.js`).addPhoto(e));
+routerAdd("DELETE", "/api/ege/exams/{id}/photos/{pid}", (e) => require(`${__hooks}/exams.js`).delPhoto(e));
+routerAdd("POST", "/api/ege/exams/{id}/check", (e) => require(`${__hooks}/exams.js`).check(e));
+// The same work the cron does, callable on demand (tests, a manual kick).
+routerAdd("POST", "/api/ege/exams/tick", (e) => {
+  if (!e.hasSuperuserAuth()) return e.json(403, { message: "forbidden" });
+  require(`${__hooks}/exams.js`).tick();
+  return e.json(200, { ok: true });
+});
+cronAdd("exams-tick", "* * * * *", () => require(`${__hooks}/exams.js`).tick());
