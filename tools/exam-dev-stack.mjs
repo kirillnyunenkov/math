@@ -13,7 +13,7 @@
 // The data is made up and lives in a temp dir. The migrations and hooks come from backend/.
 // The PocketBase rate limit is switched off for this throwaway instance only.
 // If port 8090 or 8099 is busy the script exits and kills nothing.
-import { spawn, execFileSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { createConnection } from 'node:net';
 import { randomBytes } from 'node:crypto';
@@ -53,7 +53,15 @@ const cleanup = async () => {
   if (stub) stub.close();
   if (dir) rmSync(dir, { recursive: true, force: true });
 };
-const die = async (msg, code = 1) => { console.error(msg); await cleanup(); process.exit(code); };
+// Never let the superuser password reach the terminal, whatever message arrives here.
+let rootPw = '';
+const scrub = (m) => (rootPw ? String(m).split(rootPw).join('***') : String(m));
+const die = async (msg, code = 1) => { console.error(scrub(msg)); await cleanup(); process.exit(code); };
+// A PocketBase one-off command; on failure only a fixed message is thrown (the command line carries the password).
+const pbCmd = (cmdArgs) => {
+  const r = spawnSync(PB, cmdArgs, { stdio: 'ignore' });
+  if (r.error || r.status !== 0) throw new Error(`PocketBase setup command failed (migrate or superuser upsert, exit status ${r.status ?? 'none'}). Check PB_BIN (needs v0.40.4) and the migrations.`);
+};
 process.on('SIGINT', () => cleanup().then(() => process.exit(0)));
 process.on('SIGTERM', () => cleanup().then(() => process.exit(0)));
 
@@ -83,11 +91,11 @@ try {
   dir = mkdtempSync(join(tmpdir(), 'pbdev-'));
   const log = join(dir, 'pocketbase.log');
   const args = ['--dir', join(dir, 'pb_data'), '--migrationsDir', MIG];
-  const rootPw = randomBytes(18).toString('hex');   // the superuser password is never printed
-  execFileSync(PB, ['migrate', 'up', ...args], { stdio: 'ignore' });
-  execFileSync(PB, ['superuser', 'upsert', 'root@dev.local', rootPw, ...args], { stdio: 'ignore' });
+  rootPw = randomBytes(18).toString('hex');   // the superuser password is never printed
+  pbCmd(['migrate', 'up', ...args]);
+  pbCmd(['superuser', 'upsert', 'root@dev.local', rootPw, ...args]);
   const out = openSync(log, 'a');
-  proc = spawn(PB, ['serve', '--http', `127.0.0.1:${PORT}`, ...args, '--hooksDir', HOOKS], {
+  proc = spawn(PB, ['serve', '--http', `127.0.0.1:${PORT}`, ...args, '--hooksDir', HOOKS, '--automigrate=false'], {
     stdio: ['ignore', out, out],
     env: { ...process.env, TG_API: `http://127.0.0.1:${STUB}`, TG_BOT_TOKEN: 'dev', TG_WEBHOOK_SECRET: 'dev', TEACHER_TG_ID: '1' },
   });
@@ -128,7 +136,8 @@ try {
   console.log(`Teacher: http://localhost:3456/teacher.html${teacher.link}`);
   console.log(`Ids: student ${stud.id}, teacher ${teacher.id}, exam ${exam.id}, assignment ${asg.id}`);
   console.log(`Starts in ${START_IN}s, lasts ${DURATION}s. Ctrl+C to stop.`);
-  console.log(`Simulate a photo sent to the bot (no caption needed; it attaches to the exam that started last):
+  console.log(`Simulate a photo sent to the bot. It is refused until the exam has started AND the student has opened it in the browser
+(phase "open" with "opened" set; otherwise the bot answers "Сначала открой пробник..." / "Сейчас нет пробника..."), so with START_IN=${START_IN} wait at least that long:
   curl -s -X POST http://127.0.0.1:${PORT}/api/tg/webhook -H 'X-Telegram-Bot-Api-Secret-Token: dev' -H 'content-type: application/json' \\
     -d '{"update_id":1,"message":{"message_id":1,"from":{"id":7000000001,"is_bot":false,"first_name":"Тест"},"chat":{"id":7000000001,"type":"private"},"photo":[{"file_id":"A","file_size":10},{"file_id":"B","file_size":1000}]}}'\n`);
 } catch (err) {
