@@ -177,6 +177,12 @@ released before or after the server keeps working.
   server rejects saves after `end`.
 - A failed photo upload shows an error on that photo with "Повторить"; the
   Telegram route is always available as a fallback.
+- Photos are never uploaded as shot (phone originals reach tens of MB). The
+  page redraws each image to at most 2000 px on the long side and encodes it
+  as JPEG before upload; the exact size and quality are tuned on real photos
+  of student work so that small handwriting stays readable. An image the
+  browser cannot decode (HEIC picked on a Windows computer) is not uploaded:
+  the student is told to attach it from the phone or use the Telegram route.
 - Wrong device clock: all time decisions use server time; the page keeps the
   offset from the last response.
 - Bot message fails (student blocked the bot): logged without the token, the
@@ -201,5 +207,6 @@ released before or after the server keeps working.
 - Anti-cheating measures (tab switching, copy protection).
 - Solutions for part 2; annotations drawn over the student's photos.
 - Automatic deletion of old photos. Rough volume: 30 students × 10 exams × 15
-  photos × 0.5 MB ≈ 2.3 GB a year — free disk space on the server is checked
-  before rollout.
+  photos × 0.5 MB ≈ 2.3 GB a year. The 0.5 MB per downscaled photo is an
+  estimate, to be measured on real photos; free disk space on the server is
+  checked before rollout.
