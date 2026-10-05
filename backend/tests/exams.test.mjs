@@ -303,3 +303,37 @@ test('an exam that was never opened cannot be finished', async () => {
   const id = (await assign(s.id, exam, nowS() - 10)).json.id;
   assert.equal((await post(id, 'finish', s.token)).status, 409);
 });
+
+test('rejected writes leave no handler error behind', async () => {
+  const { id, s } = await started(7000000037);
+  const other = await student(7000000038);
+  const rejected = async () => {
+    for (const what of ['answers', 'away', 'finish', 'done', 'via-tg']) {
+      const body = { answers: { 1: '5' }, n: 1, sec: 5, on: true };
+      assert.equal((await post(id, what, null, body)).status, 403, what);
+      assert.equal((await post(id, what, other.token, body)).status, 404, what);
+    }
+  };
+  await rejected();
+  // wrong phase: 'done' before the photo phase; writes to part 1 after the window; via-tg and done once it is over
+  assert.equal((await post(id, 'done', s.token)).status, 409);
+  await shift(id, { start: nowS() - 700, duration: 600 });
+  for (const what of ['answers', 'away', 'finish']) {
+    assert.equal((await post(id, what, s.token, { answers: { 1: '6' }, n: 1, sec: 5, on: true })).status, 409, what);
+  }
+  await shift(id, { start: nowS() - 1300, duration: 600 });
+  assert.equal((await post(id, 'done', s.token)).status, 409);
+  assert.equal((await post(id, 'via-tg', s.token, { on: true })).status, 409);
+  // request logs are written in batches a few seconds after the request: wait for all 16 of ours
+  const q = '/logs?perPage=200&filter=' + encodeURIComponent(`data.url ~ "/ege/exams/${id}/"`);
+  let logs;
+  for (let i = 0; i < 40; i++) {
+    logs = await req('GET', q, tok.su);
+    if (logs.status === 200 && logs.json.items.length >= 16) break;
+    await new Promise(r => setTimeout(r, 500));
+  }
+  assert.equal(logs.json.items.length, 16, 'request logs for all rejected calls');
+  const bad = logs.json.items.filter(l => l.level >= 4 || (l.data && l.data.error));
+  assert.deepEqual(bad.map(l => l.data), []);
+  assert.deepEqual((await rowOf(id)).log, null);                  // nothing was written either
+});

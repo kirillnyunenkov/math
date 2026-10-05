@@ -167,13 +167,14 @@ function get(e) {
 }
 
 // The caller's assignment if its phase is one of `phases`; otherwise the
-// handler's error answer is already written and `res` holds it.
+// error answer is already written here and `res` is true: the handler must
+// then just `return` (e.json gives back nothing under goja, so it cannot be passed on).
 function during(e, phases) {
-  if (!isStudent(e)) return { res: fail(e, 403, "forbidden") };
+  if (!isStudent(e)) { fail(e, 403, "forbidden"); return { res: true }; }
   const a = own(e);
-  if (!a) return { res: fail(e, 404, "not found") };
+  if (!a) { fail(e, 404, "not found"); return { res: true }; }
   a.t = nowS(); a.phase = Core.phase(shape(a.rec), a.t);
-  if (phases.indexOf(a.phase) < 0) return { res: fail(e, 409, "closed") };
+  if (phases.indexOf(a.phase) < 0) { fail(e, 409, "closed"); return { res: true }; }
   return a;
 }
 function logPush(rec, entries) {
@@ -184,7 +185,7 @@ function logPush(rec, entries) {
 
 function answers(e) {
   const a = during(e, ["open"]);
-  if (a.res) return a.res;
+  if (a.res) return;
   const incoming = (e.requestInfo().body || {}).answers || {};
   const short = {};
   J(a.exam, "tasks", []).forEach((x) => { if (x.kind === "short") short[String(x.n)] = true; });
@@ -202,7 +203,7 @@ function answers(e) {
 
 function away(e) {
   const a = during(e, ["open"]);
-  if (a.res) return a.res;
+  if (a.res) return;
   const b = e.requestInfo().body || {}, sec = intOf(b.sec);
   if (sec === null || sec < 1 || sec > a.rec.getInt("duration")) return fail(e, 400, "bad input");
   logPush(a.rec, [[a.t, "w", String(b.n == null ? "" : b.n).slice(0, 8), sec]]);
@@ -212,15 +213,15 @@ function away(e) {
 
 function finish(e) {
   const a = during(e, ["open"]);
-  if (a.res) return a.res;
-  if (!a.rec.getInt("opened")) return fail(e, 409, "closed");
+  if (a.res) return;
+  if (!a.rec.getInt("opened")) { fail(e, 409, "closed"); return; }
   a.rec.set("finished", a.t); $app.save(a.rec);
   return e.json(200, { ok: true });
 }
 
 function done(e) {
   const a = during(e, ["photos"]);
-  if (a.res) return a.res;
+  if (a.res) return;
   a.rec.set("photos_done", a.t); $app.save(a.rec);
   settle(a.rec, a.exam, a.t);
   return e.json(200, { ok: true });
@@ -228,7 +229,7 @@ function done(e) {
 
 function viaTg(e) {
   const a = during(e, ["open", "photos"]);
-  if (a.res) return a.res;
+  if (a.res) return;
   a.rec.set("via_tg", (e.requestInfo().body || {}).on === true); $app.save(a.rec);
   return e.json(200, { ok: true });
 }
