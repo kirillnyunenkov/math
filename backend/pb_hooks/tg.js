@@ -10,15 +10,18 @@ const CODE_TTL = 600;   // seconds
 const env = (k) => $os.getenv(k);
 const site = () => env("SITE_URL") || "https://kirillnyunenkov.github.io/math/";
 
-function send(chatId, text, url) {
+// Returns true when Telegram accepted the message (a person who blocked the
+// bot gives 403 — callers that retry need to know).
+function send(chatId, text, url, label) {
   const body = { chat_id: chatId, text: text, disable_web_page_preview: true };
-  if (url) body.reply_markup = { inline_keyboard: [[{ text: TEXT.button, url: url }]] };
+  if (url) body.reply_markup = { inline_keyboard: [[{ text: label || TEXT.button, url: url }]] };
   try {
-    $http.send({
+    const res = $http.send({
       url: (env("TG_API") || "https://api.telegram.org") + "/bot" + env("TG_BOT_TOKEN") + "/sendMessage",
       method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" }, timeout: 10,
     });
-  } catch (err) { console.log("tg: sendMessage failed"); }   // never log the URL: it holds the token
+    return res.statusCode === 200;
+  } catch (err) { console.log("tg: sendMessage failed"); return false; }   // never log the URL: it holds the token
 }
 
 function findProfile(tgId) {
@@ -124,4 +127,4 @@ function leads(e) {
   return e.json(200, { items: rows });
 }
 
-module.exports = { webhook: webhook, leads: leads, claim: claim };
+module.exports = { webhook: webhook, leads: leads, claim: claim, send: send };
