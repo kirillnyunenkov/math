@@ -45,6 +45,42 @@ Assumptions the owner accepted with the design:
 - The secondary (test) score is shown only for an exam marked as a full
   variant; otherwise only primary points.
 
+## Amendments (owner, 2026-10-05, after the server part was merged and rolled out)
+
+1. **Photos go to the bot, not to the teacher's chat.** The "send it in Telegram"
+   route is replaced: a student who finds the site inconvenient sends photos of
+   part 2 to the same bot that signs them in (`@kirill_repet_bot`). The bot
+   attaches them to the student's exam, so everything is in one place and the
+   teacher never has to search a private chat. Rules:
+   - Accepted only while the exam is `open` or `photos` (the server clock), at
+     most 5 per task, 10 MB each, JPEG/PNG/WebP (a photo or an image sent as a file).
+   - The task is taken from the caption ("13", "задание 14"); photos sent within
+     5 minutes after a captioned one (an album, a follow-up) go to the same task;
+     if the exam has exactly one part 2 task, it is that one; otherwise the photo
+     is stored as "без задания" and the bot asks to resend with a caption.
+   - The bot answers once per album: "Принял фото к заданию 13 (всего 2)", or why
+     it did not accept (no open exam, time is up, too many, unsupported file).
+   - Photos sent to the bot show up in the trainer next to the ones attached on
+     the site (the page polls a small photo-list route), and in the teacher's
+     check page under the task, or under "Без задания".
+   - The checkbox "Отправлю решения в Telegram" and the `via-tg` flag are no
+     longer used by the trainer; the server keeps the route and column.
+2. **No abrupt opening.** On the hub the banner turns from "будет в 18:00" into
+   an "Открыть" button with a short animation (respecting
+   `prefers-reduced-motion`); the exam screen fades in when the start time comes.
+3. **Exams are prepared and uploaded through Claude Code, not through the panel.**
+   The panel's "Загрузить пробник" and preview are dropped. Instead there is a
+   project skill (`.claude/skills/assigned-exam/`) that standardises the work:
+   source files in `~/math-source/exams/<slug>/`, one `exam.json`, answers
+   verified by computation, `tools/exam_check.mjs` (validation), a local
+   `preview.html` for the owner's review, and `tools/exam_api.mjs` (upload,
+   list, assign, status) that logs in with the owner's teacher link file and
+   never prints secrets. Uploading changes nothing for students; **assigning
+   sends a Telegram message to the student**, so the skill must name the
+   student, the exam and the time and get an explicit yes before it assigns.
+   The panel keeps: the assignments lists, assign/move/cancel sheets, the
+   student-card block and the check page.
+
 ## Approach
 
 Everything secret stays on the server (PocketBase at `api.kirillnyun.space`).
