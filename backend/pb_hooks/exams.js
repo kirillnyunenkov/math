@@ -20,8 +20,14 @@ const TEXT = {
   btnOpen: "Открыть пробник",
   btnResult: "Посмотреть результат",
   btnCheck: "Проверить",
+  botNoExam: "Сейчас нет пробника, к которому можно прикрепить фото.",
+  botLate: "Время пробника вышло, фото прикрепить уже нельзя. Если оно нужно, напиши преподавателю: @kirill_math_tutor.",
+  botBadFile: "Такой файл я не принимаю. Пришли фото или картинку JPEG, PNG или WebP.",
+  botTooMany: "К пробнику уже прикреплено 15 фото — больше нельзя. Лишнее можно удалить на сайте.",
+  botFail: "Не получилось забрать фото. Пришли его ещё раз.",
+  botOk: (title, k) => "Принял фото к пробнику «" + title + "» (всего " + k + ").",
 };
-const MAX_PHOTOS = 5, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
+const MAX_PHOTOS = 5, MAX_BOT_PHOTOS = 15, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
 const OPEN_NEWS = 900;   // "открыт" is sent only this long after the start, and only if not opened yet
 const DAYS = ["в воскресенье", "в понедельник", "во вторник", "в среду", "в четверг", "в пятницу", "в субботу"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -467,6 +473,64 @@ function photoList(e) {
   return e.json(200, { photos: photosOf(a.rec) });
 }
 
+// $dbx.exp takes raw SQL, so AND, not &&.
+const botCount = (a) => $app.countRecords("exam_photos", $dbx.exp("assignment = {:a} AND n = ''", { a: a.id }));
+const tgApi = () => env("TG_API") || "https://api.telegram.org";
+
+// A photo, or an image sent as a file, from the student's own Telegram chat goes to the
+// exam that started last — no caption, no task. Returns true when handled here, false
+// to let the sign-in flow answer.
+function botPhoto(msg) {
+  const chat = msg.chat.id, t = nowS();
+  let profile;
+  try { profile = $app.findFirstRecordByData("tg_profiles", "tg_id", String(msg.from.id)); } catch (_) { return false; }
+  const user = byId("users", profile.getString("user"));
+  if (!user || !user.getBool("active")) return false;
+  const say = (text) => tg.send(chat, text);
+
+  // the exam that started last (never one in the future)
+  const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u} && start <= {:t}", "-start", 1, 0, { u: user.id, t: t });
+  if (!rows.length) { say(TEXT.botNoExam); return true; }
+  const a = rows[0], p0 = Core.phase(shape(a), t);
+  if (p0 === "missed" || p0 === "scheduled") { say(TEXT.botNoExam); return true; }
+  if (p0 !== "open" && p0 !== "photos") { say(TEXT.botLate); return true; }
+
+  const doc = msg.document, f = msg.photo ? msg.photo[msg.photo.length - 1] : doc;
+  if (!f || (doc && ["image/jpeg", "image/png", "image/webp"].indexOf(doc.mime_type) < 0) || (f.file_size || 0) > 10485760) {
+    say(TEXT.botBadFile); return true;
+  }
+  if (botCount(a) >= MAX_BOT_PHOTOS) { say(TEXT.botTooMany); return true; }
+
+  // remember the album on the fresh row; a closed window is re-checked there
+  const group = String(msg.media_group_id || "");
+  const plan = mutate(a.id, (r) => {
+    const p = Core.phase(shape(r), t);
+    if (p !== "open" && p !== "photos") return false;
+    const quiet = group !== "" && group === r.getString("tg_group");
+    r.set("tg_group", group);
+    return { quiet: quiet };
+  });
+  if (!plan) { say(TEXT.botLate); return true; }
+
+  let saved = false;
+  try {
+    const info = $http.send({ url: tgApi() + "/bot" + env("TG_BOT_TOKEN") + "/getFile?file_id=" + encodeURIComponent(f.file_id), method: "GET", timeout: 10 });
+    const path = info.json && info.json.result && info.json.result.file_path;
+    if (!path) throw new Error("no file path");
+    const ph = new Record($app.findCollectionByNameOrId("exam_photos"));
+    ph.set("user", user.id); ph.set("assignment", a.id); ph.set("n", "");
+    ph.set("file", $filesystem.fileFromURL(tgApi() + "/file/bot" + env("TG_BOT_TOKEN") + "/" + path, 30));
+    $app.save(ph);
+    saved = true;
+  } catch (err) { console.log("exams: bot photo failed"); }       // never log the URL or the error text: they can hold the token
+  if (!saved) { say(TEXT.botFail); return true; }
+  if (!plan.quiet) {
+    const exam = $app.findRecordById("exams", a.getString("exam"));
+    say(TEXT.botOk(exam.getString("title"), botCount(a)));
+  }
+  return true;
+}
+
 module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get,
   answers: answers, away: away, finish: finish, done: done, viaTg: viaTg,
-  addPhoto: addPhoto, delPhoto: delPhoto, photoList: photoList, check: check, tick: tick };
+  addPhoto: addPhoto, delPhoto: delPhoto, photoList: photoList, botPhoto: botPhoto, check: check, tick: tick };

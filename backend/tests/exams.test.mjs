@@ -75,6 +75,14 @@ before(async () => {
   stub = createServer((q, s) => {
     let b = ''; q.on('data', d => b += d);
     q.on('end', () => {
+      if (q.method === 'GET' && q.url.includes('/getFile')) {             // getFile: where the bytes are
+        s.setHeader('content-type', 'application/json');
+        return s.end(JSON.stringify({ ok: true, result: { file_path: 'photos/file_1.png' } }));
+      }
+      if (q.method === 'GET' && q.url.includes('/file/bot')) {            // the bytes themselves
+        s.setHeader('content-type', 'image/png');
+        return s.end(PNG);
+      }
       const m = { path: q.url, ...JSON.parse(b) }, chat = String(m.chat_id);
       if (down.has(chat)) { refused.push(m); s.statusCode = 403; s.end('{"ok":false}'); return; }
       setTimeout(() => { sent.push(m); s.end('{"ok":true}'); }, slow[chat] || 0);
@@ -659,4 +667,107 @@ test('migration 1790800008: tg_group exists and starts empty', async () => {
   const exam = await mkExam(), s = await student(7000000292);
   const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
   assert.equal((await rowOf(id)).tg_group, '');
+});
+
+const photoUpdate = (tgId, o = {}) => ({ update_id: 1, message: {
+  message_id: 1, from: { id: tgId, is_bot: false, first_name: 'Маша' }, chat: { id: tgId, type: 'private' },
+  media_group_id: o.group,
+  ...(o.doc ? { document: { file_id: 'F1', file_size: o.size || 1000, mime_type: o.doc } }
+            : { photo: [{ file_id: 'S', file_size: 10 }, { file_id: 'L', file_size: 1000 }] }) } });
+const botHook = (upd) => req('POST', '/tg/webhook', null, upd, { 'X-Telegram-Bot-Api-Secret-Token': SECRET });
+const photosOf = async (id, token) => (await req('GET', `/ege/exams/${id}/photos`, token)).json.photos;
+async function running(tgId, title = 'Пробник Ф') {
+  const exam = await mkExam(title), s = await student(tgId);
+  const id = (await assign(s.id, exam, nowS() - 10, 600)).json.id;
+  await view(id, s.token);
+  return { exam, s, id };
+}
+
+test('a photo sent to the bot lands on the exam, with no task, and the sign-in link is not sent', async () => {
+  const { s, id } = await running(7000000300);
+  const before = sent.length;
+  assert.equal((await botHook(photoUpdate(7000000300))).status, 200);
+  const ph = await photosOf(id, s.token);
+  assert.equal(ph.length, 1); assert.equal(ph[0].n, '');
+  assert.equal(said(s.chat, 'Принял фото к пробнику «Пробник Ф» (всего 1)'), 1);
+  assert.equal(sent.slice(before).filter(m => m.reply_markup).length, 0);
+});
+
+test('an album is answered once; the next photo counts on', async () => {
+  const { s, id } = await running(7000000301);
+  await botHook(photoUpdate(7000000301, { group: 'g1' }));
+  await botHook(photoUpdate(7000000301, { group: 'g1' }));
+  await botHook(photoUpdate(7000000301, { group: 'g1' }));
+  assert.equal((await photosOf(id, s.token)).length, 3);
+  assert.equal(said(s.chat, 'Принял фото к пробнику'), 1);
+  await botHook(photoUpdate(7000000301));
+  assert.equal((await photosOf(id, s.token)).length, 4);
+  assert.equal(said(s.chat, 'Принял фото к пробнику'), 2);
+  assert.equal(said(s.chat, 'всего 4'), 1);
+});
+
+test('photos go to the exam that started last, and only while it takes photos', async () => {
+  const s = await student(7000000302), e1 = await mkExam('Старый'), e2 = await mkExam('Новый');
+  const old = (await assign(s.id, e1, nowS() - 100000, 600)).json.id;               // long over
+  const cur = (await assign(s.id, e2, nowS() - 10, 600)).json.id;
+  await view(cur, s.token);
+  await assign(s.id, await mkExam('Будущий'), nowS() + 7200);                       // not started: ignored
+  await botHook(photoUpdate(7000000302));
+  assert.equal((await photosOf(cur, s.token)).length, 1);
+  assert.equal((await rowOf(old)).opened, 0);
+  assert.equal(said(s.chat, 'пробнику «Новый»'), 1);
+
+  await shift(cur, { start: nowS() - 700, duration: 600 });                          // 10-minute photo grace
+  await botHook(photoUpdate(7000000302));
+  assert.equal((await photosOf(cur, s.token)).length, 2);
+  await shift(cur, { start: nowS() - 1300, duration: 600 });                         // grace is over
+  await botHook(photoUpdate(7000000302));
+  assert.equal((await photosOf(cur, s.token)).length, 2);
+  assert.equal(said(s.chat, 'Время пробника вышло'), 1);
+});
+
+test('no started exam at all: a polite refusal and nothing stored', async () => {
+  const s = await student(7000000303);
+  await botHook(photoUpdate(7000000303));
+  assert.equal(said(s.chat, 'Сейчас нет пробника'), 1);
+  const exam = await mkExam();
+  await assign(s.id, exam, nowS() + 7200);
+  await botHook(photoUpdate(7000000303));
+  assert.equal(said(s.chat, 'Сейчас нет пробника'), 2);
+});
+
+test('fifteen bot photos per exam, unsupported files refused, a png sent as a file accepted', async () => {
+  const { s, id } = await running(7000000304);
+  await botHook(photoUpdate(7000000304, { doc: 'image/heic' }));
+  await botHook(photoUpdate(7000000304, { doc: 'image/png', size: 11 * 1024 * 1024 }));
+  assert.equal((await photosOf(id, s.token)).length, 0);
+  assert.equal(said(s.chat, 'Такой файл я не принимаю'), 2);
+  for (let i = 0; i < 15; i++) await botHook(photoUpdate(7000000304, { doc: 'image/png' }));
+  assert.equal((await photosOf(id, s.token)).length, 15);
+  await botHook(photoUpdate(7000000304));
+  assert.equal((await photosOf(id, s.token)).length, 15);
+  assert.equal(said(s.chat, 'уже прикреплено 15 фото'), 1);
+});
+
+test('site photos and bot photos live side by side; the student can delete a bot photo', async () => {
+  const { s, id } = await running(7000000305);
+  await upload(id, s.token, 13);
+  await botHook(photoUpdate(7000000305));
+  const ph = await photosOf(id, s.token);
+  assert.deepEqual(ph.map(p => p.n).sort(), ['', '13']);
+  const bot = ph.find(p => p.n === '');
+  assert.equal((await req('DELETE', `/ege/exams/${id}/photos/${bot.id}`, s.token)).status, 200);
+  assert.equal((await photosOf(id, s.token)).length, 1);
+});
+
+test('a stranger or a non-image document gets the normal bot flow, not a crash', async () => {
+  const before = sent.length;
+  assert.equal((await botHook(photoUpdate(7000000399))).status, 200);                 // never started the bot
+  assert.equal(sent.slice(before).filter(m => m.chat_id === 7000000399 && m.reply_markup).length, 1);
+  const s = await student(7000000306);
+  const b2 = sent.length;
+  await botHook({ update_id: 1, message: { message_id: 1, from: { id: 7000000306, is_bot: false, first_name: 'Маша' },
+    chat: { id: 7000000306, type: 'private' }, document: { file_id: 'D', file_size: 10, mime_type: 'application/pdf' } } });
+  assert.equal(sent.slice(b2).filter(m => m.chat_id === 7000000306 && m.reply_markup).length, 1);   // the sign-in link
+  assert.equal(said(s.chat, 'Принял фото'), 0);
 });
