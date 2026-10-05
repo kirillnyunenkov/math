@@ -90,7 +90,8 @@ save of `users` would log everyone out).
 - `exam_assignments` — `user`, `exam`, `start`, `duration`, `opened`,
   `finished`, `photos_done`, `answers` (json, part 1 as typed), `via_tg`
   (bool), `p1` (part 1 points), `part2` (json: per task points and comment),
-  `checked`, `canceled`, and one timestamp per bot message already sent.
+  `checked`, `canceled`, `log` (json: answer changes and away intervals, see
+  "Activity signals"), and one timestamp per bot message already sent.
   Unique on (`user`, `exam`). All rules teacher-only: students never read the
   collection directly, only through the endpoints below.
 - `exam_photos` — `assignment`, `user`, `n`, `file` (protected file, images
@@ -105,7 +106,11 @@ Endpoints in `backend/pb_hooks/exams.js` (registered from a thin
 - `GET /api/ege/exams/{id}` — content according to the phase table above;
   marks the assignment as opened. Never returns `key` before `submitted`.
 - `POST /api/ege/exams/{id}/answers` — autosave of part 1; accepted only in
-  `open`.
+  `open`. The server stamps each changed answer with its own time and appends
+  it to `log`.
+- `POST /api/ege/exams/{id}/away` — the page reports that it was hidden or
+  lost focus and for how long, with the task that was on screen; appended to
+  `log`. Accepted only in `open`.
 - `POST /api/ege/exams/{id}/finish` — early finish; `POST .../done` — ends the
   photo phase early; `POST .../via-tg` — records the Telegram route.
 - `POST /api/ege/exams/{id}/check` — teacher only: stores part 2 points and
@@ -153,8 +158,24 @@ flags). The teacher's chat id comes from `TEACHER_TG_ID` in
 - Student card: "Назначить пробник" (exam, date, time, duration); reschedule
   and cancel before the start; a block with the student's assigned exams.
 - Check screen: part 1 answers with right/wrong; for each part 2 task the
-  photos (or "решения в Telegram"), a points field 0..max and a comment;
-  "Проверено".
+  photos (or "решения в Telegram"), a points field 0..max and a comment; the
+  activity summary; "Проверено".
+
+### Activity signals
+
+Facts for the teacher, not protection: nothing is blocked and the student sees
+no warnings.
+
+- Away journal: every time the exam page is hidden or loses focus during
+  `open` (another tab, another app, minimised browser) the page records the
+  interval and the task that was on screen. A second device is invisible to
+  this.
+- Time per task: when each part 1 answer was entered or changed, by the server
+  clock.
+
+The check screen shows a summary — how many times and for how long the student
+was away, the longest interval and its task, and a per-task timeline of
+answers — with the raw list on demand. The student never receives `log`.
 
 ### Content pipeline
 
@@ -197,14 +218,20 @@ released before or after the server keeps working.
   stub: a student cannot read `exams` or another student's assignment; no
   statements before `start`; no key before `submitted`; saves rejected after
   `end`; photo upload rejected after the photo deadline; cron sends each
-  message once; `missed` versus `submitted`; teacher check flow.
+  message once; `missed` versus `submitted`; teacher check flow; `log` gets
+  server-stamped answer changes and away intervals and is never returned to
+  the student.
 - Browser pass on a local stack: assign → banner → start → autosave and reload
   → photos → results → teacher check → student sees comments; phone width.
 
 ## Not doing
 
 - A task editor in the panel; assigning to several students in one action.
-- Anti-cheating measures (tab switching, copy protection).
+- Anti-cheating enforcement: copy protection, forced fullscreen, camera,
+  blocking on tab switch. Only the passive signals above are collected.
+- Delaying answers and solutions until other students have written the same
+  exam: they are shown right after submission (owner's decision); the teacher
+  avoids giving one exam to students who know each other.
 - Solutions for part 2; annotations drawn over the student's photos.
 - Automatic deletion of old photos. Rough volume: 30 students × 10 exams × 15
   photos × 0.5 MB ≈ 2.3 GB a year. The 0.5 MB per downscaled photo is an
