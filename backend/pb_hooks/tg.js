@@ -20,6 +20,7 @@ function send(chatId, text, url, label) {
       url: (env("TG_API") || "https://api.telegram.org") + "/bot" + env("TG_BOT_TOKEN") + "/sendMessage",
       method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" }, timeout: 10,
     });
+    if (res.statusCode !== 200) console.log("tg: sendMessage answered " + res.statusCode);
     return res.statusCode === 200;
   } catch (err) { console.log("tg: sendMessage failed"); return false; }   // never log the URL: it holds the token
 }

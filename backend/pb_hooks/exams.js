@@ -22,6 +22,7 @@ const TEXT = {
   btnCheck: "Проверить",
 };
 const MAX_PHOTOS = 5, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
+const OPEN_NEWS = 900;   // "открыт" is sent only this long after the start, and only if not opened yet
 const DAYS = ["в воскресенье", "в понедельник", "во вторник", "в среду", "в четверг", "в пятницу", "в субботу"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
 
@@ -58,6 +59,74 @@ const intOf = (v) => (typeof v === "number" && isFinite(v) && Math.floor(v) === 
 // Record lists come from Go as slices; index them instead of relying on Array methods.
 function each(rows, fn) { const out = []; for (let i = 0; i < rows.length; i++) out.push(fn(rows[i])); return out; }
 
+// Every write to exam_assignments goes through here: the row is re-read and
+// changed under PocketBase's single write connection, so a request never
+// writes back an older copy over someone else's change. fn(r, tx) gets the
+// fresh row; returning false means "nothing to save". Returns fn's result, or
+// null if the row is gone. Inside fn use only `r` and `tx` (an $app.* call
+// would wait forever for the connection held here), never call Telegram, and
+// never nest mutate().
+function mutate(id, fn) {
+  let out = null;
+  $app.runInTransaction((tx) => {
+    let r;
+    try { r = tx.findRecordById("exam_assignments", id); } catch (err) {
+      if (String(err).indexOf("no rows") >= 0) return;
+      throw err;
+    }
+    out = fn(r, tx);
+    if (out !== false) tx.save(r);
+  });
+  return out;
+}
+
+// A bot message guarded by a flag column (unix seconds, 0 = not sent). The
+// flag is claimed in a write first, so two runs never send the same message;
+// the message goes out after that write; if Telegram did not take it the
+// claim is given back and the next tick tries again. plan(r) decides on the
+// fresh row: null = not due, true = mark as sent without sending, a function =
+// the send itself (returns true on success).
+function notify(id, flag, t, plan) {
+  let job = null;
+  mutate(id, (r) => {
+    if (r.getInt(flag)) return false;
+    job = plan(r);
+    if (job === null) return false;
+    r.set(flag, t);
+  });
+  if (typeof job !== "function") return;
+  let ok = false;
+  try { ok = job(); } catch (_) { ok = false; }
+  if (!ok) mutate(id, (r) => { if (r.getInt(flag) !== t) return false; r.set(flag, 0); });
+}
+
+// "сдал" to the teacher; without TEACHER_TG_ID there is nobody to tell.
+function doneMsg(id, exam, tasks, t) {
+  const chat = env("TEACHER_TG_ID"), max1 = Ans.gradePart1(tasks, {}, {}).max1;
+  notify(id, "m_done", t, (r) => {
+    if (!r.getInt("settled")) return null;
+    if (!chat) return true;
+    return () => {
+      const k = photosOf(r).length;
+      const how = k ? TEXT.howPhotos(k) : r.getBool("via_tg") ? TEXT.howTg : TEXT.howNone;
+      const name = $app.findRecordById("users", r.getString("user")).getString("name");
+      return tg.send(chat, TEXT.done(name, exam.getString("title"), r.getInt("p1"), max1, how),
+        site() + "teacher.html#/check/" + id, TEXT.btnCheck);
+    };
+  });
+}
+
+// "проверен" to the student, with the total as it is when the message goes out.
+function checkedMsg(id, exam, tasks, t) {
+  notify(id, "m_checked", t, (r) => {
+    if (!r.getInt("checked")) return null;
+    return () => {
+      const sum = Core.total(tasks, r.getInt("p1"), J(r, "part2", {}));
+      return tell(r.getString("user"), TEXT.checked(exam.getString("title"), sum.pts, sum.max), examUrl(id), TEXT.btnResult);
+    };
+  });
+}
+
 function assign(e) {
   if (!isTeacher(e)) return fail(e, 403, "forbidden");
   const b = e.requestInfo().body || {}, t = nowS();
@@ -68,17 +137,21 @@ function assign(e) {
   const rec = new Record($app.findCollectionByNameOrId("exam_assignments"));
   rec.set("user", user.id); rec.set("exam", exam.id); rec.set("start", start); rec.set("duration", duration);
   rec.set("m_hour", start - t < 3600 ? t : 0);   // too close for a "one hour before"
-  try { $app.save(rec); } catch (_) { return fail(e, 400, "already assigned"); }
+  try { $app.save(rec); } catch (_) { return fail(e, 400, "already assigned"); }   // a new row: nothing to overwrite
   tell(user.id, TEXT.assigned(exam.getString("title"), when(start)), examUrl(rec.id), TEXT.btnOpen);
   return e.json(200, { id: rec.id });
 }
 
-// The row and its exam, for teacher actions allowed only while nothing was seen.
+// Teacher actions are allowed only while nothing was seen.
+function untouchedAt(rec, t) {
+  const p = Core.phase(shape(rec), t);
+  return p === "scheduled" || p === "missed";
+}
+// The row and its exam, checked once before the write; the write checks again on the fresh row.
 function untouched(e) {
   const rec = byId("exam_assignments", e.request.pathValue("id"));
   if (!rec) return { code: 404 };
-  const p = Core.phase(shape(rec), nowS());
-  if (p !== "scheduled" && p !== "missed") return { code: 409 };
+  if (!untouchedAt(rec, nowS())) return { code: 409 };
   return { rec: rec, exam: $app.findRecordById("exams", rec.getString("exam")) };
 }
 
@@ -89,9 +162,14 @@ function move(e) {
   const b = e.requestInfo().body || {}, t = nowS();
   const start = intOf(b.start), duration = b.duration == null ? a.rec.getInt("duration") : intOf(b.duration);
   if (start === null || duration === null || duration < MIN_DURATION || duration > MAX_DURATION) return fail(e, 400, "bad input");
-  a.rec.set("start", start); a.rec.set("duration", duration);
-  a.rec.set("m_hour", start - t < 3600 ? t : 0); a.rec.set("m_open", 0);
-  $app.save(a.rec);
+  const out = mutate(a.rec.id, (r) => {
+    if (!untouchedAt(r, t)) return false;
+    r.set("start", start); r.set("duration", duration);
+    r.set("m_hour", start - t < 3600 ? t : 0); r.set("m_open", 0);
+    return true;
+  });
+  if (out === null) return fail(e, 404, "not found");
+  if (!out) return fail(e, 409, "already started");
   tell(a.rec.getString("user"), TEXT.moved(a.exam.getString("title"), when(start)), examUrl(a.rec.id), TEXT.btnOpen);
   return e.json(200, { ok: true });
 }
@@ -100,8 +178,14 @@ function cancel(e) {
   if (!isTeacher(e)) return fail(e, 403, "forbidden");
   const a = untouched(e);
   if (a.code) return fail(e, a.code, a.code === 404 ? "not found" : "already started");
-  const user = a.rec.getString("user");
-  $app.delete(a.rec);
+  const user = a.rec.getString("user"), t = nowS();
+  let gone = false;
+  const out = mutate(a.rec.id, (r, tx) => {
+    if (untouchedAt(r, t)) { tx.delete(r); gone = true; }
+    return false;   // deleted or refused: nothing to save either way
+  });
+  if (out === null) return fail(e, 404, "not found");
+  if (!gone) return fail(e, 409, "already started");
   tell(user, TEXT.canceled(a.exam.getString("title")));
   return e.json(200, { ok: true });
 }
@@ -124,18 +208,22 @@ function photosOf(rec) {
 }
 
 // Once the photo phase is over: grade part 1 and tell the teacher. Runs from
-// the student's own requests and from the cron tick, whichever comes first.
+// the student's own requests and from the cron tick, whichever comes first;
+// the fresh row decides, so only one of them settles and only that one tells
+// the teacher. Returns the row as it is now (the caller's copy may be older).
 function settle(rec, exam, t) {
-  if (rec.getInt("settled") || Core.phase(shape(rec), t) !== "submitted") return;
-  const g = Ans.gradePart1(J(exam, "tasks", []), J(exam, "key", {}), J(rec, "answers", {}));
-  rec.set("p1", g.p1); rec.set("ok", g.ok); rec.set("settled", t);
-  $app.save(rec);
-  const chat = env("TEACHER_TG_ID");
-  if (!chat) return;
-  const k = photosOf(rec).length;
-  const how = k ? TEXT.howPhotos(k) : rec.getBool("via_tg") ? TEXT.howTg : TEXT.howNone;
-  const name = $app.findRecordById("users", rec.getString("user")).getString("name");
-  tg.send(chat, TEXT.done(name, exam.getString("title"), g.p1, g.max1, how), site() + "teacher.html#/check/" + rec.id, TEXT.btnCheck);
+  if (rec.getInt("settled") || Core.phase(shape(rec), t) !== "submitted") return rec;
+  const tasks = J(exam, "tasks", []), key = J(exam, "key", {});   // parsed before the write, not inside it
+  let cur = rec, did = false;
+  mutate(rec.id, (r) => {
+    cur = r;
+    if (r.getInt("settled") || Core.phase(shape(r), t) !== "submitted") return false;
+    const g = Ans.gradePart1(tasks, key, J(r, "answers", {}));
+    r.set("p1", g.p1); r.set("ok", g.ok); r.set("settled", t);
+    did = true;
+  });
+  if (did) doneMsg(rec.id, exam, tasks, t);
+  return cur;
 }
 
 // Everything the student may see right now — and nothing more.
@@ -162,8 +250,7 @@ function mine(e) {
   const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u}", "-start", 50, 0, { u: e.auth.id });
   const items = each(rows, (rec) => {
     const exam = $app.findRecordById("exams", rec.getString("exam"));
-    settle(rec, exam, t);
-    return meta(rec, exam, t);
+    return meta(settle(rec, exam, t), exam, t);
   });
   return e.json(200, { now: t, items: items });
 }
@@ -173,20 +260,55 @@ function get(e) {
   const a = own(e);
   if (!a) return fail(e, 404, "not found");
   const t = nowS();
-  if (Core.phase(shape(a.rec), t) === "open" && !a.rec.getInt("opened")) { a.rec.set("opened", t); $app.save(a.rec); }
-  settle(a.rec, a.exam, t);
-  return e.json(200, viewOf(a.rec, a.exam, t));
+  let rec = a.rec, mismatch = false;
+  // The first look inside the window marks it opened. `opened` never goes
+  // back, so a row that already has it needs no write.
+  if (Core.phase(shape(rec), t) === "open" && !rec.getInt("opened")) {
+    const out = mutate(rec.id, (r) => {
+      rec = r;
+      if (r.getString("user") !== e.auth.id) { mismatch = true; return false; }
+      if (Core.phase(shape(r), t) !== "open" || r.getInt("opened")) return false;
+      r.set("opened", t);
+    });
+    if (out === null || mismatch) return fail(e, 404, "not found");
+  }
+  rec = settle(rec, a.exam, t);
+  return e.json(200, viewOf(rec, a.exam, t));
 }
 
-// The caller's assignment if its phase is one of `phases`; otherwise the
-// error answer is already written here and `res` is true: the handler must
-// then just `return` (e.json gives back nothing under goja, so it cannot be passed on).
-function during(e, phases) {
+// The caller's own assignment, re-read in a write and handed there to
+// fn(r, a) if its phase on that fresh row is one of `phases` (a.t is the server
+// time of this request, taken once). fn returns false when there is nothing
+// to save, or [code, message] to refuse; otherwise the row is saved. prep(a),
+// if given, runs between the first read and the write: the place for slow
+// work such as parsing the exam. Without fn the phase is only checked.
+// If refused, the error answer is already written here and `res` is true: the
+// handler must then just `return` (e.json gives back nothing under goja, so
+// it cannot be passed on). Otherwise a.rec is the row as written.
+function during(e, phases, fn, prep) {
   if (!isStudent(e)) { fail(e, 403, "forbidden"); return { res: true }; }
   const a = own(e);
   if (!a) { fail(e, 404, "not found"); return { res: true }; }
-  a.t = nowS(); a.phase = Core.phase(shape(a.rec), a.t);
-  if (phases.indexOf(a.phase) < 0) { fail(e, 409, "closed"); return { res: true }; }
+  a.t = nowS();
+  const check = (r) => {
+    a.rec = r; a.phase = Core.phase(shape(r), a.t);
+    if (r.getString("user") !== e.auth.id) return [404, "not found"];
+    if (phases.indexOf(a.phase) < 0) return [409, "closed"];
+    return null;
+  };
+  let err = null;
+  if (!fn) err = check(a.rec);
+  else {
+    if (prep) prep(a);
+    const out = mutate(a.rec.id, (r) => {
+      err = check(r);
+      const res = err ? false : fn(r, a);
+      if (Array.isArray(res)) { err = res; return false; }
+      return res;
+    });
+    if (out === null) err = [404, "not found"];
+  }
+  if (err) { fail(e, err[0], err[1]); return { res: true }; }
   return a;
 }
 function logPush(rec, entries) {
@@ -196,53 +318,54 @@ function logPush(rec, entries) {
 }
 
 function answers(e) {
-  const a = during(e, ["open"]);
-  if (a.res) return;
-  const incoming = (e.requestInfo().body || {}).answers || {};
-  const short = {};
-  J(a.exam, "tasks", []).forEach((x) => { if (x.kind === "short") short[String(x.n)] = true; });
-  const cur = J(a.rec, "answers", {}), added = [];
+  const incoming = (e.requestInfo().body || {}).answers || {}, short = {};
   // The body arrives as a Go map, whose key order is random: sort so the journal is stable.
-  Object.keys(incoming).sort((x, y) => (Number(x) - Number(y)) || (x < y ? -1 : x > y ? 1 : 0)).forEach((n) => {
-    if (!short[n]) return;
-    const v = String(incoming[n] == null ? "" : incoming[n]).trim().slice(0, 40);
-    if ((cur[n] || "") === v) return;
-    cur[n] = v; added.push([a.t, "a", n, v]);
-  });
-  if (added.length) { a.rec.set("answers", cur); logPush(a.rec, added); $app.save(a.rec); }
+  const pairs = Object.keys(incoming).sort((x, y) => (Number(x) - Number(y)) || (x < y ? -1 : x > y ? 1 : 0))
+    .map((n) => [n, String(incoming[n] == null ? "" : incoming[n]).trim().slice(0, 40)]);
+  const a = during(e, ["open"], (r, a) => {
+    const cur = J(r, "answers", {}), added = [];
+    pairs.forEach((p) => {
+      const n = p[0], v = p[1];
+      if (!short[n] || (cur[n] || "") === v) return;
+      cur[n] = v; added.push([a.t, "a", n, v]);
+    });
+    if (!added.length) return false;
+    r.set("answers", cur); logPush(r, added);
+  }, (a) => { J(a.exam, "tasks", []).forEach((x) => { if (x.kind === "short") short[String(x.n)] = true; }); });
+  if (a.res) return;
   return e.json(200, { ok: true });
 }
 
 function away(e) {
-  const a = during(e, ["open"]);
+  const b = e.requestInfo().body || {}, sec = intOf(b.sec), n = String(b.n == null ? "" : b.n).slice(0, 8);
+  const a = during(e, ["open"], (r, a) => {
+    if (sec === null || sec < 1 || sec > r.getInt("duration")) return [400, "bad input"];
+    logPush(r, [[a.t, "w", n, sec]]);
+  });
   if (a.res) return;
-  const b = e.requestInfo().body || {}, sec = intOf(b.sec);
-  if (sec === null || sec < 1 || sec > a.rec.getInt("duration")) return fail(e, 400, "bad input");
-  logPush(a.rec, [[a.t, "w", String(b.n == null ? "" : b.n).slice(0, 8), sec]]);
-  $app.save(a.rec);
   return e.json(200, { ok: true });
 }
 
 function finish(e) {
-  const a = during(e, ["open"]);
+  const a = during(e, ["open"], (r, a) => {
+    if (!r.getInt("opened")) return [409, "closed"];
+    r.set("finished", a.t);
+  });
   if (a.res) return;
-  if (!a.rec.getInt("opened")) { fail(e, 409, "closed"); return; }
-  a.rec.set("finished", a.t); $app.save(a.rec);
   return e.json(200, { ok: true });
 }
 
 function done(e) {
-  const a = during(e, ["photos"]);
+  const a = during(e, ["photos"], (r, a) => { r.set("photos_done", a.t); });
   if (a.res) return;
-  a.rec.set("photos_done", a.t); $app.save(a.rec);
   settle(a.rec, a.exam, a.t);
   return e.json(200, { ok: true });
 }
 
 function viaTg(e) {
-  const a = during(e, ["open", "photos"]);
+  const on = (e.requestInfo().body || {}).on === true;
+  const a = during(e, ["open", "photos"], (r) => { r.set("via_tg", on); });
   if (a.res) return;
-  a.rec.set("via_tg", (e.requestInfo().body || {}).on === true); $app.save(a.rec);
   return e.json(200, { ok: true });
 }
 
@@ -272,11 +395,11 @@ function delPhoto(e) {
 
 function check(e) {
   if (!isTeacher(e)) return fail(e, 403, "forbidden");
-  const rec = byId("exam_assignments", e.request.pathValue("id"));
+  let rec = byId("exam_assignments", e.request.pathValue("id"));
   if (!rec) return fail(e, 404, "not found");
   const exam = $app.findRecordById("exams", rec.getString("exam")), t = nowS();
-  settle(rec, exam, t);
-  if (!rec.getInt("settled")) return fail(e, 409, "not submitted");
+  rec = settle(rec, exam, t);
+  if (!rec.getInt("settled")) return fail(e, 409, "not submitted");   // `settled` never goes back
   const incoming = (e.requestInfo().body || {}).part2 || {}, tasks = J(exam, "tasks", []), part2 = {};
   for (let i = 0; i < tasks.length; i++) {
     const x = tasks[i];
@@ -285,36 +408,51 @@ function check(e) {
     if (pts === null || pts < 0 || pts > (x.max || 1)) return fail(e, 400, "bad points for task " + x.n);
     part2[String(x.n)] = { pts: pts, comment: String(g.comment == null ? "" : g.comment).slice(0, 2000) };
   }
-  const first = !rec.getInt("checked");
-  rec.set("part2", part2);
-  if (first) rec.set("checked", t);
-  $app.save(rec);
-  if (first) {
-    const sum = Core.total(tasks, rec.getInt("p1"), part2);
-    tell(rec.getString("user"), TEXT.checked(exam.getString("title"), sum.pts, sum.max), examUrl(rec.id), TEXT.btnResult);
-  }
+  let first = false;
+  const out = mutate(rec.id, (r) => {
+    first = !r.getInt("checked");
+    r.set("part2", part2);
+    if (first) r.set("checked", t);
+  });
+  if (out === null) return fail(e, 404, "not found");
+  if (first) checkedMsg(rec.id, exam, tasks, t);
   return e.json(200, { ok: true });
 }
 
-// Every minute: reminders, the opening message, settling of finished work.
-// A message flag is set only when Telegram accepted the message, so a failed
-// send is retried on the next runs while the message still makes sense.
+// Every minute: reminders, the opening message, settling of finished work,
+// and another try for any bot message Telegram refused earlier (its flag is
+// still 0) while it still makes sense: within a week of the start.
 function tick() {
   const t = nowS();
   const rows = $app.findRecordsByFilter("exam_assignments",
-    "checked = 0 && settled = 0 && start < {:soon} && start > {:old}", "start", 500, 0,
-    { soon: t + 3600, old: t - 7 * 86400 });
+    "start > {:old} && ((checked = 0 && settled = 0 && start < {:soon}) || (settled > 0 && m_done = 0) || (checked > 0 && m_checked = 0))",
+    "start", 500, 0, { soon: t + 3600, old: t - 7 * 86400 });
   each(rows, (rec) => {
     try {
-      const exam = $app.findRecordById("exams", rec.getString("exam"));
-      const start = rec.getInt("start"), duration = rec.getInt("duration"), title = exam.getString("title");
-      if (t < start && !rec.getInt("m_hour")) {
-        if (tell(rec.getString("user"), TEXT.hour(title, when(start)))) { rec.set("m_hour", t); $app.save(rec); }
-      } else if (t >= start && t < start + duration && !rec.getInt("m_open")) {
-        const mins = Math.floor((start + duration - t) / 60);
-        if (tell(rec.getString("user"), TEXT.open(title, mins), examUrl(rec.id), TEXT.btnOpen)) { rec.set("m_open", t); $app.save(rec); }
+      // `rec` was read before any of the sends below and may be old by now:
+      // it only picks what to try; every decision is made again on the fresh row.
+      const id = rec.id, user = rec.getString("user"), start = rec.getInt("start");
+      const exam = $app.findRecordById("exams", rec.getString("exam")), title = exam.getString("title");
+      if (!rec.getInt("settled") && !rec.getInt("checked")) {
+        if (t < start && !rec.getInt("m_hour")) {
+          notify(id, "m_hour", t, (r) => {
+            const s = r.getInt("start");
+            if (t >= s || s - t >= 3600) return null;
+            return () => tell(user, TEXT.hour(title, when(s)));
+          });
+        } else if (t >= start && t < start + rec.getInt("duration") && !rec.getInt("m_open")) {
+          notify(id, "m_open", t, (r) => {
+            const s = r.getInt("start"), end = s + r.getInt("duration");
+            if (t < s || t >= end) return null;
+            if (r.getInt("opened") || t >= s + OPEN_NEWS) return true;   // already seen, or too late to be news
+            const mins = Math.floor((end - t) / 60);
+            return () => tell(user, TEXT.open(title, mins), examUrl(id), TEXT.btnOpen);
+          });
+        }
+        settle(rec, exam, t);
       }
-      settle(rec, exam, t);
+      if (rec.getInt("settled") && !rec.getInt("m_done")) doneMsg(id, exam, J(exam, "tasks", []), t);
+      if (rec.getInt("checked") && !rec.getInt("m_checked")) checkedMsg(id, exam, J(exam, "tasks", []), t);
     } catch (err) { console.log("exams: tick failed for " + rec.id); }
   });
 }

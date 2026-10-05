@@ -19,7 +19,15 @@ const PORT = 8094, STUB_PORT = 8095, B = `http://127.0.0.1:${PORT}/api`;
 const SECRET = 'whsecret', TEACHER_CHAT = '555';
 let dir, proc, stub;
 const sent = [], tok = {};
+// Stub controls: `slow[chat]` delays the answer (ms); a chat in `down` gets 403
+// (a person who blocked the bot) and its message lands in `refused`, not `sent`.
+const slow = {}, down = new Set(), refused = [];
 const nowS = () => Math.floor(Date.now() / 1000);
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// Polls until fn() is true (the in-server cron may still be inside a send).
+async function until(fn, ms = 5000) {
+  for (const t0 = Date.now(); !fn() && Date.now() - t0 < ms;) await sleep(50);
+}
 
 async function req(method, path, token, body, headers = {}) {
   const r = await fetch(B + path, {
@@ -66,7 +74,11 @@ const said = (chat, part) => sent.filter(s => String(s.chat_id) === String(chat)
 before(async () => {
   stub = createServer((q, s) => {
     let b = ''; q.on('data', d => b += d);
-    q.on('end', () => { sent.push({ path: q.url, ...JSON.parse(b) }); s.end('{"ok":true}'); });
+    q.on('end', () => {
+      const m = { path: q.url, ...JSON.parse(b) }, chat = String(m.chat_id);
+      if (down.has(chat)) { refused.push(m); s.statusCode = 403; s.end('{"ok":false}'); return; }
+      setTimeout(() => { sent.push(m); s.end('{"ok":true}'); }, slow[chat] || 0);
+    });
   }).listen(STUB_PORT, '127.0.0.1');
   dir = mkdtempSync(join(tmpdir(), 'pbex-'));
   const args = ['--dir', join(dir, 'pb_data'), '--migrationsDir', MIG];
@@ -448,4 +460,182 @@ test('check: teacher only, valid points only, the student is told once', async (
   assert.equal((await check(tok.teacher, { 13: { pts: 2, comment: '' } })).status, 200);   // a correction
   assert.equal((await view(id, s.token)).json.total.pts, 4);
   assert.equal(said(s.chat, 'проверен:'), 1);
+});
+
+// ---- Concurrency: every write re-reads the row; no bot call holds it ----
+
+test('a slow bot message does not undo what the student did meanwhile', async () => {
+  const exam = await mkExam('Пробник Г'), s = await student(7000000050);
+  const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
+  slow[String(s.chat)] = 2000;
+  try {
+    await shift(id, { start: nowS() - 5, m_hour: nowS() });
+    const tk = tick();                                   // sends "открыт", which takes 2 s
+    await sleep(300);
+    const tk2 = tick();                                  // an overlapping run must not send it again
+    await sleep(200);
+    const t0 = Date.now();
+    assert.equal((await view(id, s.token)).json.phase, 'open');
+    assert.equal((await post(id, 'answers', s.token, { answers: { 1: '5' } })).status, 200);
+    assert.ok(Date.now() - t0 < 1500, 'the student waited for the bot');
+    await Promise.all([tk, tk2]);
+  } finally { delete slow[String(s.chat)]; }
+  const row = await rowOf(id);
+  assert.ok(row.opened > 0, 'opened survives');
+  assert.deepEqual(row.answers, { 1: '5' });
+  assert.deepEqual((row.log || []).map(x => x.slice(1)), [['a', '1', '5']]);
+  assert.ok(row.m_open > 0);
+  assert.equal((await view(id, s.token)).json.phase, 'open');
+  await until(() => said(s.chat, '«Пробник Г» открыт') >= 1);
+  assert.equal(said(s.chat, '«Пробник Г» открыт'), 1);
+});
+
+// Statements of about 3 MB make every request that reads the exam slow, which
+// widens the gap between reading the row and saving it.
+async function bigExam(title) {
+  const tasks = TASKS.map(x => ({ ...x }));
+  tasks[2].cond = '<p>' + 'x'.repeat(3000000) + '</p>';
+  const r = await req('POST', '/collections/exams/records', tok.teacher, { title, full: false, tasks, key: KEY });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  return r.json.id;
+}
+
+test('an autosave and an away report sent together both survive', async () => {
+  const exam = await bigExam('Пробник Б1'), s = await student(7000000051);
+  const id = (await assign(s.id, exam, nowS() - 10)).json.id;
+  await view(id, s.token);
+  for (let i = 0; i < 6; i++) {
+    const [a, w] = await Promise.all([
+      post(id, 'answers', s.token, { answers: { 1: String(i) } }),
+      post(id, 'away', s.token, { n: 1, sec: i + 1 }),
+    ]);
+    assert.equal(a.status, 200); assert.equal(w.status, 200);
+  }
+  const row = await rowOf(id);
+  assert.deepEqual(row.answers, { 1: '5' });
+  assert.deepEqual(row.log.filter(x => x[1] === 'a').map(x => x[3]), ['0', '1', '2', '3', '4', '5']);
+  assert.deepEqual(row.log.filter(x => x[1] === 'w').map(x => x[3]), [1, 2, 3, 4, 5, 6]);
+});
+
+test('an autosave and "finish" sent together: neither is lost', async () => {
+  const exam = await bigExam('Пробник Б2');
+  for (let i = 0; i < 4; i++) {
+    const s = await student(7000000052 + i);
+    const id = (await assign(s.id, exam, nowS() - 10)).json.id;
+    await view(id, s.token);
+    const [a, f] = await Promise.all([post(id, 'answers', s.token, { answers: { 1: '7' } }), post(id, 'finish', s.token)]);
+    assert.equal(f.status, 200);
+    const row = await rowOf(id);
+    assert.ok(row.finished > 0, 'finished survives, round ' + i);
+    if (a.status === 200) assert.deepEqual(row.answers, { 1: '7' }, 'answer survives, round ' + i);
+    else assert.equal(a.status, 409);                  // finish came first: the answer was refused, not lost
+  }
+});
+
+test('requests that settle the same work together tell the teacher once', async () => {
+  const { id, s } = await started(7000000056);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await shift(id, { start: nowS() - 1300, duration: 600 });   // photo grace is over
+  await Promise.all([view(id, s.token), view(id, s.token), view(id, s.token),
+    req('GET', '/ege/exams/mine', s.token), tick(), tick()]);
+  const row = await rowOf(id);
+  assert.ok(row.settled > 0); assert.equal(row.p1, 1);
+  await sleep(300);
+  assert.equal(sent.filter(m => String(m.chat_id) === TEACHER_CHAT && m.reply_markup
+    && m.reply_markup.inline_keyboard[0][0].url.endsWith('#/check/' + id)).length, 1);
+});
+
+// ---- Bot messages Telegram refused are sent again by the tick ----
+
+test('the teacher\'s "сдал" message is retried after a refusal, and delivered once', async () => {
+  const exam = await mkExam('Пробник Д'), s = await student(7000000057);
+  const id = (await assign(s.id, exam, nowS() - 10)).json.id;
+  await view(id, s.token);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await post(id, 'finish', s.token);
+  const text = 'сдал(а) пробник «Пробник Д»';
+  down.add(TEACHER_CHAT);
+  try {
+    assert.equal((await post(id, 'done', s.token)).status, 200);
+    await tick();
+    const row = await rowOf(id);
+    assert.ok(row.settled > 0);
+    assert.equal(row.m_done, 0);
+    assert.ok(refused.some(m => m.text.includes(text)));
+    assert.equal(said(TEACHER_CHAT, text), 0);
+  } finally { down.delete(TEACHER_CHAT); }
+  await tick();
+  await until(() => said(TEACHER_CHAT, text) >= 1);
+  assert.equal(said(TEACHER_CHAT, text), 1);
+  assert.ok((await rowOf(id)).m_done > 0);
+  await tick();
+  assert.equal(said(TEACHER_CHAT, text), 1);
+});
+
+test('the student\'s "проверен" message is retried after a refusal, and delivered once', async () => {
+  const exam = await mkExam('Пробник П'), s = await student(7000000058);
+  const id = (await assign(s.id, exam, nowS() - 10)).json.id;
+  await view(id, s.token);
+  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  const text = '«Пробник П» проверен';
+  down.add(String(s.chat));
+  try {
+    assert.equal((await post(id, 'check', tok.teacher, { part2: { 13: { pts: 2 } } })).status, 200);
+    await tick();
+    assert.equal((await rowOf(id)).m_checked, 0);
+    assert.ok(refused.some(m => m.text.includes(text)));
+    assert.equal(said(s.chat, text), 0);
+  } finally { down.delete(String(s.chat)); }
+  await tick();
+  await until(() => said(s.chat, text) >= 1);
+  assert.equal(said(s.chat, text), 1);
+  assert.ok(sent.some(m => m.text.includes(text + ': 2 из 4')));
+  assert.ok((await rowOf(id)).m_checked > 0);
+  await tick();
+  assert.equal(said(s.chat, text), 1);
+});
+
+test('the hour and opening messages are retried after a refusal, and delivered once', async () => {
+  const exam = await mkExam('Пробник Р'), s = await student(7000000059);
+  const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
+  const chat = String(s.chat);
+  down.add(chat);
+  try {
+    await shift(id, { start: nowS() + 1800 });
+    await tick();
+    assert.equal((await rowOf(id)).m_hour, 0);
+  } finally { down.delete(chat); }
+  await tick();
+  await until(() => said(chat, 'Через час пробник «Пробник Р»') >= 1);
+  assert.equal(said(chat, 'Через час пробник «Пробник Р»'), 1);
+  assert.ok((await rowOf(id)).m_hour > 0);
+
+  down.add(chat);
+  try {
+    await shift(id, { start: nowS() - 5 });
+    await tick();
+    assert.equal((await rowOf(id)).m_open, 0);
+  } finally { down.delete(chat); }
+  await tick();
+  await until(() => said(chat, '«Пробник Р» открыт') >= 1);
+  assert.equal(said(chat, '«Пробник Р» открыт'), 1);
+  assert.ok((await rowOf(id)).m_open > 0);
+  await tick();
+  assert.equal(said(chat, '«Пробник Р» открыт'), 1);
+});
+
+test('no opening message to a student who already opened it, or a quarter of an hour late', async () => {
+  const exam = await mkExam('Пробник О1'), s = await student(7000000060);
+  const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
+  await shift(id, { start: nowS() - 10, opened: nowS() - 5 });   // in one write: the cron cannot slip in between
+  await tick();
+  assert.ok((await rowOf(id)).m_open > 0);
+  const late = await mkExam('Пробник О2');
+  const id2 = (await assign(s.id, late, nowS() + 7200, 3600)).json.id;
+  await shift(id2, { start: nowS() - 1000 });                    // nobody opened it, 16 min in
+  await tick();
+  assert.ok((await rowOf(id2)).m_open > 0);
+  await sleep(300);
+  assert.equal(said(s.chat, '«Пробник О1» открыт'), 0);
+  assert.equal(said(s.chat, '«Пробник О2» открыт'), 0);
 });

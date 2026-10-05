@@ -38,7 +38,8 @@ migrate((app) => {
       { type: "json", name: "ok", maxSize: 20000 },
       { type: "json", name: "part2", maxSize: 100000 },
       { type: "json", name: "log", maxSize: 400000 },
-      num("m_hour"), num("m_open"),                                // bot messages already sent
+      // bot messages already sent: one hour before, "открыт", "сдал" to the teacher, "проверен"
+      num("m_hour"), num("m_open"), num("m_done"), num("m_checked"),
       created,
     ],
     indexes: [
