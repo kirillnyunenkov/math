@@ -14,14 +14,22 @@ const TEXT = {
   open: (title, mins) => "Пробник «" + title + "» открыт. На работу " + mins + " мин, время уже идёт.",
   checked: (title, pts, max) => "Пробник «" + title + "» проверен: " + pts + " из " + max + ".\nБаллы и комментарии по второй части — в тренажёре.",
   done: (name, title, p1, max1, how) => name + " сдал(а) пробник «" + title + "».\nПервая часть: " + p1 + " из " + max1 + ".\nВторая часть: " + how + ".",
-  howPhotos: (k) => "фото на сайте — " + k,
+  howPhotos: (k) => "фото — " + k,
   howTg: "решения пришлёт в Telegram",
   howNone: "фото нет",
   btnOpen: "Открыть пробник",
   btnResult: "Посмотреть результат",
   btnCheck: "Проверить",
+  botNoExam: "Сейчас нет пробника, к которому можно прикрепить фото.",
+  botLate: "Время пробника вышло, фото прикрепить уже нельзя. Если оно нужно, напиши преподавателю: @kirill_math_tutor.",
+  botBadFile: "Такой файл я не принимаю. Пришли фото или картинку JPEG, PNG или WebP.",
+  botTooMany: "К пробнику уже прикреплено 15 фото — больше нельзя. Лишнее можно удалить на сайте.",
+  botFail: "Не получилось забрать фото. Пришли его ещё раз.",
+  botNotOpened: "Сначала открой пробник в тренажёре — фото принимаются после этого.",
+  botOkAlbum: (title) => "Принял фото к пробнику «" + title + "». Все присланные фото видны в тренажёре.",
+  botOk: (title, k) => "Принял фото к пробнику «" + title + "» (всего " + k + ").",
 };
-const MAX_PHOTOS = 5, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
+const MAX_PHOTOS = 5, MAX_BOT_PHOTOS = 15, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
 const OPEN_NEWS = 900;   // "открыт" is sent only this long after the start, and only if not opened yet
 const DAYS = ["в воскресенье", "в понедельник", "во вторник", "в среду", "в четверг", "в пятницу", "в субботу"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -457,6 +465,90 @@ function tick() {
   });
 }
 
+// The caller's photos for the page to poll while photos can still arrive from the bot.
+function photoList(e) {
+  if (!isStudent(e)) return fail(e, 403, "forbidden");
+  const a = own(e);
+  if (!a) return fail(e, 404, "not found");
+  const p = Core.phase(shape(a.rec), nowS());
+  if (p === "scheduled" || p === "missed") return fail(e, 409, "closed");
+  return e.json(200, { photos: photosOf(a.rec) });
+}
+
+// $dbx.exp takes raw SQL, so AND, not &&. `db` is $app, or tx inside a transaction.
+const botCount = (a, db) => (db || $app).countRecords("exam_photos", $dbx.exp("assignment = {:a} AND n = ''", { a: a.id }));
+const tgApi = () => env("TG_API") || "https://api.telegram.org";
+
+// A photo, or an image sent as a file, from the student's own Telegram chat goes to the
+// exam that started last — no caption, no task. Returns true when handled here, false
+// to let the sign-in flow answer. An album is answered once: the first part to reach
+// the server marks the album on the row, later parts keep quiet (except a failed download).
+function botPhoto(msg) {
+  const chat = msg.chat.id, t = nowS();
+  let profile;
+  try { profile = $app.findFirstRecordByData("tg_profiles", "tg_id", String(msg.from.id)); } catch (_) { return false; }
+  const user = byId("users", profile.getString("user"));
+  if (!user || !user.getBool("active")) return false;
+  const say = (text) => tg.send(chat, text);
+
+  // the exam that started last (never one in the future)
+  const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u} && start <= {:t}", "-start", 1, 0, { u: user.id, t: t });
+  if (!rows.length) {
+    // no assignments at all: this is not an exam student, the sign-in flow answers
+    if (!$app.countRecords("exam_assignments", $dbx.hashExp({ user: user.id }))) return false;
+    say(TEXT.botNoExam); return true;
+  }
+  const a = rows[0];
+
+  // mark the album first, so every refusal below is also said once per album;
+  // the phase is read from the fresh row
+  const group = String(msg.media_group_id || "").slice(0, 40);   // tg_group holds 40 characters
+  const mark = mutate(a.id, (r) => {
+    const quiet = group !== "" && group === r.getString("tg_group");
+    r.set("tg_group", group);
+    return { quiet: quiet, phase: Core.phase(shape(r), t), opened: r.getInt("opened") };
+  });
+  if (!mark) { say(TEXT.botNoExam); return true; }
+  const refuse = (text) => { if (!mark.quiet) say(text); return true; };
+  if (mark.phase === "missed" || mark.phase === "scheduled") return refuse(TEXT.botNoExam);
+  if (mark.phase !== "open" && mark.phase !== "photos") return refuse(TEXT.botLate);
+  if (mark.phase === "open" && !mark.opened) return refuse(TEXT.botNotOpened);   // the statements were never seen
+
+  const doc = msg.document, f = msg.photo ? msg.photo[msg.photo.length - 1] : doc;
+  if (!f || (doc && ["image/jpeg", "image/png", "image/webp"].indexOf(doc.mime_type) < 0) || (f.file_size || 0) > 10485760) {
+    return refuse(TEXT.botBadFile);
+  }
+  if (botCount(a) >= MAX_BOT_PHOTOS) return refuse(TEXT.botTooMany);   // fast path; the real check is below
+
+  let stored = false, full = false;
+  try {
+    const info = $http.send({ url: tgApi() + "/bot" + env("TG_BOT_TOKEN") + "/getFile?file_id=" + encodeURIComponent(f.file_id), method: "GET", timeout: 10 });
+    const path = info.json && info.json.result && info.json.result.file_path;
+    if (!path) throw new Error("no file path");
+    const file = $filesystem.fileFromURL(tgApi() + "/file/bot" + env("TG_BOT_TOKEN") + "/" + path, 30);   // network: outside the transaction
+    // count and save in one write transaction, so parallel album parts cannot pass the cap
+    $app.runInTransaction((tx) => {
+      if (botCount(a, tx) >= MAX_BOT_PHOTOS) { full = true; return; }
+      const ph = new Record(tx.findCollectionByNameOrId("exam_photos"));
+      ph.set("user", user.id); ph.set("assignment", a.id); ph.set("n", ""); ph.set("file", file);
+      tx.save(ph);
+      stored = true;
+    });
+  } catch (err) { console.log("exams: bot photo failed"); }       // never log the URL or the error text: they can hold the token
+  if (full) return refuse(TEXT.botTooMany);
+  if (!stored) {
+    // the next part of this album must not be silent; a DB error here must not fail the webhook
+    try { mutate(a.id, (r) => { r.set("tg_group", ""); }); } catch (_) { console.log("exams: album mark not cleared"); }
+    say(TEXT.botFail); return true;
+  }
+  if (!mark.quiet) {
+    const exam = $app.findRecordById("exams", a.getString("exam"));
+    // an album reply states no number: its parts arrive one by one, a count now would be stale
+    say(group !== "" ? TEXT.botOkAlbum(exam.getString("title")) : TEXT.botOk(exam.getString("title"), botCount(a)));
+  }
+  return true;
+}
+
 module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get,
   answers: answers, away: away, finish: finish, done: done, viaTg: viaTg,
-  addPhoto: addPhoto, delPhoto: delPhoto, check: check, tick: tick };
+  addPhoto: addPhoto, delPhoto: delPhoto, photoList: photoList, botPhoto: botPhoto, check: check, tick: tick };

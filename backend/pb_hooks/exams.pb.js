@@ -11,6 +11,7 @@ routerAdd("POST", "/api/ege/exams/{id}/away", (e) => require(`${__hooks}/exams.j
 routerAdd("POST", "/api/ege/exams/{id}/finish", (e) => require(`${__hooks}/exams.js`).finish(e));
 routerAdd("POST", "/api/ege/exams/{id}/done", (e) => require(`${__hooks}/exams.js`).done(e));
 routerAdd("POST", "/api/ege/exams/{id}/via-tg", (e) => require(`${__hooks}/exams.js`).viaTg(e));
+routerAdd("GET", "/api/ege/exams/{id}/photos", (e) => require(`${__hooks}/exams.js`).photoList(e));
 routerAdd("POST", "/api/ege/exams/{id}/photos", (e) => require(`${__hooks}/exams.js`).addPhoto(e));
 routerAdd("DELETE", "/api/ege/exams/{id}/photos/{pid}", (e) => require(`${__hooks}/exams.js`).delPhoto(e));
 routerAdd("POST", "/api/ege/exams/{id}/check", (e) => require(`${__hooks}/exams.js`).check(e));

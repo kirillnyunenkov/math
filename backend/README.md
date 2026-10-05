@@ -106,6 +106,30 @@ teacher go to the chat in `TEACHER_TG_ID`. A message Telegram refused (the
 person blocked the bot, Telegram was down) is tried again every minute while
 it still makes sense; each one is delivered at most once.
 
+### Photos through the bot
+
+A student can send photos of part 2 to the bot instead of attaching them on the site — no
+caption, no task number. The bot attaches them to the exam that started last, if it is still
+open or within the 10 minutes after it; otherwise it says the time is over. Bot photos have an
+empty task (`exam_photos.n = ''`), at most 15 per exam. Handled in `botPhoto()`
+(`pb_hooks/exams.js`); the webhook (`tg.js`) hands photo messages there. No change to the
+Telegram webhook registration is needed (`message` updates already include photos).
+
+Rollout of this part, on top of the earlier exams rollout. Take a backup first (it copies the data
+and the stored files, so a rollback loses nothing):
+
+    ssh root@185.249.154.78 'systemctl start ege-api-backup.service'
+
+Nightly backups (the newest 14 are kept) now also hold the bot photos: up to 15 x 10 MB per exam.
+
+Then the files:
+
+    scp backend/pb_migrations/1790800008_exam_tg_photos.js root@185.249.154.78:/opt/ege-api/pb_migrations/
+    scp backend/pb_hooks/exams.pb.js backend/pb_hooks/exams.js backend/pb_hooks/tg.js root@185.249.154.78:/opt/ege-api/pb_hooks/
+    ssh root@185.249.154.78 'chown egeapi: /opt/ege-api/pb_migrations/1790800008_exam_tg_photos.js /opt/ege-api/pb_hooks/exams.pb.js /opt/ege-api/pb_hooks/exams.js /opt/ege-api/pb_hooks/tg.js && systemctl restart ege-api && sleep 2 && systemctl is-active ege-api'
+
+Verify: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/x/photos` prints `403`.
+
 ### Rollout
 
 1. The teacher presses "Старт" in the bot once, from the account that should

@@ -104,6 +104,10 @@ function webhook(e) {
   if (!$security.equal(e.request.header.get("X-Telegram-Bot-Api-Secret-Token"), secret)) return e.json(403, { message: "forbidden" });
   const msg = (e.requestInfo().body || {}).message;
   if (!msg || !msg.from || msg.from.is_bot || !msg.chat || msg.chat.type !== "private") return e.json(200, { ok: true });
+  // photos and images sent as files belong to a running exam, not to the sign-in flow
+  if (msg.photo || (msg.document && /^image\//.test(msg.document.mime_type || ""))) {
+    if (require(`${__hooks}/exams.js`).botPhoto(msg)) return e.json(200, { ok: true });
+  }
   const r = ensure(msg.from);
   const user = $app.findRecordById("users", r.profile.get("user"));
   if (!user.get("active")) { send(msg.chat.id, TEXT.off); return e.json(200, { ok: true }); }
