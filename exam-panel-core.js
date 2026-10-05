@@ -19,20 +19,31 @@
      page was hidden / lost focus. Facts for the teacher, not proof of anything. */
   function activitySummary(log, start) {
     const away = { count: 0, totalSec: 0, longest: null }, tasks = {};
-    (log || []).forEach(function (e) {
-      const t = e[0], kind = e[1], n = String(e[2]), v = e[3];
+    if (!Array.isArray(log)) return { away: away, tasks: tasks };
+    log.forEach(function (e) {
+      if (!Array.isArray(e) || e.length < 4) return;
+      const t = e[0], kind = e[1];
+      if (typeof t !== 'number' || !isFinite(t)) return;
       if (kind === 'w') {
-        away.count++; away.totalSec += v;
-        if (!away.longest || v > away.longest.sec) away.longest = { sec: v, n: n };
+        const v = e[3], n = String(e[2]);
+        if (typeof v === 'number' && isFinite(v) && v > 0) {
+          away.count++; away.totalSec += v;
+          if (!away.longest || v > away.longest.sec) away.longest = { sec: v, n: n };
+        }
       } else if (kind === 'a') {
-        const k = tasks[n] || (tasks[n] = { changes: 0, firstSec: t - start, lastSec: t - start });
-        k.changes++; k.lastSec = t - start;
+        const n = e[2];
+        if (n !== null && n !== undefined) {
+          const nstr = String(n);
+          const k = tasks[nstr] || (tasks[nstr] = { changes: 0, firstSec: t - start, lastSec: t - start });
+          k.changes++; k.lastSec = t - start;
+        }
       }
     });
     return { away: away, tasks: tasks };
   }
 
   function fmtSec(sec) {
+    sec = Math.max(0, Math.floor(Number(sec) || 0));
     const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60, p = (x) => String(x).padStart(2, '0');
     return h ? h + ':' + p(m) + ':' + p(s) : m + ':' + p(s);
   }

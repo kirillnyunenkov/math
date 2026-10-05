@@ -40,3 +40,25 @@ test('fmtSec', () => {
 test('every phase the server can return has a label', () => {
   for (const p of ['scheduled', 'open', 'photos', 'submitted', 'checked', 'missed']) assert.ok(P.PHASE_TEXT[p], p);
 });
+
+test('activitySummary tolerates malformed entries and non-array logs', () => {
+  const log = [null, 5, 'x', [1,'w','2',30], [2,'a','1','5'], [3,'a',null,'x'], [4,'w','1','30'], [5,'w','1',null], [6,'zzz','1',1]];
+  const s = P.activitySummary(log, 0);
+  assert.deepEqual(s.away, { count: 1, totalSec: 30, longest: { sec: 30, n: '2' } });
+  assert.deepEqual(s.tasks['1'], { changes: 1, firstSec: 2, lastSec: 2 });
+  assert.equal(Object.keys(s.tasks).length, 1);
+});
+
+test('activitySummary returns empty summary for non-array logs', () => {
+  const empty = { away: { count: 0, totalSec: 0, longest: null }, tasks: {} };
+  assert.deepEqual(P.activitySummary({}, 0), empty);
+  assert.deepEqual(P.activitySummary('abc', 0), empty);
+  assert.deepEqual(P.activitySummary(42, 0), empty);
+});
+
+test('fmtSec coerces and sanitizes input', () => {
+  assert.equal(P.fmtSec(NaN), '0:00');
+  assert.equal(P.fmtSec(-5), '0:00');
+  assert.equal(P.fmtSec(undefined), '0:00');
+  assert.equal(P.fmtSec(65.9), '1:05');
+});
