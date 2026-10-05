@@ -111,3 +111,57 @@ test('assignments and photos cannot be written through the collection API', asyn
   }
   assert.equal((await req('GET', '/collections/exam_assignments/records', s.token)).json.totalItems, 0);
 });
+
+const assign = (user, exam, start, duration = 600, token = tok.teacher) =>
+  req('POST', '/ege/exams/assign', token, { user, exam, start, duration });
+
+test('only the teacher assigns; the student is told at once', async () => {
+  const exam = await mkExam(), s = await student(7000000010);
+  assert.equal((await assign(s.id, exam, nowS() + 7200, 600, s.token)).status, 403);
+  assert.equal((await assign(s.id, exam, nowS() + 7200, 600, null)).status, 403);
+  const r = await assign(s.id, exam, nowS() + 7200);
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(said(s.chat, 'Тебе назначен пробник'), 1);
+  const rec = await req('GET', `/collections/exam_assignments/records/${r.json.id}`, tok.teacher);
+  assert.equal(rec.json.duration, 600);
+  assert.equal(rec.json.m_hour, 0);
+});
+
+test('assign validates input and refuses the same exam twice', async () => {
+  const exam = await mkExam(), s = await student(7000000011);
+  assert.equal((await assign('nope', exam, nowS() + 100)).status, 400);
+  assert.equal((await assign(s.id, 'nope', nowS() + 100)).status, 400);
+  assert.equal((await assign(s.id, exam, 'soon')).status, 400);
+  assert.equal((await assign(s.id, exam, nowS() + 100, 30)).status, 400);
+  assert.equal((await assign(s.id, exam, nowS() + 100, 99999)).status, 400);
+  assert.equal((await assign(s.id, exam, nowS() + 100)).status, 200);
+  assert.equal((await assign(s.id, exam, nowS() + 900)).status, 400);
+});
+
+test('default duration is 3 h 55 min; a start within the hour skips the hour reminder', async () => {
+  const exam = await mkExam(), s = await student(7000000012);
+  const r = await req('POST', '/ege/exams/assign', tok.teacher, { user: s.id, exam, start: nowS() + 600 });
+  const rec = await req('GET', `/collections/exam_assignments/records/${r.json.id}`, tok.teacher);
+  assert.equal(rec.json.duration, 14100);
+  assert.ok(rec.json.m_hour > 0);
+});
+
+test('move and cancel work before the start only, and tell the student', async () => {
+  const exam = await mkExam(), s = await student(7000000013);
+  const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
+  const moved = nowS() + 9000;
+  assert.equal((await req('POST', `/ege/exams/${id}/move`, s.token, { start: moved })).status, 403);
+  assert.equal((await req('POST', `/ege/exams/${id}/move`, tok.teacher, { start: moved })).status, 200);
+  assert.equal((await req('GET', `/collections/exam_assignments/records/${id}`, tok.teacher)).json.start, moved);
+  assert.equal(said(s.chat, 'перенесён'), 1);
+
+  await shift(id, { start: nowS() - 10, opened: nowS() - 5 });           // the exam is being written
+  assert.equal((await req('POST', `/ege/exams/${id}/move`, tok.teacher, { start: moved })).status, 409);
+  assert.equal((await req('POST', `/ege/exams/${id}/cancel`, tok.teacher)).status, 409);
+
+  await shift(id, { start: nowS() + 7200, opened: 0 });
+  assert.equal((await req('POST', `/ege/exams/${id}/cancel`, tok.teacher)).status, 200);
+  assert.equal((await req('GET', `/collections/exam_assignments/records/${id}`, tok.teacher)).status, 404);
+  assert.equal(said(s.chat, 'отменён'), 1);
+  assert.equal((await assign(s.id, exam, nowS() + 7200)).status, 200);   // free to assign again
+});
