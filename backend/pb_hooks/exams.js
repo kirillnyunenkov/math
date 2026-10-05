@@ -473,13 +473,14 @@ function photoList(e) {
   return e.json(200, { photos: photosOf(a.rec) });
 }
 
-// $dbx.exp takes raw SQL, so AND, not &&.
-const botCount = (a) => $app.countRecords("exam_photos", $dbx.exp("assignment = {:a} AND n = ''", { a: a.id }));
+// $dbx.exp takes raw SQL, so AND, not &&. `db` is $app, or tx inside a transaction.
+const botCount = (a, db) => (db || $app).countRecords("exam_photos", $dbx.exp("assignment = {:a} AND n = ''", { a: a.id }));
 const tgApi = () => env("TG_API") || "https://api.telegram.org";
 
 // A photo, or an image sent as a file, from the student's own Telegram chat goes to the
 // exam that started last — no caption, no task. Returns true when handled here, false
-// to let the sign-in flow answer.
+// to let the sign-in flow answer. An album is answered once: the first part to reach
+// the server marks the album on the row, later parts keep quiet (except a failed download).
 function botPhoto(msg) {
   const chat = msg.chat.id, t = nowS();
   let profile;
@@ -491,40 +492,48 @@ function botPhoto(msg) {
   // the exam that started last (never one in the future)
   const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u} && start <= {:t}", "-start", 1, 0, { u: user.id, t: t });
   if (!rows.length) { say(TEXT.botNoExam); return true; }
-  const a = rows[0], p0 = Core.phase(shape(a), t);
-  if (p0 === "missed" || p0 === "scheduled") { say(TEXT.botNoExam); return true; }
-  if (p0 !== "open" && p0 !== "photos") { say(TEXT.botLate); return true; }
+  const a = rows[0];
+
+  // mark the album first, so every refusal below is also said once per album;
+  // the phase is read from the fresh row
+  const group = String(msg.media_group_id || "");
+  const mark = mutate(a.id, (r) => {
+    const quiet = group !== "" && group === r.getString("tg_group");
+    r.set("tg_group", group);
+    return { quiet: quiet, phase: Core.phase(shape(r), t) };
+  });
+  if (!mark) { say(TEXT.botNoExam); return true; }
+  const refuse = (text) => { if (!mark.quiet) say(text); return true; };
+  if (mark.phase === "missed" || mark.phase === "scheduled") return refuse(TEXT.botNoExam);
+  if (mark.phase !== "open" && mark.phase !== "photos") return refuse(TEXT.botLate);
 
   const doc = msg.document, f = msg.photo ? msg.photo[msg.photo.length - 1] : doc;
   if (!f || (doc && ["image/jpeg", "image/png", "image/webp"].indexOf(doc.mime_type) < 0) || (f.file_size || 0) > 10485760) {
-    say(TEXT.botBadFile); return true;
+    return refuse(TEXT.botBadFile);
   }
-  if (botCount(a) >= MAX_BOT_PHOTOS) { say(TEXT.botTooMany); return true; }
+  if (botCount(a) >= MAX_BOT_PHOTOS) return refuse(TEXT.botTooMany);   // fast path; the real check is below
 
-  // remember the album on the fresh row; a closed window is re-checked there
-  const group = String(msg.media_group_id || "");
-  const plan = mutate(a.id, (r) => {
-    const p = Core.phase(shape(r), t);
-    if (p !== "open" && p !== "photos") return false;
-    const quiet = group !== "" && group === r.getString("tg_group");
-    r.set("tg_group", group);
-    return { quiet: quiet };
-  });
-  if (!plan) { say(TEXT.botLate); return true; }
-
-  let saved = false;
+  let stored = false, full = false;
   try {
     const info = $http.send({ url: tgApi() + "/bot" + env("TG_BOT_TOKEN") + "/getFile?file_id=" + encodeURIComponent(f.file_id), method: "GET", timeout: 10 });
     const path = info.json && info.json.result && info.json.result.file_path;
     if (!path) throw new Error("no file path");
-    const ph = new Record($app.findCollectionByNameOrId("exam_photos"));
-    ph.set("user", user.id); ph.set("assignment", a.id); ph.set("n", "");
-    ph.set("file", $filesystem.fileFromURL(tgApi() + "/file/bot" + env("TG_BOT_TOKEN") + "/" + path, 30));
-    $app.save(ph);
-    saved = true;
+    const file = $filesystem.fileFromURL(tgApi() + "/file/bot" + env("TG_BOT_TOKEN") + "/" + path, 30);   // network: outside the transaction
+    // count and save in one write transaction, so parallel album parts cannot pass the cap
+    $app.runInTransaction((tx) => {
+      if (botCount(a, tx) >= MAX_BOT_PHOTOS) { full = true; return; }
+      const ph = new Record(tx.findCollectionByNameOrId("exam_photos"));
+      ph.set("user", user.id); ph.set("assignment", a.id); ph.set("n", ""); ph.set("file", file);
+      tx.save(ph);
+      stored = true;
+    });
   } catch (err) { console.log("exams: bot photo failed"); }       // never log the URL or the error text: they can hold the token
-  if (!saved) { say(TEXT.botFail); return true; }
-  if (!plan.quiet) {
+  if (full) return refuse(TEXT.botTooMany);
+  if (!stored) {
+    mutate(a.id, (r) => { r.set("tg_group", ""); });              // the next part of this album must not be silent
+    say(TEXT.botFail); return true;
+  }
+  if (!mark.quiet) {
     const exam = $app.findRecordById("exams", a.getString("exam"));
     say(TEXT.botOk(exam.getString("title"), botCount(a)));
   }

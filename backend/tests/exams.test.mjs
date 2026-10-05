@@ -76,6 +76,7 @@ before(async () => {
     let b = ''; q.on('data', d => b += d);
     q.on('end', () => {
       if (q.method === 'GET' && q.url.includes('/getFile')) {             // getFile: where the bytes are
+        if (q.url.includes('file_id=BAD')) { s.setHeader('content-type', 'application/json'); return s.end('{"ok":false}'); }
         s.setHeader('content-type', 'application/json');
         return s.end(JSON.stringify({ ok: true, result: { file_path: 'photos/file_1.png' } }));
       }
@@ -673,7 +674,7 @@ const photoUpdate = (tgId, o = {}) => ({ update_id: 1, message: {
   message_id: 1, from: { id: tgId, is_bot: false, first_name: 'Маша' }, chat: { id: tgId, type: 'private' },
   media_group_id: o.group,
   ...(o.doc ? { document: { file_id: 'F1', file_size: o.size || 1000, mime_type: o.doc } }
-            : { photo: [{ file_id: 'S', file_size: 10 }, { file_id: 'L', file_size: 1000 }] }) } });
+            : { photo: [{ file_id: 'S', file_size: 10 }, { file_id: o.fileId || 'L', file_size: 1000 }] }) } });
 const botHook = (upd) => req('POST', '/tg/webhook', null, upd, { 'X-Telegram-Bot-Api-Secret-Token': SECRET });
 const photosOf = async (id, token) => (await req('GET', `/ege/exams/${id}/photos`, token)).json.photos;
 async function running(tgId, title = 'Пробник Ф') {
@@ -690,7 +691,7 @@ test('a photo sent to the bot lands on the exam, with no task, and the sign-in l
   const ph = await photosOf(id, s.token);
   assert.equal(ph.length, 1); assert.equal(ph[0].n, '');
   assert.equal(said(s.chat, 'Принял фото к пробнику «Пробник Ф» (всего 1)'), 1);
-  assert.equal(sent.slice(before).filter(m => m.reply_markup).length, 0);
+  assert.equal(sent.slice(before).filter(m => m.chat_id === 7000000300 && m.reply_markup).length, 0);
 });
 
 test('an album is answered once; the next photo counts on', async () => {
@@ -770,4 +771,38 @@ test('a stranger or a non-image document gets the normal bot flow, not a crash',
     chat: { id: 7000000306, type: 'private' }, document: { file_id: 'D', file_size: 10, mime_type: 'application/pdf' } } });
   assert.equal(sent.slice(b2).filter(m => m.chat_id === 7000000306 && m.reply_markup).length, 1);   // the sign-in link
   assert.equal(said(s.chat, 'Принял фото'), 0);
+});
+
+test('an album sent after the window closed is refused once, nothing stored', async () => {
+  const { s, id } = await running(7000000310);
+  await shift(id, { start: nowS() - 1300, duration: 600 });                          // grace is over
+  for (let i = 0; i < 3; i++) await botHook(photoUpdate(7000000310, { group: 'late' }));
+  assert.equal(said(s.chat, 'Время пробника вышло'), 1);
+  assert.equal((await photosOf(id, s.token)).length, 0);
+});
+
+test('an album over the cap is refused once, the count stays 15', async () => {
+  const { s, id } = await running(7000000311);
+  for (let i = 0; i < 15; i++) await botHook(photoUpdate(7000000311));
+  for (let i = 0; i < 3; i++) await botHook(photoUpdate(7000000311, { group: 'full' }));
+  assert.equal((await photosOf(id, s.token)).length, 15);
+  assert.equal(said(s.chat, 'уже прикреплено 15 фото'), 1);
+});
+
+test('a failed download does not silence the rest of the album', async () => {
+  const { s, id } = await running(7000000312);
+  await botHook(photoUpdate(7000000312, { group: 'bad', fileId: 'BAD' }));
+  assert.equal(said(s.chat, 'Не получилось забрать фото'), 1);
+  assert.equal((await photosOf(id, s.token)).length, 0);
+  await botHook(photoUpdate(7000000312, { group: 'bad' }));
+  assert.equal((await photosOf(id, s.token)).length, 1);
+  assert.equal(said(s.chat, 'Принял фото к пробнику'), 1);
+});
+
+test('album parts arriving in parallel cannot push the exam over fifteen photos', async () => {
+  const { s, id } = await running(7000000313);
+  for (let i = 0; i < 10; i++) await botHook(photoUpdate(7000000313));
+  await Promise.all(Array.from({ length: 8 }, () => botHook(photoUpdate(7000000313, { group: 'par' }))));
+  assert.equal((await photosOf(id, s.token)).length, 15);
+  assert.ok(said(s.chat, 'уже прикреплено 15 фото') <= 1);
 });
