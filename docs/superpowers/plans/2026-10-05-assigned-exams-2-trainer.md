@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** In the trainer, a signed-in student sees the exam the teacher assigned (banner with date and time), writes it inside the hard time window (answers autosaved, timer by the server clock), attaches photos of part 2 or chooses "I will send them in Telegram", and then sees the results and, after the teacher's check, the points and comments.
+**Goal:** In the trainer, a signed-in student sees the exam the teacher assigned (banner with date and time), writes it inside the hard time window (answers autosaved, timer by the server clock), attaches photos of part 2 on the site or sends them to the sign-in bot, and then sees the results and, after the teacher's check, the points and comments.
 
 **Architecture:** A new lazily-simple script `exam.js` (global `ExamUI`) renders the exam screens into the existing `#app` using the existing exam card markup and styles; pure logic lives in `exam-client-core.js` (unit-tested in Node). `index.html` gets a route `#/exam/<id>`, a hub banner hook, a few CSS rules and two script tags. All data comes from the server routes built in Plan 1; nothing about assigned exams is written to localStorage progress, marks or the regular mock-exam history.
 
@@ -18,7 +18,9 @@
 - Phones are the main device: layout must work at 375 px width; dark theme must work (use tokens from `:root` in `index.html`, never new colors). Colour rule from the design system: warm colours = student status, blue accent = interface; the exam banner and buttons are interface (accent).
 - Text for the student in Russian, on «ты», no emoji. Code comments in English.
 - The numeric answer inputs must give iPhone the text keyboard (minus sign only exists there): use `IS_IPHONE` and the same attributes as `ansAttrs` does for iPhone, regardless of `TASKDATA`.
-- Photos are never uploaded as shot: long side at most 2000 px, JPEG; an image the browser cannot decode is not uploaded, the student gets the message "Этот файл не получается обработать. Прикрепи его с телефона или отправь решения в Telegram."
+- Photos are never uploaded as shot: long side at most 2000 px, JPEG; an image the browser cannot decode is not uploaded, the student gets the message "Этот файл не получается обработать. Прикрепи его с телефона или отправь фото боту в Telegram."
+- Photos of part 2 can also arrive through the bot (Plan 1b): the page lists them with `GET /ege/exams/{id}/photos` (polled every 15 s while the exam or the photo phase is on screen) and shows them next to the ones attached on the site. The old checkbox "Отправлю решения в Telegram" and the `via-tg` call are NOT used any more.
+- No abrupt opening: the hub banner turns into the "Открыть" button with a short animation, and the exam screen fades in when the start time comes. Animations are CSS-only and switched off by `prefers-reduced-motion`.
 - Bump `VERSION` in `sw.js` (currently `v86`) in the task that changes shipped files, and add the new files to `SHELL`. API requests are never cached (the service worker already ignores other origins).
 - Commit after every task; never push to `master`; never touch the production server.
 - Unit tests: `node --test 'tests/*.test.mjs'`. Backend tests: `PB_BIN=~/.local/pocketbase/pocketbase node --test 'backend/tests/*.test.mjs'`.
@@ -28,13 +30,14 @@
 All under `API` (`http://127.0.0.1:8090/api` locally), header `Authorization: <auth.token>`:
 
 - `GET /ege/exams/mine` → `{now, items:[{id,title,full,start,duration,phase,via_tg}]}` (newest start first). Task 1 adds `until`.
+- `GET /ege/exams/{id}/photos` → `{photos:[{id,n,file}]}` (Plan 1b; `409` while scheduled/missed).
 - `GET /ege/exams/{id}` → meta + `now` + by phase:
   - `scheduled`, `missed`: nothing more.
   - `open`: `tasks:[{n,kind:'short'|'long',max,cond}]`, `answers:{n:text}`, `photos:[{id,n,file}]`.
   - `photos`: `tasks:[{n,kind:'long',max}]` (no `cond`), `photos`.
   - `submitted`: `tasks` (with `cond`), `answers`, `photos`, `key:{n:{a,sol?}}`, `p1`, `max1`, `ok:{n:boolean}`.
   - `checked`: the above plus `part2:{n:{pts,comment}}`, `total:{pts,max}`.
-- `POST /ege/exams/{id}/answers` `{answers:{n:text}}`; `/away` `{n,sec}`; `/finish`; `/done`; `/via-tg` `{on:boolean}`; `POST /ege/exams/{id}/photos` multipart `n`,`file` → `{id,n,file}`; `DELETE /ege/exams/{id}/photos/{pid}`. Wrong phase → `409`.
+- `POST /ege/exams/{id}/answers` `{answers:{n:text}}`; `/away` `{n,sec}`; `/finish`; `/done`; `POST /ege/exams/{id}/photos` multipart `n`,`file` → `{id,n,file}`; `DELETE /ege/exams/{id}/photos/{pid}`. Wrong phase → `409`.
 - Photo bytes: `POST /files/token` → `{token}` (short-lived), then `GET /files/exam_photos/{photoId}/{file}?token=…`.
 
 ## File Structure
@@ -341,7 +344,16 @@ async function req(method, path, token, body) {
 const login = async (identity, password, coll = 'users') =>
   (await req('POST', `/collections/${coll}/auth-with-password`, null, { identity, password }));
 
-const stub = createServer((q, s) => { q.resume(); q.on('end', () => s.end('{"ok":true}')); }).listen(STUB, '127.0.0.1');
+// Telegram stub: answers sendMessage, getFile and serves one tiny PNG for every file download.
+const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+const stub = createServer((q, s) => {
+  q.resume();
+  q.on('end', () => {
+    if (q.url.includes('/getFile')) { s.setHeader('content-type', 'application/json'); return s.end(JSON.stringify({ ok: true, result: { file_path: 'photos/file_1.png' } })); }
+    if (q.url.includes('/file/bot')) { s.setHeader('content-type', 'image/png'); return s.end(PNG); }
+    s.end('{"ok":true}');
+  });
+}).listen(STUB, '127.0.0.1');
 const dir = mkdtempSync(join(tmpdir(), 'pbdev-'));
 const args = ['--dir', join(dir, 'pb_data'), '--migrationsDir', MIG];
 execFileSync(PB, ['migrate', 'up', ...args], { stdio: 'ignore' });
@@ -365,6 +377,8 @@ const mkUser = async (login_, role, name) => {
 };
 const teacher = await mkUser('teacher', 'teacher', 'Преподаватель');
 const stud = await mkUser('stud1', 'student', 'Тест Ученик');
+// a bot profile for the student, so that photos "sent to the bot" can be simulated with the webhook
+await req('POST', '/collections/tg_profiles/records', su, { user: stud.id, tg_id: '7000000001', username: 'stud1', first_name: 'Тест', mine: true });
 const tt = (await login('teacher', 'P' + 'x'.repeat(31))).token;
 
 const TASKS = [
@@ -382,7 +396,10 @@ const asg = await req('POST', '/ege/exams/assign', tt, { user: stud.id, exam: ex
 console.log(`\nStack is up. Serve the site:  python3 -m http.server 3456`);
 console.log(`Student: http://localhost:3456/${stud.link}`);
 console.log(`Teacher: http://localhost:3456/teacher.html${teacher.link}`);
-console.log(`Exam ${exam.id}, assignment ${asg.id}, starts in ${START_IN}s, lasts ${DURATION}s. Ctrl+C to stop.\n`);
+console.log(`Exam ${exam.id}, assignment ${asg.id}, starts in ${START_IN}s, lasts ${DURATION}s. Ctrl+C to stop.`);
+console.log(`Simulate a photo sent to the bot (caption = task number):
+  curl -s -X POST http://127.0.0.1:${PORT}/api/tg/webhook -H 'X-Telegram-Bot-Api-Secret-Token: dev' -H 'content-type: application/json' \\
+    -d '{"update_id":1,"message":{"message_id":1,"from":{"id":7000000001,"is_bot":false,"first_name":"Тест"},"chat":{"id":7000000001,"type":"private"},"caption":"13","photo":[{"file_id":"A","file_size":10},{"file_id":"B","file_size":1000}]}}'\n`);
 ```
 
 - [ ] **Step 2: Run it and check it comes up**
@@ -429,7 +446,8 @@ git commit -m "Add a local dev stack for browser checks of assigned exams"
   const C = window.ExamClientCore;
   const esc = (s) => escapeHtml(String(s == null ? '' : s));
   const SEEN_KEY = 'ege_exam_seen_v1';
-  const TG = 'https://t.me/kirill_math_tutor';
+  const TG = 'https://t.me/kirill_math_tutor';   // the teacher, used on the "missed" screen
+  const TG_BOT = 'kirill_repet_bot';             // the sign-in bot that also takes photos of part 2
 
   const st = { mine: null, mineAt: 0, loading: false, hubTimer: 0, id: null, view: null, offset: 0, timers: [],
     queue: null, away: null, photos: [], ftoken: '', ftokenAt: 0, picker: false, saveTimer: 0, saveFail: false };
@@ -458,9 +476,13 @@ git commit -m "Add a local dev stack for browser checks of assigned exams"
   const shown = (it) => it.phase === 'scheduled' || it.phase === 'open' || it.phase === 'photos' || it.phase === 'submitted' ||
     (it.phase === 'checked' && seen().indexOf(it.id) < 0);
 
+  // The phase each banner was last drawn with: a changed phase animates in (scheduled -> open is the one that matters).
+  const drawnPhase = {};
   function bannerOf(it) {
     const t = esc(it.title);
-    const row = (title, sub, act) => '<div class="ex-banner"><div class="ex-b-body"><span class="ex-b-t">' + title + '</span>' +
+    const fresh = drawnPhase[it.id] && drawnPhase[it.id] !== it.phase;
+    drawnPhase[it.id] = it.phase;
+    const row = (title, sub, act) => '<div class="ex-banner' + (fresh ? ' ex-fresh' : '') + '"><div class="ex-b-body"><span class="ex-b-t">' + title + '</span>' +
       (sub ? '<span class="ex-b-s">' + sub + '</span>' : '') + '</div>' +
       (act ? '<button class="btn primary" data-exam="' + it.id + '">' + act + '</button>' : '') + '</div>';
     if (it.phase === 'scheduled') return row('Пробник «' + t + '»', C.whenText(it.start) + ' · время московское', '');
@@ -525,6 +547,8 @@ git commit -m "Add a local dev stack for browser checks of assigned exams"
 
   function paint(v) {
     scrollTop();
+    if (st.shownPhase && st.shownPhase !== v.phase && st.shownId === v.id) fadeIn();
+    st.shownPhase = v.phase; st.shownId = v.id;
     if (v.phase === 'scheduled') return paintScheduled(v);
     if (v.phase === 'missed') return paintMissed(v);
     appEl.innerHTML = shell('<p class="lead">' + esc(v.phase) + '</p>');   // replaced by later tasks
@@ -537,6 +561,12 @@ git commit -m "Add a local dev stack for browser checks of assigned exams"
       '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>');
     const id = v.id;
     later(() => { if (st.id === id) renderExam(id); }, v.until * 1000 - serverNowMs() + 1200);
+  }
+
+  // A phase change on screen (the scheduled page becoming the exam) eases in instead of a hard cut.
+  function fadeIn() {
+    appEl.classList.remove('ex-screen-in'); void appEl.offsetWidth; appEl.classList.add('ex-screen-in');
+    setTimeout(() => appEl.classList.remove('ex-screen-in'), 700);
   }
 
   function paintMissed(v) {
@@ -612,6 +642,14 @@ function render(){
   .ex-banner .ex-b-body{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:2px;}
   .ex-banner .ex-b-t{font-family:'Literata',Georgia,serif;font-weight:600;color:var(--ink);}
   .ex-banner .ex-b-s{font-size:var(--fs-sm);color:var(--ink-2);}
+  /* the banner changed state (e.g. the exam just opened): the new text and button ease in instead of snapping */
+  @keyframes exIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  @keyframes exGlow{0%{box-shadow:0 0 0 0 var(--accent-line);}100%{box-shadow:0 0 0 12px transparent;}}
+  .ex-banner.ex-fresh{animation:exGlow .9s ease-out 1;}
+  .ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn{animation:exIn .45s ease-out both;}
+  .ex-banner.ex-fresh .btn{animation-delay:.12s;}
+  .ex-screen-in{animation:exIn .5s ease-out both;}
+  @media (prefers-reduced-motion:reduce){.ex-banner.ex-fresh,.ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn,.ex-screen-in{animation:none;}}
 ```
 
 (g) `sw.js` — add `'./exam-client-core.js', './exam.js'` to `SHELL` and bump `VERSION` to `'v87'`.
@@ -622,7 +660,8 @@ function render(){
 2. Open the printed student link. After login the hub shows the banner "Пробник «Тестовый пробник» — в <день>, <дата>, в <время> · время московское" and no button. Check at 375 px width too (`resize_window` mobile) and in dark theme.
 3. Open `http://localhost:3456/#/exam/<assignment id>` (the id is printed): the scheduled screen shows the title and the start text.
 4. Restart the stack with `START_IN=-5000 DURATION=60`: the exam window already passed unopened → the banner is gone and the screen shows "Время пробника прошло…" (`missed`).
-5. `read_console_messages`: no errors. A signed-out visitor to `#/exam/xyz` gets the wall/login flow unchanged (no exceptions).
+5. Animation: with `START_IN=15`, leave the hub open on the banner. At the start time the banner text and the "Открыть" button ease in (no snap); the scheduled exam screen turning into the exam fades in too. With reduced motion enabled in the browser the change is instant. No errors.
+6. `read_console_messages`: no errors. A signed-out visitor to `#/exam/xyz` gets the wall/login flow unchanged (no exceptions).
 
 Expected: all five checks pass. Fix and re-check if not.
 
@@ -840,13 +879,13 @@ git commit -m "Trainer: open exam screen with timer, autosave, finish and away j
 
 ---
 
-### Task 6: Photos of part 2, the Telegram route, and the photo phase
+### Task 6: Photos of part 2 (site and bot) and the photo phase
 
 **Files:**
 - Modify: `exam.js`, `index.html` (CSS)
 
 **Interfaces:**
-- Consumes: Task 4–5 helpers; server routes for photos, `via-tg`, `done`, `/files/token`.
+- Consumes: Task 4–5 helpers; server routes for photos (upload, delete, list), `done`, `/files/token`.
 - Produces: `photoBlockHTML(n)`, `tgBlockHTML(v)`, `mountPhotos(v)`, `paintPhotos(v)`, `downscale(file) -> Promise<Blob>`, `uploadPhoto(id, n, file)`, `thumbSrc(p)`.
 
 - [ ] **Step 1: Replace the three stubs and add the photo code**
@@ -859,10 +898,11 @@ Replace the stubs `photoBlockHTML`, `tgBlockHTML`, `mountPhotos` from Task 5 wit
     '<label class="btn ex-add">Прикрепить фото<input type="file" accept="image/*" multiple hidden data-ex-file="' + n + '"></label>' +
     '<span class="ex-msg" id="ex-msg-' + n + '" role="status" aria-live="polite"></span></div>';
 
-  const tgBlockHTML = (v) => '<div class="vcard ex-tg"><label class="ex-tg-l"><input type="checkbox" data-ex-tg' + (v.via_tg ? ' checked' : '') + '>' +
-    '<span>Отправлю решения второй части в Telegram</span></label>' +
-    '<p class="ex-note">Если с компьютера неудобно прикреплять фото, просто пришли их преподавателю в Telegram: ' +
-    '<a href="' + TG + '" target="_blank" rel="noopener">@kirill_math_tutor</a>. Отметь галочку, чтобы он знал, где искать.</p></div>';
+  // Photos can also be sent to the sign-in bot; the page picks them up by polling.
+  const tgBlockHTML = () => '<div class="vcard ex-tg"><div class="vlabel">Неудобно прикреплять с компьютера?</div>' +
+    '<p class="ex-note">Пришли фото решения боту <a href="https://t.me/' + TG_BOT + '" target="_blank" rel="noopener">@' + TG_BOT + '</a> ' +
+    'и напиши в подписи номер задания, например «13». Если снимков несколько, отправь их одним альбомом с одной подписью. ' +
+    'Фото появятся здесь сами.</p></div>';
 
   // ---- file access: a short-lived token, refreshed when it is about to expire ----
   async function ensureToken() {
@@ -886,6 +926,24 @@ Replace the stubs `photoBlockHTML`, `tgBlockHTML`, `mountPhotos` from Task 5 wit
   }
   function mountPhotos(v) {
     (v.tasks || []).filter((t) => t.kind === 'long').forEach((t) => renderThumbs(t.n));
+    pollPhotos(v);
+  }
+
+  // Photos can arrive through the bot: take the server's list as the truth every 15 s while photos are possible.
+  function pollPhotos(v) {
+    const id = v.id;
+    const tick = async () => {
+      if (st.id !== id || document.visibilityState === 'hidden') return;
+      let r; try { r = await xapi('/' + id + '/photos'); } catch (e) { return; }
+      if (st.id !== id || !r || r.status !== 200) return;
+      const have = {}; st.photos.forEach((p) => { have[p.id] = p; });
+      const next = r.json.photos.map((p) => (have[p.id] && have[p.id].local) ? Object.assign({}, p, { local: have[p.id].local }) : p);
+      if (JSON.stringify(next.map((p) => p.id)) === JSON.stringify(st.photos.map((p) => p.id))) return;
+      st.photos = next;
+      (v.tasks || []).filter((t) => t.kind === 'long').forEach((t) => renderThumbs(t.n));
+    };
+    every(tick, 15000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tick(); });
   }
 
   // ---- downscale before upload: phone originals are tens of MB ----
@@ -960,12 +1018,6 @@ Replace the stubs `photoBlockHTML`, `tgBlockHTML`, `mountPhotos` from Task 5 wit
   appEl.addEventListener('change', async (e) => {
     const f = e.target.closest('[data-ex-file]');
     if (f && st.id) { st.picker = false; const n = f.dataset.exFile, files = f.files; await uploadPhotos(st.id, n, files); f.value = ''; return; }
-    const tg = e.target.closest('[data-ex-tg]');
-    if (tg && st.id) {
-      const on = tg.checked, id = st.id;
-      const r = await xapi('/' + id + '/via-tg', { method: 'POST', body: { on: on } }).catch(() => null);
-      if (!r || r.status !== 200) tg.checked = !on;
-    }
   });
 ```
 
@@ -1000,8 +1052,6 @@ Finally in `paint(v)` add, before the placeholder line: `if (v.phase === 'photos
     background:var(--surface);color:var(--ink);font:inherit;font-size:18px;line-height:1;cursor:pointer;}
   .ex-add{align-self:flex-start;}
   .ex-msg{font-size:var(--fs-sm);color:var(--ink-2);}
-  .ex-tg-l{display:flex;gap:var(--s3);align-items:flex-start;font-weight:500;}
-  .ex-tg-l input{margin-top:3px;}
 ```
 
 - [ ] **Step 3: Verify in the browser on the local stack**
@@ -1009,7 +1059,7 @@ Finally in `paint(v)` add, before the placeholder line: `if (v.phase === 'photos
 1. `START_IN=-5 DURATION=900`; open the exam. Each long task shows "Прикрепить фото" and the Telegram checkbox block appears under the tasks.
 2. Attach a real phone-sized photo (a JPEG of at least 3000 px; any test image works) to task 13: the thumbnail appears; in `read_network_requests` the multipart POST is far smaller than the original (long side 2000, a few hundred KB to ~1.5 MB). Attach three more, then a fifth and a sixth: the sixth shows the five-photo message. Delete one: it disappears; reload: the remaining photos still show (they load through the file token).
 3. Attach a non-image renamed `x.png` containing text: the page shows the "не получается обработать" message and nothing is uploaded.
-4. Tick the Telegram checkbox, reload: still ticked.
+4. Bot photos (needs Plan 1b's server code): the block "Неудобно прикреплять с компьютера?" under the tasks names the bot. Run the `curl` printed by the dev stack (it posts a photo update from the student's Telegram id with caption `13`): within 15 seconds a thumbnail for task 13 appears on the page without a reload, and it survives a page reload. Send the same with caption `99` (not a task of this exam, but with a single part 2 task it still lands on 13) — and check the bot stub received an "Принял фото…" message (the dev stack stub ignores it; verify instead through `GET /api/ege/exams/<id>/photos`).
 5. Away journal: choosing a file must NOT create an away entry (check the row's `log` through the superuser API).
 6. "Завершить" → photo phase: only long tasks, no conditions, the 10-minute timer, the thumbnails, "Готово" → confirm → the screen moves to the results placeholder. Let a `DURATION=60` exam end by itself and check the photo phase appears with a 10-minute timer.
 7. Phone width and dark theme; console clean.
@@ -1020,7 +1070,7 @@ Expected: all pass.
 
 ```bash
 git add exam.js index.html
-git commit -m "Trainer: part 2 photos with downscaling, Telegram route and the photo phase"
+git commit -m "Trainer: part 2 photos from the site and from the bot, and the photo phase"
 ```
 
 ---
@@ -1157,6 +1207,6 @@ git commit -m "Trainer: assigned exams end-to-end pass; sw version"
 
 ## Self-Review (done by the plan author)
 
-Spec coverage for the trainer: banner with date and time and no countdown (Task 4); the start opens the exam, hard window by server clock, timer (Tasks 4–5); part 1 in answer fields with autosave and reload recovery (5); photos per task with downscaling, the HEIC message, the five-photo limit (6); the Telegram route (6); finish early and the 10-minute photo phase (5–6); results with part 1 answers, solutions, and part 2 on review / points and comments (7); away journal and time per task are collected by the server from the calls made in Task 5; nothing in local progress (Task 8). The bot messages and the teacher side belong to Plan 1 and Plan 3.
+Spec coverage for the trainer: banner with date and time and no countdown (Task 4); the start opens the exam, hard window by server clock, timer (Tasks 4–5); part 1 in answer fields with autosave and reload recovery (5); photos per task with downscaling, the HEIC message, the five-photo limit (6); the bot photos (6); finish early and the 10-minute photo phase (5–6); results with part 1 answers, solutions, and part 2 on review / points and comments (7); away journal and time per task are collected by the server from the calls made in Task 5; nothing in local progress (Task 8). The bot messages and the teacher side belong to Plan 1 and Plan 3.
 
 Known limits: a student whose device clock is far off sees a countdown from the server offset, so it is right; the page needs the network to autosave (offline typing is kept in the input and sent when the connection returns, as long as the tab stays open).

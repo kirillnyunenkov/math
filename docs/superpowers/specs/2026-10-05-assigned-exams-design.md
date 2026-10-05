@@ -56,13 +56,13 @@ Assumptions the owner accepted with the design:
      most 5 per task, 10 MB each, JPEG/PNG/WebP (a photo or an image sent as a file).
    - The task is taken from the caption ("13", "задание 14"); photos sent within
      5 minutes after a captioned one (an album, a follow-up) go to the same task;
-     if the exam has exactly one part 2 task, it is that one; otherwise the photo
-     is stored as "без задания" and the bot asks to resend with a caption.
+     if the exam has exactly one part 2 task, it is that one; otherwise nothing
+     is stored and the bot asks to resend the photo with a caption.
    - The bot answers once per album: "Принял фото к заданию 13 (всего 2)", or why
      it did not accept (no open exam, time is up, too many, unsupported file).
    - Photos sent to the bot show up in the trainer next to the ones attached on
-     the site (the page polls a small photo-list route), and in the teacher's
-     check page under the task, or under "Без задания".
+     the site (the page polls a small photo-list route), and on the teacher's
+     check page under the task.
    - The checkbox "Отправлю решения в Telegram" and the `via-tg` flag are no
      longer used by the trainer; the server keeps the route and column.
 2. **No abrupt opening.** On the hub the banner turns from "будет в 18:00" into
