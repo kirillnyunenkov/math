@@ -16,7 +16,7 @@ Progress sync and the teacher panel talk to a PocketBase instance at
 | `/etc/caddy/Caddyfile` | block from `deploy/Caddyfile.snippet` |
 | `/root/ege-api-superuser.txt` | admin UI login (`https://api.kirillnyun.space/_/`) |
 | `/root/ege-api-teacher-link.txt` | the teacher's login link |
-| `/etc/ege-api.env` | `TG_BOT_TOKEN`, `TG_WEBHOOK_SECRET` (root-only, mode 600) |
+| `/etc/ege-api.env` | `TG_BOT_TOKEN`, `TG_WEBHOOK_SECRET`, `TEACHER_TG_ID` (root-only, mode 600) |
 
 Secrets live only in those three root-only files; never commit them.
 
@@ -81,3 +81,48 @@ cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak-$(date +%Y%m%d-%H%M%S)
 set -a; . /etc/avito-crm-caddy.env; set +a
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile && systemctl reload caddy
 ```
+
+## Assigned mock exams
+
+Design: `docs/superpowers/specs/2026-10-05-assigned-exams-design.md`.
+
+The teacher's own exams live in `exams` (statements in `tasks`, answers and
+part 1 solutions in `key`) and are never part of the public site. An exam is
+opened to one student by a row in `exam_assignments`; photos of part 2 go to
+`exam_photos` (protected files). Students reach all of it only through the
+routes in `pb_hooks/exams.js`, which decide by the server clock what may be
+shown (phases: `exam-core.js`). Bot texts are at the top of `exams.js`.
+
+`pb_hooks/lib/` holds copies of `exam-core.js` and `answers-core.js` from the
+repository root. After editing either file:
+
+    cp answers-core.js exam-core.js backend/pb_hooks/lib/
+
+(`tests/cores-in-sync.test.mjs` fails if you forget.)
+
+A cron job inside PocketBase (`exams-tick`, every minute) sends the "one hour
+before" and "exam is open" messages and settles finished work. Messages to the
+teacher go to the chat in `TEACHER_TG_ID`.
+
+### Rollout
+
+1. The teacher presses "Старт" in the bot once, from the account that should
+   receive "student has submitted" messages.
+2. On the server, find that chat id and add it to the env file (prints only
+   the id):
+
+       sqlite3 /opt/ege-api/pb_data/data.db "SELECT tg_id FROM tg_profiles WHERE username = '<telegram username>'"
+       echo 'TEACHER_TG_ID=<id>' >> /etc/ege-api.env
+
+3. Check free disk space (photos): `df -h /opt/ege-api`.
+4. Copy the migration and the hooks, restart:
+
+       scp backend/pb_migrations/1790800007_exams.js root@185.249.154.78:/opt/ege-api/pb_migrations/
+       scp -r backend/pb_hooks/exams.pb.js backend/pb_hooks/exams.js backend/pb_hooks/tg.js backend/pb_hooks/lib root@185.249.154.78:/opt/ege-api/pb_hooks/
+       ssh root@185.249.154.78 'chown -R egeapi: /opt/ege-api/pb_migrations /opt/ege-api/pb_hooks && systemctl restart ege-api && sleep 2 && systemctl is-active ege-api'
+
+5. Verify from anywhere: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/mine`
+   must print `403` (the route exists and refuses a signed-out caller).
+
+The nightly backup archives `pb_data`, which now includes the photos in
+`pb_data/storage/`; watch the size of `/opt/ege-api/backups/`.
