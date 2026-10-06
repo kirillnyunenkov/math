@@ -130,6 +130,22 @@ Then the files:
 
 Verify: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/x/photos` prints `403`.
 
+### Rollout of the trainer screens
+
+The trainer screens (banner, exam, photos, result) read `until` (the end of the exam window) from the
+exam meta, which `pb_hooks/exams.js` now returns. Deploy the hooks **before** the site, otherwise the
+"scheduled" screen has no `until` and cannot show the end of the window. Only `exams.js` changed; take
+the backup and copy the hook the same way as in "Photos through the bot" above:
+
+    ssh root@185.249.154.78 'systemctl start ege-api-backup.service'
+    scp backend/pb_hooks/exams.js root@185.249.154.78:/opt/ege-api/pb_hooks/
+    ssh root@185.249.154.78 'chown egeapi: /opt/ege-api/pb_hooks/exams.js && systemctl restart ege-api && sleep 2 && systemctl is-active ege-api'
+
+Then deploy the site (the new files `exam.js`, `exam-client-core.js`, `exam-validate.js` are in the
+service worker's list, `sw.js` version is raised). Photos from the site need the Caddy 12 MB rule for
+`/api/ege/exams/<id>/photos`; it is the one from step 6 of "Rollout" below (`deploy/Caddyfile.snippet`)
+and is already in place on the server, so nothing to do here.
+
 ### Preparing and assigning exams (Claude Code)
 
 Exams are not uploaded through the panel. Work happens in a Claude Code chat with the project
@@ -144,7 +160,7 @@ every formula rendered with the repo's KaTeX), a local `node tools/exam_preview.
 message, `node tools/exam_api.mjs assign ... --yes`. `exams`, `students`, `status` and `delete` are
 there too. The tool logs in with `~/ege-teacher-link.txt` and prints no secrets.
 
-- Do not assign an exam to a student until the trainer exam screens (Plan 2) are released: the student cannot open it yet.
+- Assign an exam only after the trainer screens release has been deployed together with the updated server hooks (see "Rollout of the trainer screens" below): until then the student cannot open it.
 - The catalog is numbered: `exams` prints "No. N · title", and `--exam` takes that number (or a title).
 - Statements and solutions are HTML checked against an allowlist (`exam-validate.js`, run by
   `exam_check.mjs` and again before `upload`). Short answers are plain text as a student types them;

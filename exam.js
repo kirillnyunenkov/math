@@ -167,9 +167,10 @@
     } catch (e) { if (gen !== st.gen) return; /* offline: keep what we had */ }
     st.loading = false;
     clearTimeout(st.hubTimer);
-    const next = (st.mine || []).filter((it) => it.phase === 'scheduled' && typeof it.until === 'number' && Number.isFinite(it.until))
-      .map((it) => it.until).sort((a, b) => a - b)[0];
-    // A failed refresh, or a start that has passed while the server still says "scheduled", counts as a miss: back off.
+    // The next moment a banner changes by itself: a start (scheduled -> open), the end of the window (open -> missed or
+    // photos), the end of the photo time (photos -> submitted).
+    const next = C.nextChangeAt(st.mine);
+    // A failed refresh, or a moment that has passed while the server still shows the old phase, counts as a miss: back off.
     if (ok && next !== undefined && next * 1000 > serverNowMs()) st.hubMiss = 0; else if (!ok || next !== undefined) st.hubMiss++; else st.hubMiss = 0;
     if (next !== undefined && st.synced && uid === st.user) {
       st.hubTimer = setTimeout(() => loadMine(true), C.refreshDelay(next, serverNowMs(), st.hubMiss, 1500));

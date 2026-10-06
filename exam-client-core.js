@@ -31,6 +31,18 @@
     return misses > 1 ? 60000 : 30000;
   }
 
+  /* The soonest moment (server seconds) at which the hub banners can change by themselves: the start of a scheduled
+     exam, the end of a running window, the end of the photo time. Items without a finite `until` are ignored. */
+  function nextChangeAt(items) {
+    let best;
+    (Array.isArray(items) ? items : []).forEach(function (it) {
+      if (!it || (it.phase !== 'scheduled' && it.phase !== 'open' && it.phase !== 'photos')) return;
+      if (typeof it.until !== 'number' || !Number.isFinite(it.until)) return;
+      if (best === undefined || it.until < best) best = it.until;
+    });
+    return best;
+  }
+
   const offsetOf = (serverNowSec, clientNowMs) => serverNowSec * 1000 - clientNowMs;
 
   function leftSec(untilSec, offsetMs, clientNowMs) {
@@ -321,7 +333,7 @@
   }
 
   const api = { mergePhotoLists: mergePhotoLists, ownGet: ownGet, pointsOf: pointsOf, secondaryOf: secondaryOf, resultOf: resultOf, canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
-    classifyStatus: classifyStatus, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
+    classifyStatus: classifyStatus, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, nextChangeAt: nextChangeAt, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamClientCore = api;

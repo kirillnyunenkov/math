@@ -59,6 +59,16 @@ test('SaveQueue keeps values that changed while a save was in flight', () => {
   assert.equal(q.has(), false);
 });
 
+test('nextChangeAt picks the soonest start, window end or photo end, and ignores the rest', () => {
+  assert.equal(C.nextChangeAt([{ phase: 'scheduled', until: 500 }, { phase: 'open', until: 300 }, { phase: 'photos', until: 900 }]), 300);
+  assert.equal(C.nextChangeAt([{ phase: 'open', until: 700 }]), 700);                  // a running window ends: missed or photos
+  assert.equal(C.nextChangeAt([{ phase: 'photos', until: 50 }, { phase: 'scheduled', until: 80 }]), 50);
+  assert.equal(C.nextChangeAt([{ phase: 'submitted', until: 0 }, { phase: 'checked', until: 10 }, { phase: 'missed', until: 5 }]), undefined);
+  assert.equal(C.nextChangeAt([{ phase: 'open' }, { phase: 'open', until: NaN }, { phase: 'open', until: '9' }, null, 7]), undefined);
+  assert.equal(C.nextChangeAt(null), undefined);
+  assert.equal(C.nextChangeAt([]), undefined);
+});
+
 test('clampDelay keeps every timer inside the 32-bit setTimeout range', () => {
   assert.equal(C.clampDelay(1500.4), 1500);
   assert.equal(C.clampDelay(-5), 0);

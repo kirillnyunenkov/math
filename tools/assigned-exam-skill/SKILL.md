@@ -23,7 +23,7 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
   `--api http://127.0.0.1:8090/api --link-file <throwaway file>`.
 - Assigning sends a Telegram message to the student. Run `--yes` (or give him the `--yes` command) only after
   his explicit yes that names the student, the exam (№ and title) and the time.
-- Do not assign an exam to a student until the trainer exam screens (Plan 2) are released: the student cannot open it yet.
+- Assign only after the trainer screens release has been deployed together with the updated server hooks (backend/README.md, "Rollout of the trainer screens"): until then the student cannot open the exam.
 - Times are Moscow time. Default duration is 235 minutes.
 
 ## Workflow
