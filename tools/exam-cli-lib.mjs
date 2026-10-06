@@ -7,7 +7,23 @@ const require = createRequire(import.meta.url);
 const P = require(join(dirname(fileURLToPath(import.meta.url)), '..', 'exam-panel-core.js'));
 
 // "2026-10-09 18:00" or "2026-10-09T18:00", Moscow time.
-export const parseWhen = (s) => P.moscowInputToTs(String(s || '').trim().replace(' ', 'T'));
+// A date that does not exist (02-31) or a clock time past 23:59 would roll over silently, so the timestamp
+// must convert back to exactly the same text.
+export function parseWhen(s) {
+  const text = String(s || '').trim().replace(' ', 'T');
+  const ts = P.moscowInputToTs(text);
+  return ts !== null && P.tsToMoscowInput(ts) === text ? ts : null;
+}
+
+const BAD_WHEN = 'Время: укажи --at "ГГГГ-ММ-ДД ЧЧ:ММ" (по Москве), такой даты или времени не бывает.';
+// Same year bounds as the panel's assign form: not 2 years ahead or more, not more than 1 year back
+// (anything else is a typo in the year). A start in the past is allowed (the exam opens at once): `past` flags it.
+export function checkWhen(s, nowSec) {
+  const ts = parseWhen(s);
+  if (ts === null) return { error: BAD_WHEN };
+  if (ts >= nowSec + 2 * 365 * 86400 || ts < nowSec - 365 * 86400) return { error: 'Время: похоже на опечатку в годе (' + String(s).trim() + '). Можно от года назад до двух лет вперёд.' };
+  return { ts, past: ts < nowSec };
+}
 
 // An exact (case-insensitive) name wins; otherwise a unique fragment; otherwise an explanation.
 export function pickOne(items, query, getName) {

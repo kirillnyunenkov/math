@@ -14,7 +14,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { checkExam } from './exam-check-lib.mjs';
-import { parseWhen, pickOne, pickExam, linkFromText } from './exam-cli-lib.mjs';
+import { checkWhen, pickOne, pickExam, linkFromText } from './exam-cli-lib.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -49,12 +49,21 @@ const opt = (name, dflt) => (opts[name] === undefined ? dflt : opts[name]);
 const flag = (name) => !!opts[name];
 
 let API = String(opt('api', 'https://api.kirillnyun.space/api')).replace(/\/+$/, ''), HOST = '';
-try { const u = new URL(API); if (u.protocol !== 'https:' && u.protocol !== 'http:') throw 0; if (u.username || u.password) throw 0; HOST = u.host; }
-catch { die('--api должен быть адресом вида https://хост/api (без логина и пароля в адресе).', 2); }
+const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
+try {
+  const u = new URL(API);
+  if (u.protocol !== 'https:' && u.protocol !== 'http:') throw 0;
+  if (u.username || u.password) throw 0;
+  // The teacher secret is POSTed at login: plain http is only for the local machine.
+  if (u.protocol === 'http:' && !LOOPBACK.test(u.hostname)) throw 0;
+  HOST = u.host;
+}
+catch { die('--api должен быть адресом вида https://хост/api (без логина и пароля в адресе); http:// допустим только для 127.0.0.1, localhost и [::1].', 2); }
+const IS_LOCAL = LOOPBACK.test(new URL(API).hostname);
 const LINK = opt('link-file', join(homedir(), 'ege-teacher-link.txt'));
 
 const WRITES = ['upload', 'assign', 'delete'];
-if (WRITES.includes(cmd)) console.log('Сервер: ' + HOST + (/^(127\.0\.0\.1|localhost)(:|$)/.test(HOST) ? ' (локальный, для проверки)' : ' (БОЕВОЙ)'));
+if (WRITES.includes(cmd)) console.log('Сервер: ' + HOST + (IS_LOCAL ? ' (локальный, для проверки)' : ' (БОЕВОЙ)'));
 
 let token = '';
 async function call(method, path, body) {
@@ -123,21 +132,22 @@ if (cmd === 'exams') {
   if (res.status === 413) die('Сервер отклонил размер файла (413): на сервере не применена настройка Caddy из backend/README.md.');
   if (res.status !== 200 || !res.json || !res.json.id) die('Сервер ответил ' + res.status + '. Ничего не загружено.');
   const after = await exams(), idx = after.findIndex((e) => e.id === res.json.id);
-  console.log('Загружено: №' + (idx + 1) + ' · «' + exam.title + '» (' + r.stats.short + ' + ' + r.stats.long + ' заданий). Ученики его не видят, пока ты не назначишь.');
+  console.log('Загружено: ' + (idx >= 0 ? '№' + (idx + 1) + ' · ' : '') + '«' + exam.title + '» (' + r.stats.short + ' + ' + r.stats.long + ' заданий). Ученики его не видят, пока ты не назначишь.');
 } else if (cmd === 'assign') {
   const [list, ppl] = await Promise.all([exams(), people()]);
   const s = pickOne(ppl, opt('student'), (p) => p.name), e = pickExam(list, opt('exam'), (x) => x.title);
   if (s.error) die('Ученик: ' + s.error); if (e.error) die('Пробник: ' + e.error);
-  const start = parseWhen(opt('at')); if (!start) die('Время: укажи --at "ГГГГ-ММ-ДД ЧЧ:ММ" (по Москве).');
+  const now = Math.floor(Date.now() / 1000), when = checkWhen(opt('at'), now);
+  if (when.error) die(when.error);
+  const start = when.ts;
   const minutes = Number(opt('minutes', '235'));
   if (!(minutes >= 1 && minutes <= 360)) die('Минут на работу: от 1 до 360.');
   console.log('Назначу: ' + s.item.name + ' · ' + examName(list, e.item) + ' · ' + fmt(start) + ' (МСК) · ' + minutes + ' мин.');
   console.log('Ученику сразу уйдёт сообщение в Telegram, потом напоминание за час.');
-  if (start < Math.floor(Date.now() / 1000)) console.log('ВНИМАНИЕ: это время уже прошло, пробник откроется сразу.');
+  if (when.past) console.log('ВНИМАНИЕ: это время уже прошло, пробник откроется сразу.');
   if (!flag('yes')) die('Ничего не сделано. Подтверди и добавь --yes.', 3);
   const r = await call('POST', '/ege/exams/assign', { user: s.item.id, exam: e.item.id, start, duration: Math.round(minutes * 60) });
-  if (r.status === 400) die('Сервер отказал: такой пробник этому ученику уже назначен, или данные не подошли.');
-  if (r.status !== 200) die('Сервер ответил ' + r.status + '.');
+  if (r.status !== 200) die('Сервер не принял назначение (ответ ' + r.status + '). Подробности скрыты; проверь `status`: возможно, этот пробник уже назначен ученику.');
   console.log('Назначено. Ученик получил сообщение.');
 } else if (cmd === 'delete') {
   const list = await exams(), e = pickExam(list, opt('exam'), (x) => x.title);

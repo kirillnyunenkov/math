@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWhen, pickOne, pickExam, linkFromText } from '../tools/exam-cli-lib.mjs';
+import { parseWhen, checkWhen, pickOne, pickExam, linkFromText } from '../tools/exam-cli-lib.mjs';
 
 test('parseWhen reads Moscow wall time in both spellings', () => {
   assert.equal(parseWhen('2026-10-09 18:00'), 1791558000);
@@ -8,6 +8,31 @@ test('parseWhen reads Moscow wall time in both spellings', () => {
   assert.equal(parseWhen('2026-10-10 00:05'), 1791579900);
   assert.equal(parseWhen('9 октября'), null);
   assert.equal(parseWhen(''), null);
+});
+
+test('parseWhen refuses rollover and impossible clock times', () => {
+  assert.equal(parseWhen('2026-02-31T10:00'), null);
+  assert.equal(parseWhen('2026-13-01 10:00'), null);
+  assert.equal(parseWhen('2026-04-31 10:00'), null);
+  assert.equal(parseWhen('2026-10-09 25:00'), null);
+  assert.equal(parseWhen('2026-10-09 18:61'), null);
+  assert.equal(parseWhen('2026-10-09 24:00'), null);
+  assert.equal(parseWhen('2028-02-29 10:00') > 0, true);   // a real leap day is fine
+  assert.equal(parseWhen('2027-02-29 10:00'), null);
+});
+
+test('checkWhen bounds the year like the panel: up to 2 years ahead, up to 1 year back', () => {
+  const now = parseWhen('2026-10-06 12:00');
+  assert.equal(checkWhen('2026-12-01 18:00', now).ts, parseWhen('2026-12-01 18:00'));
+  assert.equal(checkWhen('2026-12-01 18:00', now).past, false);
+  assert.equal(checkWhen('2026-10-01 18:00', now).past, true);   // past, but allowed (warning)
+  assert.equal(checkWhen('2028-06-01 18:00', now).ts > 0, true);
+  assert.match(checkWhen('2062-10-09 18:00', now).error, /год/);
+  assert.match(checkWhen('2025-01-01 18:00', now).error, /год/);
+  assert.match(checkWhen('2026-02-31 10:00', now).error, /ГГГГ-ММ-ДД/);
+  assert.match(checkWhen('2026-10-09 25:61', now).error, /ГГГГ-ММ-ДД/);
+  assert.match(checkWhen('', now).error, /ГГГГ-ММ-ДД/);
+  assert.match(checkWhen('завтра', now).error, /ГГГГ-ММ-ДД/);
 });
 
 test('pickOne prefers an exact name, accepts a unique fragment, explains the rest', () => {
