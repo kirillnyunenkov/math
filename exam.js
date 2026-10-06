@@ -286,7 +286,7 @@
 
   function paintMissed(v) {
     appEl.innerHTML = shell('<div class="vintro"><h2>' + titleOf(v) + '</h2>' +
-      '<p class="lead">Время пробника прошло, а ты его не открывал. Напиши преподавателю — договоритесь о новом времени.</p>' +
+      '<p class="lead">Время пробника прошло, а ты его не открывал. Напиши мне — договоримся о новом времени.</p>' +
       '<div class="vactions"><a class="btn primary" href="' + TG + '" target="_blank" rel="noopener">Написать в Telegram</a> ' +
       '<button class="btn" data-home>К заданиям</button></div></div>');
   }
@@ -334,7 +334,7 @@
     });
     bindOpen(s);
     stageAndMount(shell(barHTML() +
-        (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши преподавателю.</p>' : '') +
+        (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши мне.</p>' : '') +
         (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') +
         tasks.map((t) => cardHTML(t, typed)).join('') +
         (hasLong ? tgBlockHTML() : '') +
@@ -510,7 +510,7 @@
     if (s.finishing || s.dead || s.result) return;
     if (s.fatal) {
       if (s.fatal === 'auth') note('Нужно войти заново', 'Твой вход устарел, пробник не принимает ответы. Войди через ссылку из Telegram и открой пробник снова.');
-      else note('Пробник недоступен', 'Сервер не нашёл этот пробник. Напиши преподавателю.');
+      else note('Пробник недоступен', 'Сервер не нашёл этот пробник. Напиши мне.');
       return;
     }
     if (uploading(s)) { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Завершить» ещё раз.'); return; }
@@ -629,8 +629,8 @@
     badTask: 'Это задание не принимает фото. Обнови страницу.',
     retry: 'Не загрузилось — проверь интернет и нажми «Ещё раз» на фото.',
     auth: 'Войди в тренажёр заново — пока ты не вошёл, фото не загрузятся.',
-    gone: 'Пробник недоступен. Напиши преподавателю.',
-    listGone: 'Список фото больше не обновляется: сервер его не нашёл. Показано то, что было загружено; если что-то не так, напиши преподавателю.',
+    gone: 'Пробник недоступен. Напиши мне.',
+    listGone: 'Список фото больше не обновляется: сервер его не нашёл. Показано то, что было загружено; если что-то не так, напиши мне.',
     closed: 'Время для фото вышло. Смотрю, что дальше…',
     delFail: 'Не получилось удалить фото — попробуй ещё раз.',
   };
@@ -1093,7 +1093,7 @@
     if (!live(s) || s.finishing || s.result) return;
     const P = s.ph, wait = () => { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Готово» ещё раз.'); };
     if (uploading(s)) { wait(); return; }
-    if (s.fatal) { note(s.fatal === 'auth' ? 'Нужно войти заново' : 'Пробник недоступен', s.fatal === 'auth' ? 'Войди через ссылку из Telegram и открой пробник снова.' : 'Сервер не нашёл этот пробник. Напиши преподавателю.'); return; }
+    if (s.fatal) { note(s.fatal === 'auth' ? 'Нужно войти заново' : 'Пробник недоступен', s.fatal === 'auth' ? 'Войди через ссылку из Telegram и открой пробник снова.' : 'Сервер не нашёл этот пробник. Напиши мне.'); return; }
     if (P && P.known.length) {
       const failed = P.pending.length > 0;
       const ok = await askHere({ title: 'Всё прикреплено?',
@@ -1139,7 +1139,7 @@
     const photos = P.server.some((p) => p.n === String(n)) ? '<div class="ex-photos" data-ex-ph="' + n + '"><div class="ex-thumbs"></div></div>' : '';
     return '<div class="vcard ' + CARD[it.state] + '" data-n="' + n + '">' + head +
       '<div class="answer long tex">Ответ: ' + (it.answer ? safeHtml(it.answer) : 'не указан') + '</div>' + photos +
-      (it.comment ? '<div class="ex-comment"><div class="ex-comment-h">Комментарий преподавателя</div>' + esc(it.comment) + '</div>' : '') + '</div>';   // part 2 never shows a solution
+      (it.comment ? '<div class="ex-comment"><div class="ex-comment-h">Мой комментарий</div>' + esc(it.comment) + '</div>' : '') + '</div>';   // part 2 never shows a solution
   }
 
   function paintResult(v) {
@@ -1154,18 +1154,18 @@
     s.result = true; s.closed = true;
     const P = s.ph = newPhotos(id, tasks, v.photos); P.s = s; P.ro = true;
     const tiles = tile('Часть 1', frac(R.p1, R.max1)) +
-      (R.hasLong ? tile('Часть 2', R.checked ? frac(R.part2, R.max2) : '<span style="font-size:16px">на проверке</span>') : '') +
+      (R.hasLong ? tile('Часть 2', R.checked ? frac(R.part2, R.max2) : '<span class="vv-txt">на проверке</span>') : '') +
       (R.checked ? tile('Первичный балл', frac(R.total.pts, R.total.max)) : '') +
       (R.second !== null ? tile('Тестовый балл', Number(R.second)) : '');
     // Nothing updates by itself: the student is told to come back when the Telegram message arrives.
     const waits = R.checked ? '' : R.hasLong
-      ? '<p class="lead">Первая часть проверена. Вторую часть посмотрит преподаватель. Когда она будет проверена, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будут баллы и комментарии.</p>'
-      : '<p class="lead">Работа сдана. Когда преподаватель её проверит, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будет итог.</p>';
+      ? '<p class="lead">Первая часть проверена. Вторую часть посмотрю я. Когда я её проверю, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будут баллы и комментарии.</p>'
+      : '<p class="lead">Работа сдана. Когда я её проверю, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будет итог.</p>';
     const bot = P.server.some((p) => p.n === '')
       ? '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div></div>' : '';
     stageAndMount(shell('<div class="vresult"><h2>' + titleOf(v) + '</h2><div class="vscores">' + tiles + '</div>' + waits +
         (lost && !R.checked ? '<p class="ex-note">Часть фото не успела загрузиться и в работу не попала.</p>' : '') +
-        (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши преподавателю.</p>' : '') +
+        (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши мне.</p>' : '') +
         '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>' +
         tasks.map((t, i) => resultCard(t, R.items[i], P)).join('') + bot),
       () => live(s) && parseRoute().view === 'exam',
