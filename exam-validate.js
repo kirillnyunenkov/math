@@ -26,10 +26,42 @@
   };
   const ALLOWED_TAGS = ('p br hr b i em strong u sup sub span div ul ol li table thead tbody tr th td blockquote pre code h3 h4 img').split(' ');
   const ATTR_VALUE = {
-    src: /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=]+$/,
+    src: /^data:image\/(png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+\/=]+$/,
     width: /^\d+(px)?$/, height: /^\d+(px)?$/, colspan: /^\d+$/, rowspan: /^\d+$/, align: /^(left|right|center)$/,
     alt: /^[^"<>]*$/,
   };
+  /* An SVG figure is allowed only as the content of an <img src="data:image/svg+xml;base64,...">: a browser never runs
+     scripts in an SVG used as an image and never loads anything external for it. The checks below are a second line
+     (the figure is also opened directly by someone who saves it): no script, no event handlers, no foreign content,
+     no external references, no entities. Returns '' when the SVG is fine, otherwise the reason. */
+  const MAX_SVG_CHARS = 400000;
+  const SVG_BAD_TAG = /<\s*(script|foreignobject|iframe|embed|object|audio|video|link|meta|animate|set|handler|listener)\b/i;
+  function svgProblem(b64) {
+    let text;
+    try {
+      const bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch (e) { return 'файл не читается (это не SVG в base64).'; }
+    if (text.length > MAX_SVG_CHARS) return 'файл слишком большой (больше ' + (MAX_SVG_CHARS / 1000) + ' тысяч символов).';
+    if (!/<svg[\s>]/i.test(text)) return 'внутри нет тега <svg>.';
+    if (SVG_BAD_TAG.test(text)) return 'внутри есть скрипт, вставка чужого содержимого или анимация (script, foreignObject, iframe, animate и подобное).';
+    if (/<\s*!\s*(entity|doctype)/i.test(text) || /<\s*\?\s*xml-stylesheet/i.test(text)) return 'объявления ENTITY, DOCTYPE и таблицы стилей не разрешены.';
+    if (/[\s"'\/]on[a-z]+\s*=/i.test(text)) return 'внутри есть обработчик события (onload и подобные).';
+    if (/javascript\s*:/i.test(text)) return 'внутри есть ссылка javascript:.';
+    // References: only to an element of the same file (#id) or to an embedded raster picture.
+    const ref = /(?:href|src)\s*=\s*("[^"]*"|'[^']*')/gi;
+    let m;
+    while ((m = ref.exec(text)) !== null) {
+      const v = m[1].slice(1, -1).trim();
+      if (v.charAt(0) !== '#' && !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=\s]+$/.test(v)) return 'внутри есть внешняя ссылка (разрешены только ссылки на части этого же рисунка и встроенные png/jpeg/webp/gif).';
+    }
+    const url = /url\(\s*(["']?)([^)]*)\1\s*\)/gi;
+    while ((m = url.exec(text)) !== null) if (m[2].trim().charAt(0) !== '#') return 'внутри есть внешняя ссылка url(…) (разрешены только url(#id)).';
+    if (/@import/i.test(text)) return 'внутри есть @import.';
+    return '';
+  }
+
   // Opening tag: lowercase name, attributes only as ` name="value"` (double quotes, no < > " inside), optional "/".
   const TAG_OPEN = /<([a-z][a-z0-9]*)((?:[ \t\r\n]+[a-z][a-z-]*="[^"<>]*")*)[ \t\r\n]*\/?>/y;
   const TAG_CLOSE = /<\/([a-z][a-z0-9]*)>/y;
@@ -61,7 +93,8 @@
           while ((am = ATTR.exec(m[2])) !== null) {
             const an = am[1], av = am[2];
             if (!allowed[an]) return 'атрибут «' + an + '» у тега «' + name + '» не разрешён';
-            if (!ATTR_VALUE[an].test(av)) return 'недопустимое значение атрибута «' + an + '»' + (an === 'src' ? ' (картинка — только встроенная data:image png/jpeg/webp/gif в base64)' : '');
+            if (!ATTR_VALUE[an].test(av)) return 'недопустимое значение атрибута «' + an + '»' + (an === 'src' ? ' (картинка — только встроенная data:image png/jpeg/webp/gif/svg+xml в base64)' : '');
+            if (an === 'src' && av.indexOf('data:image/svg+xml;base64,') === 0) { const sp = svgProblem(av.slice(26)); if (sp) return 'картинка SVG не подходит: ' + sp; }
             if (an === 'src') seenSrc = true;
           }
           if (name === 'img' && !seenSrc) return 'картинка без встроенного src';

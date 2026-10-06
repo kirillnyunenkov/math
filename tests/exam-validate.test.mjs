@@ -1,7 +1,7 @@
 // tests/exam-validate.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { createRequire } from 'node:module';
 const V = createRequire(import.meta.url)('../exam-validate.js');
 const sample = () => JSON.parse(readFileSync(new URL('./fixtures/exam-sample.json', import.meta.url), 'utf8'));
@@ -92,7 +92,7 @@ test('unsafe HTML: case, data: URIs, svg/math, srcdoc, links, evasion tricks and
     '<p ONCLICK="x()">a</p>', '<p OnMouseOver=x()>a</p>', '<P>x</P>', '<p>x</P>', '<Br>', '<IMG SRC="DATA:IMAGE/PNG;BASE64,AA==">',
     '<a href="data:text/html,<b>x</b>">a</a>', '<a href="DATA:text/html;base64,PGI+">a</a>',
     '<img src="data:text/html;base64,PGI+">', '<img src="data:application/javascript;base64,AA==">',
-    '<img src="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=">', '<img src="data:image/png;charset=x;base64,AA==">',
+    '<img src="data:image/png;charset=x;base64,AA==">',
     '<svg onload="alert(1)"></svg>', '<svg><circle r="1"/></svg>', '<SVG></SVG>', '<math><mi>x</mi></math>', '<MATH></MATH>',
     '<iframe srcdoc="<b>x</b>"></iframe>', '<p SRCDOC="x">a</p>',
     // evasion: no whitespace before the handler, ">" inside a quoted value, entities, tabs and form feeds
@@ -434,4 +434,45 @@ test('only a full exam is held to the real shape; any other exam stays free', ()
   assert.deepEqual(errs(x), []);
   const y = fullExam(); delete y.full; y.tasks[3].max = 1;
   assert.deepEqual(errs(y), []);
+});
+
+// ---- SVG figures: only as <img src="data:image/svg+xml;base64,..."> and only without anything active ----------------
+const svgImg = (svg, extra) => '<p><img src="data:image/svg+xml;base64,' + Buffer.from(svg, 'utf8').toString('base64') + '"' + (extra || '') + '></p>';
+const SVG_OK = '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs><linearGradient id="g"/></defs><path d="M0 0L10 10" stroke="#000" fill="url(#g)"/><use href="#g"/></svg>';
+
+test('an SVG figure is accepted as an image, like the trainer does for its own figures', () => {
+  assert.equal(V.htmlProblem(svgImg(SVG_OK, ' width="120" height="80" alt="Рисунок"')), '');
+  const x = sample(); x.tasks[0].cond = svgImg(SVG_OK);
+  assert.deepEqual(errs(x), []);
+});
+
+test('real figures of the task bank pass the SVG gate', () => {
+  const dir = new URL('../img/t1/gfx/', import.meta.url);
+  const files = readdirSync(dir).filter((f) => f.endsWith('.svg')).slice(0, 12);
+  assert.ok(files.length > 0);
+  files.forEach((f) => assert.equal(V.htmlProblem(svgImg(readFileSync(new URL(f, dir), 'utf8'))), '', f));
+});
+
+test('an SVG with anything active or external is refused, whatever the spelling', () => {
+  const bad = [
+    '<svg onload="x()"></svg>', '<svg><circle onclick="x()" r="1"/></svg>', '<svg ONLOAD = "x()"></svg>', "<svg\nonload='x()'></svg>",
+    '<svg><script>alert(1)</script></svg>', '<svg><SCRIPT href="x"/></svg>', '<svg><foreignObject><div/></foreignObject></svg>',
+    '<svg><iframe src="#a"/></svg>', '<svg><animate attributeName="href" to="x"/></svg>', '<svg><set attributeName="onload" to="x()"/></svg>',
+    '<svg><image href="https://example.com/a.png"/></svg>', '<svg><image xlink:href="http://example.com/a.png"/></svg>',
+    "<svg><use href='//example.com/a.svg#a'/></svg>", '<svg><a href="javascript:alert(1)"><text>x</text></a></svg>',
+    '<svg><image href="data:image/svg+xml;base64,PHN2Zz48L3N2Zz4="/></svg>', '<svg><image href="data:text/html;base64,PGI+"/></svg>',
+    '<svg style="fill:url(https://example.com/a)"></svg>', '<svg><style>@import "x.css";</style></svg>', '<svg><rect fill="url(data:image/png;base64,AA==)"/></svg>',
+    '<!DOCTYPE svg [<!ENTITY a "b">]><svg>&a;</svg>', '<?xml-stylesheet href="x.css"?><svg/>', '<!ENTITY a "b"><svg/>',
+    '<html><body>not a figure</body></html>', '', 'just text',
+  ];
+  bad.forEach((b) => assert.notEqual(V.htmlProblem(svgImg(b)), '', JSON.stringify(b)));
+  assert.notEqual(V.htmlProblem('<img src="data:image/svg+xml;base64,@@@">'), '', 'not base64');
+  assert.notEqual(V.htmlProblem('<img src="data:image/svg+xml;base64,/w==">'), '', 'not utf-8 text');
+  assert.notEqual(V.htmlProblem(svgImg('<svg>' + 'a'.repeat(400001) + '</svg>')), '', 'too big');
+});
+
+test('SVG as markup in the text and other SVG-like forms stay refused', () => {
+  ['<svg><circle r="1"/></svg>', '<p><svg></svg></p>', '<img src="data:image/svg;base64,AA==">', '<img src="data:image/svg+xml,%3Csvg/%3E">',
+    '<img src="data:image/svg+xml;utf8,<svg/>">', '<img src="https://example.com/a.svg">', '<img src="a.svg">',
+  ].forEach((b) => assert.notEqual(V.htmlProblem(b), '', b));
 });
