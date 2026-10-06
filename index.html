@@ -1852,7 +1852,7 @@ const Sync={
       if(r.status===401||r.status===403){this.expired(r.status===403);return;}
       if(r.status===200){auth.token=r.json.token;auth.name=r.json.record.name||auth.name;saveJ(AUTH_KEY,auth);}
     }catch(e){}},
-  logout(){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}if(window.ExamUI)ExamUI.reset();render();}
+  logout(){if(window.ExamUI)ExamUI.reset();auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
 };
 window.addEventListener('online',()=>Sync.soon(0));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')Sync.soon(0);});

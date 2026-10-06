@@ -142,3 +142,51 @@ test('SaveQueue survives an ack of a value that is not queued any more', () => {
   q.ack({});
   assert.equal(q.has(), false);
 });
+
+test('classifyStatus tells a retry from a permanent answer', () => {
+  assert.equal(C.classifyStatus(200), 'ok');
+  assert.equal(C.classifyStatus(409), 'closed');
+  assert.equal(C.classifyStatus(401), 'auth');
+  assert.equal(C.classifyStatus(403), 'auth');
+  assert.equal(C.classifyStatus(404), 'gone');
+  assert.equal(C.classifyStatus(400), 'client');
+  assert.equal(C.classifyStatus(429), 'client');
+  assert.equal(C.classifyStatus(500), 'retry');
+  assert.equal(C.classifyStatus(503), 'retry');
+  assert.equal(C.classifyStatus(null), 'retry');                 // no answer at all: network error or timeout
+  assert.equal(C.classifyStatus(undefined), 'retry');
+  assert.equal(C.classifyStatus(0), 'retry');
+  assert.equal(C.classifyStatus(302), 'retry');
+});
+
+test('detachedDelay gives three retries on the 5, 15, 30 s schedule, then stops', () => {
+  assert.deepEqual([1, 2, 3].map(C.detachedDelay), [5000, 15000, 30000]);
+  assert.equal(C.detachedDelay(4), null);
+  assert.equal(C.detachedDelay(99), null);
+  assert.equal(C.detachedDelay(0), 5000);
+  assert.equal(C.detachedDelay(NaN), null);
+});
+
+test('unsentOf keeps only the entries an in-flight request does not carry', () => {
+  assert.deepEqual(C.unsentOf({ 1: 'a', 2: 'b' }, { 1: 'a', 2: 'x' }), { 2: 'b' });
+  assert.deepEqual(C.unsentOf({ 1: 'a' }, { 1: 'a' }), {});
+  assert.deepEqual(C.unsentOf({ 1: 'a', 3: 'c' }, null), { 1: 'a', 3: 'c' });
+  assert.deepEqual(C.unsentOf({}, { 1: 'a' }), {});
+});
+
+test('pickToken prefers the explicit token, then the signed-in one, never throws', () => {
+  assert.equal(C.pickToken('own', { token: 'cur' }), 'own');
+  assert.equal(C.pickToken('', { token: 'cur' }), 'cur');
+  assert.equal(C.pickToken(undefined, null), '');
+  assert.equal(C.pickToken(undefined, { token: 5 }), '');
+  assert.equal(C.pickToken(5, { token: 'cur' }), 'cur');
+});
+
+test('mergePending lays unsent text over the server text for short tasks only', () => {
+  const tasks = C.wellFormedTasks([{ n: 1, kind: 'short', max: 1, cond: 'a' }, { n: 2, kind: 'short', max: 1, cond: 'b' },
+    { n: 13, kind: 'long', max: 2, cond: 'c' }]);
+  const pend = JSON.parse('{"1":"new","13":"x","99":"y","__proto__":"p","2":7}');
+  assert.deepEqual(C.mergePending({ 1: 'old', 2: 'two' }, pend, tasks), { 1: 'new', 2: 'two' });
+  assert.deepEqual(C.mergePending({ 1: 'old' }, null, tasks), { 1: 'old' });
+  assert.deepEqual(C.mergePending({}, { 2: '' }, tasks), { 2: '' });   // an erased field is also unsent text
+});

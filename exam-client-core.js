@@ -108,7 +108,50 @@
   // Wait before the next autosave attempt after `fails` failures in a row: 5 s, 15 s, then 30 s.
   function retryDelay(fails) { return fails >= 3 ? 30000 : fails === 2 ? 15000 : 5000; }
 
-  const api = { wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
+  /* What a server answer to a save means: 'ok'; 'closed' (409, the window is over: re-read the phase); 'auth' (401/403:
+     stop, sign in again); 'gone' (404); 'client' (other 4xx: the server refuses this request, retrying is slow but
+     allowed); 'retry' (no answer, a timeout, 5xx, anything unexpected). */
+  function classifyStatus(status) {
+    if (status === 200) return 'ok';
+    if (status === 409) return 'closed';
+    if (status === 401 || status === 403) return 'auth';
+    if (status === 404) return 'gone';
+    if (typeof status === 'number' && status >= 400 && status < 500) return 'client';
+    return 'retry';
+  }
+
+  // A page that was left with unsent answers retries in the background: after the nth failure wait 5 s, 15 s, 30 s; then give up (null).
+  function detachedDelay(failures) {
+    if (typeof failures !== 'number' || failures !== failures) return null;
+    return failures <= 1 ? 5000 : failures === 2 ? 15000 : failures === 3 ? 30000 : null;
+  }
+
+  // The entries of `snap` that the request already on its way (`inflight`) does not carry with the same value.
+  function unsentOf(snap, inflight) {
+    const out = {};
+    Object.keys(snap).forEach(function (k) {
+      if (!inflight || !Object.prototype.hasOwnProperty.call(inflight, k) || inflight[k] !== snap[k]) out[k] = snap[k];
+    });
+    return out;
+  }
+
+  // The token a request goes with: the one given explicitly (kept by an exam screen, it survives a sign-out), else the signed-in one.
+  function pickToken(own, authObj) {
+    if (typeof own === 'string' && own) return own;
+    return authObj && typeof authObj.token === 'string' ? authObj.token : '';
+  }
+
+  // Answers typed but never sent (kept from a screen that was left) shown over the older server text; short tasks of this exam only.
+  function mergePending(typed, pending, tasks) {
+    const out = Object.assign({}, typed);
+    if (!pending || typeof pending !== 'object') return out;
+    tasks.forEach(function (t) {
+      if (t.kind === 'short' && Object.prototype.hasOwnProperty.call(pending, String(t.n)) && typeof pending[String(t.n)] === 'string') out[t.n] = pending[String(t.n)];
+    });
+    return out;
+  }
+
+  const api = { classifyStatus: classifyStatus, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamClientCore = api;
