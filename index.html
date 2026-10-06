@@ -940,6 +940,7 @@
   .vscore .vk{font-size:var(--fs-xs);opacity:.7;margin-bottom:var(--s1);}
   .vscore .vv{font-family:'Literata',Georgia,serif;font-weight:700;font-size:var(--fs-3xl);
     line-height:1;letter-spacing:-.02em;font-variant-numeric:tabular-nums;}
+  .vscore .vv .vv-txt{display:block;font-size:var(--fs-lg);font-weight:600;letter-spacing:0;line-height:1.2;}
   .vresult .vactions{display:flex;gap:var(--s2);margin-top:var(--s5);flex-wrap:wrap;}
   .vresult .btn{background:var(--invert-tile);border-color:var(--invert-line);color:var(--invert-ink);}
   .vresult .btn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.28);color:var(--invert-ink);}
@@ -3043,7 +3044,7 @@ document.addEventListener('submit',async e=>{
     Sync.login(r.json.login,r.json.secret,location.origin+location.pathname+'#/login/'+r.json.login+'.'+r.json.secret);
     return;
   }
-  msg.textContent=r.status===403?'Аккаунт отключён преподавателем.'
+  msg.textContent=r.status===403?'Аккаунт отключён.'
     :r.status===429?'Слишком много попыток. Подожди минуту.'
     :r.status===400?'Код не подошёл или устарел. Напиши боту — он пришлёт новый.'
     :'Не получилось войти. Попробуй позже.';
