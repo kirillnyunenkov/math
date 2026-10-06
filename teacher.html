@@ -189,6 +189,7 @@
   .chip.ex-missed{background:var(--err-soft);color:var(--err-text);}
   .chip.ex-scheduled{background:var(--todo-soft);color:var(--todo-text);}
   .acts-cell{white-space:nowrap;text-align:right;}
+  .toolbar h3{margin-bottom:0;}
   .wrong .it{display:block;}
   .wrong .meta{display:flex;justify-content:space-between;gap:var(--s3);color:var(--ink-3);font-size:var(--fs-xs);}
   .wrong .cond{margin:6px 0;font-size:var(--fs-sm);color:var(--ink-2);}
@@ -202,10 +203,17 @@
     justify-content:center;z-index:100;padding:var(--s4);}
   .sheet-ov.open{display:flex;}
   .sheet{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e3);padding:var(--s6);
-    width:100%;max-width:480px;}
+    width:100%;max-width:480px;max-height:100%;overflow-y:auto;}
   .sheet h3{font-size:var(--fs-xl);margin-bottom:var(--s3);}
   .sheet p{color:var(--ink-2);font-size:var(--fs-sm);margin:0 0 var(--s4);}
   .sheet .acts{display:flex;gap:var(--s3);justify-content:flex-end;flex-wrap:wrap;margin-top:var(--s4);}
+  .fld{display:flex;flex-direction:column;gap:var(--s2);margin:var(--s3) 0;font-size:var(--fs-sm);font-weight:500;}
+  .fld select,.fld input{font:inherit;min-height:44px;padding:0 var(--s3);border:1px solid var(--line-strong);
+    border-radius:var(--r-md);background:var(--input-bg);color:var(--ink);}
+  .sheet .errline{margin:0;color:var(--err-text);font-size:var(--fs-sm);font-weight:500;}
+  .sheet .errline:not(:empty){margin-top:var(--s3);}
+  .sheet .btn{min-height:44px;}
+  .btn:disabled{opacity:.55;cursor:default;}
   .field{width:100%;font:inherit;padding:10px 12px;border-radius:var(--r-sm);border:1px solid var(--line-strong);
     background:var(--input-bg);color:var(--ink);}
   .linkbox{word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:var(--fs-xs);
@@ -230,6 +238,7 @@
     .asg td.num::before{content:"1 часть: ";color:var(--ink-3);font-weight:400;}
     .asg .acts-cell{grid-area:acts;text-align:left;white-space:normal;padding-top:var(--s2);}
     .asg .acts-cell:empty{display:none;}
+    .list.cat .it .btn{min-height:40px;}
   }
 </style>
 <script>
@@ -488,6 +497,7 @@ function renderStudent(id){
           ${protos.length?`<div class="list">${protos.map(p=>`<div class="it"><span>Задание ${p.n} · ${p.proto==null?'задача '+p.pid:'прототип '+p.proto}</span><span class="muted">${p.wrong} из ${p.attempts} неверно</span></div>`).join('')}</div>`:'<p class="muted">Ошибок пока нет.</p>'}</div>
       </div>
     </div>
+    ${examBlock(id)}
     <div class="grid2">
       <div class="panel"><h3>Пробники</h3>
         ${vs.length?`<div class="list">${vs.map(v=>`<div class="it"><span>${fmtDate(v.t)}</span><span class="vres"><b>${v.s}</b> <span class="muted">тест. · ${v.p} из ${v.m||v.total} перв. · ${Math.round((v.ms||0)/60000)} мин</span></span>
@@ -618,6 +628,114 @@ function renderExams(){
     ${done.length?sec('Проверены (последние 20)',table(done,'done'),''):''}`;
 }
 
+// ---- пробники: назначить, перенести, отменить ----
+/* The server answers 400 both for "already assigned" and for bad input, so the
+   message names both. Move and cancel only work on an untouched assignment (409). */
+const fmtErr=(kind,status)=>status===400?(kind==='assign'?'Такой пробник этому ученику уже назначен, или данные не подошли.':'Сервер не принял время. Проверь дату и длительность.')
+  :status===409?'Пробник уже начался — перенести или отменить его нельзя.'
+  :status===403?'Нет доступа: вход мог истечь. Открой свою ссылку преподавателя заново.'
+  :status===404?'Такого назначения уже нет, возможно, его отменили. Список обновлён.'
+  :`Сервер ответил ${status}.`;
+const byName=(x,y)=>(x.name||x.login||'').localeCompare(y.name||y.login||'','ru');
+function personOptions(sel){
+  const opt=u=>`<option value="${esc(u.id)}"${u.id===sel?' selected':''}>${esc(u.name||u.login)}</option>`;
+  const students=data.students.filter(u=>u.active!==false||u.id===sel).sort(byName);
+  const leads=data.leads.filter(p=>p.active||p.user===sel).map(p=>data.userOf[p.user]).filter(Boolean).sort(byName);
+  // no default person: an assignment to the first name in the list by mistake is worse than one more tap
+  return `<option value=""${sel?'':' selected'} disabled>Выбери ученика</option>
+    <optgroup label="Ученики">${students.map(opt).join('')}</optgroup>${leads.length?`<optgroup label="Из канала">${leads.map(opt).join('')}</optgroup>`:''}`;
+}
+const whenFields=(when,min,label)=>`<label class="fld">${label} (по Москве)<input type="datetime-local" id="as-start" value="${esc(when)}"></label>
+    <label class="fld">Время на работу, минут (от 1 до 360)<input type="number" id="as-dur" min="1" max="360" step="1" inputmode="numeric" value="${esc(min)}"></label>
+    <p class="errline" id="as-err" role="alert"></p>`;
+function assignSheet(o){
+  o=o||{};
+  if(!(data.exams||[]).length){sheet(`<h3>Нет пробников</h3><p>Сначала загрузи пробник в каталог.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
+  // tomorrow 18:00 Moscow: the date is taken from a Moscow wall-clock string, so the browser zone does not matter
+  const when=o.when||ExamPanelCore.tsToMoscowInput(nowS()+86400).slice(0,11)+'18:00';
+  sheet(`<h3>Назначить пробник</h3>
+    <label class="fld">Ученик<select id="as-user">${personOptions(o.user)}</select></label>
+    <label class="fld">Пробник из каталога<select id="as-exam"><option value=""${o.exam?'':' selected'} disabled>Выбери пробник</option>${data.exams.map(e=>`<option value="${esc(e.id)}"${e.id===o.exam?' selected':''}>${esc(examLabel(e))}</option>`).join('')}</select></label>
+    ${whenFields(when,o.min||235,'Начало')}
+    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="assign-go">Назначить</button></div>`);
+}
+/* The form's time as {start,duration} in seconds, or null. A start more than two
+   years ahead is taken for a typo in the year. */
+function readWhen(){
+  const start=ExamPanelCore.moscowInputToTs(document.getElementById('as-start').value),min=+document.getElementById('as-dur').value;
+  return(start&&start<nowS()+2*365*86400&&Number.isInteger(min)&&min>=1&&min<=360)?{start,duration:min*60}:null;
+}
+/* Sends one request from the open sheet: the button is off while it runs (no double
+   assignment), the error goes to #as-err, success closes the sheet and reloads the data. */
+async function sendExam(kind,path,body,btn){
+  const err=document.getElementById('as-err');
+  btn.disabled=true;err.textContent='';
+  let r;try{r=await api(path,{method:'POST',body});}
+  catch(e){if(e.message==='401')closeSheet();else{err.textContent='Нет связи с сервером.';btn.disabled=false;}return;}
+  if(r.status!==200){
+    err.textContent=fmtErr(kind,r.status);btn.disabled=false;
+    // the lists are stale: refresh them behind the sheet
+    if(r.status===409||r.status===404)refresh().catch(()=>{});
+    return;}
+  closeSheet();
+  try{await refresh();}catch(e){if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось обновить данные: ${esc(e.message)}</p>`;}
+}
+/* A start in the past is asked about on a second sheet step; `pending` holds the request meanwhile. */
+let pending=null;
+function askPast(p){
+  pending=p;
+  const left=Math.max(0,Math.ceil((p.body.start+p.body.duration-nowS())/60));
+  sheet(`<h3>Это время уже прошло</h3>
+    <p>${left?`Пробник станет доступен ученику сразу, но время на работу считается от назначенного начала: останется ${left} мин.`:'Время на работу тоже уже вышло: пробник сразу окажется пропущенным.'}</p>
+    <p class="errline" id="as-err" role="alert"></p>
+    <div class="acts"><button class="btn quiet" data-act="past-back">Изменить время</button><button class="btn" data-act="past-go">${p.kind==='assign'?'Назначить':'Перенести'}</button></div>`);
+}
+function pastBack(){
+  const p=pending;if(!p)return closeSheet();
+  if(p.kind==='assign')assignSheet({...p.form,when:p.when,min:p.body.duration/60});
+  else moveSheet(p.id,{when:p.when,min:p.body.duration/60});
+}
+function pastGo(b){if(pending)sendExam(pending.kind,pending.path,pending.body,b);}
+function assignGo(b){
+  const err=document.getElementById('as-err'),form={user:document.getElementById('as-user').value,exam:document.getElementById('as-exam').value};
+  if(!form.user||!form.exam){err.textContent='Выбери ученика и пробник.';return;}
+  const w=readWhen();
+  if(!w){err.textContent='Проверь дату, время и длительность: время на работу от 1 до 360 минут.';return;}
+  const p={kind:'assign',path:'/ege/exams/assign',body:{...form,...w},form,when:document.getElementById('as-start').value};
+  if(w.start<nowS())askPast(p);else sendExam('assign',p.path,p.body,b);
+}
+function moveSheet(id,o){
+  const a=(data.asg||[]).find(x=>x.id===id);if(!a)return;
+  o=o||{};
+  sheet(`<h3>Перенести пробник</h3><p><b>${esc(nameOf(a.user))}</b> · ${esc(examOf(a.exam)?examLabel(examOf(a.exam)):'—')}. Сейчас: ${esc(fmtTs(a.start))}. Если ученик подключён к боту, он получит сообщение в Telegram.</p>
+    ${whenFields(o.when||ExamPanelCore.tsToMoscowInput(a.start),o.min||Math.round(a.duration/60),'Новое начало')}
+    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="move-go" data-id="${esc(id)}">Перенести</button></div>`);
+}
+function moveGo(id,b){
+  const w=readWhen(),err=document.getElementById('as-err');
+  if(!w){err.textContent='Проверь дату, время и длительность: время на работу от 1 до 360 минут.';return;}
+  const p={kind:'move',id,path:`/ege/exams/${id}/move`,body:w,when:document.getElementById('as-start').value};
+  if(w.start<nowS())askPast(p);else sendExam('move',p.path,p.body,b);
+}
+function cancelSheet(id){
+  const a=(data.asg||[]).find(x=>x.id===id);if(!a)return;
+  sheet(`<h3>Отменить пробник?</h3><p><b>${esc(nameOf(a.user))}</b> · ${esc(examOf(a.exam)?examLabel(examOf(a.exam)):'—')} · ${esc(fmtTs(a.start))}. Назначение исчезнет. Если ученик подключён к боту, он получит сообщение в Telegram. Потом можно назначить заново.</p>
+    <p class="errline" id="as-err" role="alert"></p>
+    <div class="acts"><button class="btn quiet" data-act="close">Не отменять</button><button class="btn danger" data-act="cancel-go" data-id="${esc(id)}">Отменить</button></div>`);
+}
+const cancelGo=(id,b)=>sendExam('cancel',`/ege/exams/${id}/cancel`,undefined,b);
+// the student card: this student's assignments, newest first
+function examBlock(uid){
+  const rows=asgOfUser(uid).sort((x,y)=>y.start-x.start);
+  return `<div class="panel"><div class="toolbar"><h3 class="grow">Пробники от преподавателя</h3>
+      <button class="btn" data-act="assign" data-user="${esc(uid)}">Назначить пробник</button></div>
+    ${rows.length?`<div class="list cat">${rows.map(a=>{const ph=phaseOf(a),e=examOf(a.exam);
+      return `<div class="it"><span><b>${esc(e?examLabel(e):'—')}</b> <span class="muted">· ${esc(fmtTs(a.start))}</span> ${chipFor(ph)}${a.settled?` <span class="muted">· 1 часть: ${esc(a.p1)}</span>`:''}</span>
+        <span>${ph==='scheduled'||ph==='missed'?`<button class="btn quiet" data-act="move" data-id="${esc(a.id)}">Перенести</button> <button class="btn danger" data-act="cancel" data-id="${esc(a.id)}">Отменить</button>`
+          :ph==='submitted'||ph==='checked'?`<button class="btn quiet" data-act="open-check" data-id="${esc(a.id)}">Открыть</button>`:''}</span></div>`;}).join('')}</div>`
+      :'<p class="muted">Своих пробников этому ученику ещё не назначали.</p>'}</div>`;
+}
+
 // ---- маршруты ----
 async function refresh(){await load();for(const k in summaries)delete summaries[k];route();}
 function route(){
@@ -654,6 +772,14 @@ document.addEventListener('click',e=>{
   else if(a==='vdel')delVariant(b.dataset.user,id);
   else if(a==='vdel-go')delVariantGo(b.dataset.user,id);
   else if(a==='open-check')location.hash='#/check/'+id;
+  else if(a==='assign')assignSheet({exam:b.dataset.exam,user:b.dataset.user});
+  else if(a==='assign-go')assignGo(b);
+  else if(a==='past-go')pastGo(b);
+  else if(a==='past-back')pastBack();
+  else if(a==='move')moveSheet(id);
+  else if(a==='move-go')moveGo(id,b);
+  else if(a==='cancel')cancelSheet(id);
+  else if(a==='cancel-go')cancelGo(id,b);
 });
 document.getElementById('sheet-ov').addEventListener('click',e=>{if(e.target.id==='sheet-ov')closeSheet();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});
