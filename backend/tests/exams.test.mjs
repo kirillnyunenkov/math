@@ -59,8 +59,8 @@ const TASKS = [
   { n: 13, kind: 'long', max: 2, cond: '<p>Решите уравнение x = 1.</p>' },
 ];
 const KEY = { 1: { a: '5', sol: '<p>2 + 3 = 5.</p>' }, 2: { a: '0,5', sol: '<p>1 : 2 = 0,5.</p>' }, 13: { a: '<p>x = 1</p>' } };
-async function mkExam(title = 'Пробник 1') {
-  const r = await req('POST', '/collections/exams/records', tok.teacher, { title, full: false, tasks: TASKS, key: KEY });
+async function mkExam(title = 'Пробник 1', tasks = TASKS) {
+  const r = await req('POST', '/collections/exams/records', tok.teacher, { title, full: false, tasks, key: KEY });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   return r.json.id;
 }
@@ -317,6 +317,30 @@ test('early finish opens the photo phase; done closes it', async () => {
   assert.equal(v.json.phase, 'submitted');
   assert.equal(v.json.via_tg, false);
   assert.equal((await post(id, 'via-tg', s.token, { on: true })).status, 409);
+});
+
+test('without a part 2 there is no photo phase: finishing hands the work in at once', async () => {
+  const exam = await mkExam('Короткий', TASKS.slice(0, 2)), s = await student(7000000090);
+  const id = (await assign(s.id, exam, nowS() - 10, 600)).json.id;
+  await view(id, s.token);
+  await post(id, 'answers', s.token, { answers: { 1: '5', 2: '0,5' } });   // both right: its message to the teacher differs from the other tests'
+  assert.equal((await post(id, 'finish', s.token)).status, 200);
+  const v = await view(id, s.token);
+  assert.equal(v.json.phase, 'submitted');
+  assert.equal(v.json.p1, 2);
+});
+
+test('the photo phase says whether the student finished early and whether there is a part 2', async () => {
+  const early = await started(7000000091);
+  await post(early.id, 'finish', early.s.token);
+  const e = (await view(early.id, early.s.token)).json;
+  assert.equal(e.phase, 'photos'); assert.equal(e.early, true); assert.equal(e.nolong, false);
+  const late = await started(7000000092);
+  await shift(late.id, { start: nowS() - 700, duration: 650 });                    // the window ended 50 s ago, never finished
+  const l = (await view(late.id, late.s.token)).json;
+  assert.equal(l.phase, 'photos'); assert.equal(l.early, false);
+  const open = await started(7000000093);
+  assert.equal((await view(open.id, open.s.token)).json.early, undefined);        // other phases carry neither flag
 });
 
 test('an exam that was never opened cannot be finished', async () => {

@@ -214,10 +214,15 @@ function untilOf(a, phase) {
   if (phase === "photos") return t.photoUntil;
   return 0;
 }
+function hasLong(exam) { return J(exam, "tasks", []).some((x) => x.kind === "long"); }
+
 function meta(rec, exam, t) {
   const a = shape(rec), phase = Core.phase(a, t);
-  return { id: rec.id, title: exam.getString("title"), full: exam.getBool("full"), start: rec.getInt("start"),
+  const m = { id: rec.id, title: exam.getString("title"), full: exam.getBool("full"), start: rec.getInt("start"),
     duration: rec.getInt("duration"), phase: phase, via_tg: rec.getBool("via_tg"), until: untilOf(a, phase) };
+  // Only the photo phase needs these (the banner and the screen word it differently); the exam is parsed for it alone.
+  if (phase === "photos") { m.early = rec.getInt("finished") > 0; m.nolong = !hasLong(exam); }
+  return m;
 }
 
 function photosOf(rec) {
@@ -365,11 +370,16 @@ function away(e) {
 }
 
 function finish(e) {
+  let noPhotos = false;
   const a = during(e, ["open"], (r, a) => {
     if (!r.getInt("opened")) return [409, "closed"];
     r.set("finished", a.t);
+    // Without a part 2 there is nothing to attach: no photo phase, the work is handed in at once.
+    noPhotos = !hasLong(a.exam);
+    if (noPhotos) r.set("photos_done", a.t);
   });
   if (a.res) return;
+  if (noPhotos) settle(a.rec, a.exam, a.t);
   return e.json(200, { ok: true });
 }
 
