@@ -112,7 +112,7 @@
     if (it.phase === 'scheduled') return row(t, C.whenText(it.start) + ' · время московское', '');
     if (it.phase === 'open') return row(t + ' идёт', 'Время на работу уже идёт', 'Открыть');
     if (it.phase === 'photos') return row(t, st.noLong[it.id] ? 'Время работы вышло, осталось сдать' : 'Осталось прикрепить фото второй части', 'Открыть');
-    if (it.phase === 'submitted') return row(t + ' сдан', 'Вторую часть проверяет преподаватель', 'Результат');
+    if (it.phase === 'submitted') return row(t + ' сдан', 'Идёт проверка', 'Результат');   // /mine has no task data: no word about a part 2
     return row(t + ' проверен', 'Баллы и комментарии готовы', 'Результат');
   }
 
@@ -1091,7 +1091,7 @@
     const n = Number(it.n);
     const head = '<div class="vlabel">Задание ' + n + '<span class="vtag ' + TAGC[it.state] + '">' + esc(it.label) + '</span></div>' +
       '<div class="cond"><div class="tex">' + safeHtml(t.cond) + '</div></div>';
-    const sol = it.sol ? '<details class="ex-sol"><summary>Решение</summary><div class="tex">' + safeHtml(it.sol) + '</div></details>' : '';
+    const sol = it.kind === 'short' && it.sol ? '<details class="ex-sol"><summary>Решение</summary><div class="tex">' + safeHtml(it.sol) + '</div></details>' : '';
     if (it.kind === 'short') {
       return '<div class="vcard ' + CARD[it.state] + '" data-n="' + n + '">' + head +
         '<div class="vans-row"><span class="yours">Твой ответ: ' + (it.given ? esc(it.given) : '—') + '</span> · <span class="right">Верный: ' +
@@ -1100,7 +1100,7 @@
     const photos = P.server.some((p) => p.n === String(n)) ? '<div class="ex-photos" data-ex-ph="' + n + '"><div class="ex-thumbs"></div></div>' : '';
     return '<div class="vcard ' + CARD[it.state] + '" data-n="' + n + '">' + head +
       '<div class="answer long tex">Ответ: ' + (it.answer ? safeHtml(it.answer) : 'не указан') + '</div>' + photos +
-      (it.comment ? '<div class="ex-comment"><div class="ex-comment-h">Комментарий преподавателя</div>' + esc(it.comment) + '</div>' : '') + sol + '</div>';
+      (it.comment ? '<div class="ex-comment"><div class="ex-comment-h">Комментарий преподавателя</div>' + esc(it.comment) + '</div>' : '') + '</div>';   // part 2 never shows a solution
   }
 
   function paintResult(v) {
@@ -1118,8 +1118,10 @@
       (R.hasLong ? tile('Часть 2', R.checked ? frac(R.part2, R.max2) : '<span style="font-size:16px">на проверке</span>') : '') +
       (R.checked ? tile('Первичный балл', frac(R.total.pts, R.total.max)) : '') +
       (R.second !== null ? tile('Тестовый балл', Number(R.second)) : '');
-    const waits = !R.checked && R.hasLong
-      ? '<p class="lead">Первая часть проверена. Вторую часть посмотрит преподаватель — когда она будет проверена, баллы и комментарии появятся здесь, и тебе придёт сообщение в Telegram.</p>' : '';
+    // Nothing updates by itself: the student is told to come back when the Telegram message arrives.
+    const waits = R.checked ? '' : R.hasLong
+      ? '<p class="lead">Первая часть проверена. Вторую часть посмотрит преподаватель. Когда она будет проверена, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будут баллы и комментарии.</p>'
+      : '<p class="lead">Работа сдана. Когда преподаватель её проверит, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будет итог.</p>';
     const bot = P.server.some((p) => p.n === '')
       ? '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div></div>' : '';
     stageAndMount(shell('<div class="vresult"><h2>' + titleOf(v) + '</h2><div class="vscores">' + tiles + '</div>' + waits +

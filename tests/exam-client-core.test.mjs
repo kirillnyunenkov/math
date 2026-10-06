@@ -455,3 +455,62 @@ test('mergePhotoLists takes the server list and keeps a photo uploaded here that
   assert.deepEqual(C.mergePhotoLists(raw, null, null, known).map((p) => p.id), ['a', 'bot1']);
   assert.deepEqual(C.mergePhotoLists([mk('x', '99')], [], null, known), []);   // not a task of the exam
 });
+
+// ---- review round 1: the tiles are the server's numbers ----
+test('resultOf: the server totals win over the local sums (capped max, duplicate n, unknown kind, n = 41)', () => {
+  const E = ExamCore, A = createRequire(import.meta.url)('../answers-core.js');
+  const tasks = [{ n: 1, kind: 'short', max: 1, cond: 'a' }, { n: 2, kind: 'short', max: 1, cond: 'b' }, { n: 2, kind: 'short', max: 2, cond: 'dup' },
+    { n: 41, kind: 'short', max: 1, cond: 'x' }, { n: 5, kind: 'weird', max: 3, cond: 'u' }, { n: 13, kind: 'long', max: 12, cond: 'c' }];
+  const key = { 1: { a: '5' }, 2: { a: '7' }, 41: { a: '1' }, 13: { a: 'z' } }, answers = { 1: '5', 2: '7', 41: '1' };
+  const g = A.gradePart1(tasks, key, answers), part2 = { 13: { pts: 11, comment: '' } };
+  const v = { phase: 'checked', full: true, tasks: tasks, answers: answers, ok: g.ok, key: key, p1: g.p1, max1: g.max1, part2: part2, total: E.total(tasks, g.p1, part2) };
+  assert.deepEqual(v.total, { pts: 16, max: 20 });                           // what the server and Telegram say
+  const r = C.resultOf(v, C.wellFormedTasks(tasks), { secondary: (p) => p * 2 });
+  assert.deepEqual([r.p1, r.max1, r.part2, r.max2], [5, 5, 11, 15]);
+  assert.deepEqual(r.total, { pts: 16, max: 20 });
+  assert.equal(r.second, 32);                                                // from the server total
+  assert.equal(r.items[r.items.length - 1].label, 'проверено');              // 10 из 10 would contradict 11/15
+  assert.equal(r.items[r.items.length - 1].state, 'wait');
+});
+
+test('resultOf: a total that matches the page keeps the per-task labels', () => {
+  const part2 = { 13: { pts: 1 }, 14: { pts: 1 } };
+  const v = rview({ phase: 'checked', part2: part2, p1: 1, max1: 3, total: { pts: 3, max: 8 } });
+  const r = C.resultOf(v, C.wellFormedTasks(RTASKS));
+  assert.deepEqual([r.part2, r.max2, r.total.pts, r.total.max], [2, 5, 3, 8]);
+  assert.deepEqual(r.items.slice(3).map((i) => i.label), ['1 из 2', '1 из 3']);
+});
+
+test('resultOf falls back to the local sums when the server numbers are missing or invalid', () => {
+  const t = C.wellFormedTasks(RTASKS), part2 = { 13: { pts: 2 }, 14: { pts: 1 } };
+  const bad = [undefined, null, 'x', [], { pts: 5 }, { pts: 'a', max: 8 }, { pts: 9, max: 8 }, { pts: -1, max: 8 }, { pts: 2.5, max: 8 },
+    { pts: 0, max: 8 },                                                      // below part 1 (1)
+    { pts: 3, max: 2 }, { pts: NaN, max: 8 }, { pts: Infinity, max: Infinity }];
+  bad.forEach((tot) => {
+    const r = C.resultOf(rview({ phase: 'checked', part2: part2, total: tot }), t);
+    assert.deepEqual(r.total, { pts: 4, max: 8 }, JSON.stringify(tot));
+    assert.equal(r.part2, 3);
+    assert.deepEqual(r.items.slice(3).map((i) => i.label), ['2 из 2', '1 из 3']);
+  });
+  // an invalid p1/max1 pair is ignored too
+  const r = C.resultOf(rview({ phase: 'checked', part2: part2, p1: 9, max1: 3 }), t);
+  assert.deepEqual([r.p1, r.max1], [3, 3]);
+  assert.equal(r.total.max, 8);
+});
+
+test('resultOf: a long task never carries a solution, a short one does', () => {
+  const t = C.wellFormedTasks(RTASKS);
+  const r = C.resultOf(rview({ key: { 1: { a: '5', sol: '<p>s</p>' }, 13: { a: 'x', sol: '<p>long sol</p>' }, 14: { a: 'y', sol: 'z' } } }), t);
+  assert.equal(r.items[0].sol, '<p>s</p>');
+  assert.deepEqual(r.items.slice(3).map((i) => i.sol), ['', '']);
+  const c = C.resultOf(rview({ phase: 'checked', part2: {}, key: { 13: { a: 'x', sol: '<p>long sol</p>' } } }), t);
+  assert.equal(c.items[3].sol, '');
+});
+
+test('mergePhotoLists accepts the Map of local previews', () => {
+  const known = ['13'], mk = (id, n) => ({ id: id, n: n, file: id + '.jpg' });
+  const local = new Map([['mine', 'blob:x']]);
+  const out = C.mergePhotoLists([mk('bot', '')], [mk('mine', '13'), mk('old', '13')], local, known);
+  assert.deepEqual(out.map((p) => p.id), ['bot', 'mine']);                    // `old` has no preview
+  assert.deepEqual(C.mergePhotoLists([], [mk('mine', '13')], new Map(), known), []);
+});

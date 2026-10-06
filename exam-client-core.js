@@ -232,11 +232,11 @@
   }
 
   /* The server list of the photo phase merged into a carried list: what the server says now is the truth, except a photo
-     that was uploaded from this very page (`localIds`: ids with a local preview) and is not in that answer yet, because the
+     that was uploaded from this very page (`localIds`: a Set, a Map or an array of ids with a local preview) and is not in that answer yet, because the
      answer was read just before the upload was committed. Fresh objects, bad items dropped, never more than LIST_MAX. */
   function mergePhotoLists(raw, held, localIds, known) {
     const out = wellFormedPhotos(raw, known), have = new Set(out.map(function (p) { return p.id; }));
-    const mine = localIds instanceof Set ? localIds : new Set(Array.isArray(localIds) ? localIds : []);
+    const mine = localIds instanceof Set ? localIds : localIds instanceof Map ? new Set(localIds.keys()) : new Set(Array.isArray(localIds) ? localIds : []);
     wellFormedPhotos(held, known).forEach(function (p) {
       if (mine.has(p.id) && !have.has(p.id) && out.length < PHOTO.LIST_MAX) { have.add(p.id); out.push(p); }
     });
@@ -269,11 +269,18 @@
   }
 
   /* Everything the result page shows, as plain data (the page escapes it): the tiles and one entry per task.
-     `tasks` is wellFormedTasks(v.tasks). Part 1 points are the server's (it grades the short answers); part 2 points and the
-     total are summed here the way ExamCore.total does (a task without a known maximum counts for 1). Until the exam is
-     checked part 2 has no points: state 'wait'. A short answer counts as right only when ok[n] is exactly true.
-     state: 'ok' | 'part' | 'no' | 'wait'. Text fields are plain strings: the key's `a` of a short task is plain text,
-     `answer` and `sol` are teacher HTML that the page passes through its HTML gate. */
+     `tasks` is wellFormedTasks(v.tasks).
+     The tiles are the SERVER's numbers, the same as in the Telegram message and the teacher panel: p1/max1 and total
+     {pts, max} are taken when they are whole numbers with 0 <= p1 <= max1 and 0 <= pts <= max (and the total covers part 1);
+     part 2 is then total - part 1. Only when they are missing or invalid are the numbers summed locally the way
+     ExamCore.total does it (a task without a known maximum counts for 1).
+     The per-task label "N из M" is local: it is shown only when the local sums agree with the tiles (the page may have
+     dropped tasks the server counts, or capped a maximum); otherwise the task says just "проверено", never a contradiction.
+     Until the exam is checked part 2 has no points: state 'wait'. A short answer counts as right only when ok[n] is exactly
+     true. state: 'ok' | 'part' | 'no' | 'wait'. Text fields are plain strings: the key's `a` of a short task is plain text,
+     `answer` is teacher HTML of a long task and `sol` of a short one, both for the page's HTML gate; a long task never
+     has a solution (part 1 only). */
+  const whole = function (x) { return typeof x === 'number' && Number.isInteger(x) && x >= 0 && x <= 1000; };
   function resultOf(v, tasks, opts) {
     v = isPlain(v) ? v : {};
     const checked = v.phase === 'checked', mxOf = function (t) { return t.max || 1; };
@@ -281,24 +288,35 @@
     let max1 = 0, max2 = 0, sum1 = 0, sum2 = 0, hasLong = false;
     const items = tasks.map(function (t) {
       const mx = mxOf(t), k = ownGet(v.key, t.n), key = isPlain(k) ? k : {};
-      const sol = text(key.sol, MAX_COND), a = typeof key.a === 'string' ? key.a : typeof key.a === 'number' && Number.isFinite(key.a) ? String(key.a) : '';
+      const a = typeof key.a === 'string' ? key.a : typeof key.a === 'number' && Number.isFinite(key.a) ? String(key.a) : '';
       if (t.kind === 'short') {
         const ok = ownGet(v.ok, t.n) === true;
         max1 += mx; if (ok) sum1 += mx;
         return { n: t.n, kind: 'short', max: mx, ok: ok, state: ok ? 'ok' : 'no', label: ok ? 'верно' : 'неверно',
-          given: typeof typed[t.n] === 'string' ? typed[t.n].trim() : '', correct: a.trim().slice(0, 200), sol: sol };
+          given: typeof typed[t.n] === 'string' ? typed[t.n].trim() : '', correct: a.trim().slice(0, 200), sol: text(key.sol, MAX_COND) };
       }
       hasLong = true; max2 += mx;
       const g = ownGet(v.part2, t.n), gg = isPlain(g) ? g : {};
       const pts = checked ? pointsOf(gg.pts, 0, mx, 0) : 0;
       sum2 += pts;
-      const state = !checked ? 'wait' : pts >= mx ? 'ok' : pts > 0 ? 'part' : 'no';
-      return { n: t.n, kind: 'long', max: mx, pts: pts, state: state, label: checked ? pts + ' из ' + mx : 'на проверке',
-        answer: a.trim() ? a : '', sol: sol, comment: checked ? text(gg.comment, 5000) : '' };
+      return { n: t.n, kind: 'long', max: mx, pts: pts, state: !checked ? 'wait' : pts >= mx ? 'ok' : pts > 0 ? 'part' : 'no',
+        label: checked ? pts + ' из ' + mx : 'на проверке', answer: a.trim() ? a : '', sol: '', comment: checked ? text(gg.comment, 5000) : '' };
     });
-    const p1 = pointsOf(v.p1, 0, max1, Math.min(sum1, max1));
-    const total = checked ? { pts: p1 + sum2, max: max1 + max2 } : null;
-    return { checked: checked, items: items, hasLong: hasLong, p1: p1, max1: max1, max2: max2, part2: checked ? sum2 : null, total: total,
+    // part 1: the server's pair when valid, else counted here
+    const srvP1 = whole(v.p1) && whole(v.max1) && v.p1 <= v.max1;
+    const p1 = srvP1 ? v.p1 : pointsOf(v.p1, 0, max1, Math.min(sum1, max1));
+    if (srvP1) max1 = v.max1;
+    let total = null, part2 = null;
+    if (checked) {
+      const t = ownGet(v, 'total'), srvT = isPlain(t) && whole(t.pts) && whole(t.max) && t.pts <= t.max && t.pts >= p1 && t.max - max1 >= t.pts - p1;
+      if (srvT) { total = { pts: t.pts, max: t.max }; part2 = t.pts - p1; max2 = t.max - max1; }
+      else { total = { pts: p1 + sum2, max: max1 + max2 }; part2 = sum2; }
+      // the per-task numbers may not contradict the tiles
+      if (srvT && (sum2 !== part2 || tasks.filter(function (x) { return x.kind === 'long'; }).reduce(function (m, x) { return m + mxOf(x); }, 0) !== max2)) {
+        items.forEach(function (i) { if (i.kind === 'long') { i.label = 'проверено'; i.state = 'wait'; } });
+      }
+    }
+    return { checked: checked, items: items, hasLong: hasLong, p1: p1, max1: max1, max2: max2, part2: part2, total: total,
       second: total ? secondaryOf(v.full, total.pts, opts && opts.secondary) : null };
   }
 
