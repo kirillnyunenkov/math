@@ -198,7 +198,7 @@
   // Typed answers that are still unsent go on in the background (see drain); renderExam waits a moment for it.
   // `carry`: the photos go on to the next screen (the open phase turning into the photo phase): they are detached, not dropped.
   function leave(carry) {
-    clearTimers();
+    clearTimers(); closeZoom();
     st.listeners.splice(0).forEach((off) => off());
     if (st.carry) { addLost(st.carry.id, dropPhotos(st.carry)); st.carry = null; }   // nobody took them over
     // A question of this screen (leave? finish? delete?) does not outlive it: its answer would be about a screen that is gone.
@@ -419,9 +419,17 @@
   }
 
   // ---- autosave of part 1 ----
+  // "Сохранено" is shown with a tick, in green, and goes out after a couple of seconds: a status that never changes is not read.
+  const SAVED = 'Сохранено';
+  let savedTimer = 0;
   const setSaveText = (t, bad) => {
-    const e = document.getElementById('ex-save');
-    if (e) { e.textContent = t; e.classList.toggle('bad', !!bad); }
+    clearTimeout(savedTimer);
+    const e = document.getElementById('ex-save'), ok = t === SAVED;
+    if (e) { e.textContent = ok ? '✓ ' + SAVED : t; e.classList.toggle('bad', !!bad); e.classList.toggle('ok', ok); }
+    if (ok) savedTimer = setTimeout(() => {
+      const x = document.getElementById('ex-save');
+      if (x && x.classList.contains('ok')) { x.textContent = ''; x.classList.remove('ok'); }
+    }, 2500);
     const h = document.getElementById('ex-savehint');
     if (h) h.hidden = !bad;
   };
@@ -772,14 +780,14 @@
   // never redraws (and so never reloads) a tile that is on screen.
   function serverFig(P, p, tok) {
     const src = P.local.get(p.id) || (tok ? thumbUrl(tok, p) : '');
-    return '<figure class="ex-thumb">' + (src ? '<img data-ex-img="' + esc(p.id) + '" src="' + esc(src) + '" alt="' + esc(altOf(p.n)) + '" loading="lazy" decoding="async">'
+    return '<figure class="ex-thumb' + (src ? ' ex-z' : '') + '">' + (src ? '<img data-ex-img="' + esc(p.id) + '" src="' + esc(src) + '" alt="' + esc(altOf(p.n)) + '" loading="lazy" decoding="async">'
         : '<span class="ex-nopic" aria-hidden="true"></span>') +
       (P.ro ? '' : '<button type="button" class="ex-del" data-ex-del="' + esc(p.id) + '" aria-label="Удалить фото"' + (P.deleting.has(p.id) ? ' disabled' : '') + '>×</button>') + '</figure>';
   }
   function pendFig(x) {
     const bad = x.state === 'err';
     const label = x.state === 'prep' ? 'Готовлю…' : x.state === 'wait' ? 'Ждём связь…' : 'Загружаю…';
-    return '<figure class="ex-thumb ' + (bad ? 'ex-err' : 'ex-busy') + '">' +
+    return '<figure class="ex-thumb ' + (bad ? 'ex-err' : 'ex-busy') + (x.url ? ' ex-z' : '') + '">' +
       (x.url ? '<img src="' + esc(x.url) + '" alt="' + esc(altOf(x.n)) + '">' : '<span class="ex-nopic" aria-hidden="true"></span>') +
       (bad ? (x.fatal ? '<span class="ex-st">Не принято</span>' : '<button type="button" class="ex-st ex-retry" data-ex-rt="' + esc(x.key) + '">Ещё раз</button>')
         : '<span class="ex-st">' + label + '</span>') +
@@ -1211,6 +1219,70 @@
     });
   }
 
+  // ---- a photo full size: tap a thumbnail, tap the picture to enlarge it, arrows or a swipe for the next one ----
+  const zoomSt = { el: null, pics: [], i: 0, keyH: null };
+  function closeZoom() {
+    const z = zoomSt;
+    if (!z.el) return;
+    z.el.remove(); z.el = null; z.pics = [];
+    document.removeEventListener('keydown', z.keyH, true); z.keyH = null;
+    document.documentElement.classList.remove('ex-lb-open');
+  }
+  function showZoom(i) {
+    const z = zoomSt;
+    if (!z.el || !z.pics.length) return;
+    z.i = (i + z.pics.length) % z.pics.length;
+    const im = z.el.querySelector('.ex-lb-img'), p = z.pics[z.i];
+    z.el.classList.remove('zoom');
+    im.src = p.src; im.alt = p.alt;
+    z.el.querySelector('.ex-lb-cnt').textContent = z.pics.length > 1 ? (z.i + 1) + ' из ' + z.pics.length : '';
+    z.el.querySelectorAll('.ex-lb-nav').forEach((b) => { b.hidden = z.pics.length < 2; });
+  }
+  function openZoom(img) {
+    closeZoom();
+    const group = img.closest('.ex-thumbs') || img.parentNode;
+    const all = [].slice.call(group.querySelectorAll('.ex-z img')).filter((x) => !x.classList.contains('ex-broken') && x.src);
+    const z = zoomSt;
+    z.pics = all.map((x) => ({ src: x.src, alt: x.alt || 'Фото' }));
+    if (!z.pics.length) return;
+    const el = document.createElement('div');
+    el.className = 'ex-lb'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Фото');
+    el.innerHTML = '<div class="ex-lb-bar"><span class="ex-lb-cnt"></span><button type="button" class="ex-lb-x" data-lb="x" aria-label="Закрыть">×</button></div>' +
+      '<div class="ex-lb-stage"><img class="ex-lb-img" alt=""></div>' +
+      '<button type="button" class="ex-lb-nav prev" data-lb="prev" aria-label="Предыдущее фото">‹</button>' +
+      '<button type="button" class="ex-lb-nav next" data-lb="next" aria-label="Следующее фото">›</button>' +
+      '<p class="ex-lb-tip">Нажми на фото, чтобы увеличить</p>';
+    z.el = el;
+    el.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-lb]');
+      if (b) { const k = b.dataset.lb; if (k === 'x') closeZoom(); else showZoom(z.i + (k === 'next' ? 1 : -1)); return; }
+      const stage = e.target.closest('.ex-lb-stage');
+      if (!stage) return;
+      if (e.target.tagName === 'IMG') {                                    // tap the picture: enlarge (around the tapped point) or back
+        const r = e.target.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+        const on = el.classList.toggle('zoom');
+        if (on) { stage.scrollLeft = fx * stage.scrollWidth - stage.clientWidth / 2; stage.scrollTop = fy * stage.scrollHeight - stage.clientHeight / 2; }
+      } else if (!el.classList.contains('zoom')) closeZoom();              // the dark area closes
+    });
+    let x0 = null;
+    el.addEventListener('touchstart', (e) => { x0 = e.touches.length === 1 && !el.classList.contains('zoom') ? e.touches[0].clientX : null; }, { passive: true });
+    el.addEventListener('touchend', (e) => {
+      if (x0 === null || !e.changedTouches.length || z.pics.length < 2) return;
+      const dx = e.changedTouches[0].clientX - x0; x0 = null;
+      if (Math.abs(dx) > 60) showZoom(z.i + (dx < 0 ? 1 : -1));
+    }, { passive: true });
+    z.keyH = (e) => {
+      if (e.key === 'Escape') { e.stopPropagation(); closeZoom(); }
+      else if (e.key === 'ArrowRight') showZoom(z.i + 1);
+      else if (e.key === 'ArrowLeft') showZoom(z.i - 1);
+    };
+    document.addEventListener('keydown', z.keyH, true);
+    document.documentElement.classList.add('ex-lb-open');
+    document.body.appendChild(el);
+    showZoom(Math.max(0, all.indexOf(img)));
+    el.querySelector('.ex-lb-x').focus();
+  }
+
   // ---- clicks on this module's elements ----
   appEl.addEventListener('click', (e) => {
     const t = e.target, s = st.save;
@@ -1219,6 +1291,8 @@
     if (t.closest('[data-ex-retry]') && st.id) { renderExam(st.id); return; }
     if (t.closest('[data-ex-finish]') && s) { finishNow(s); return; }
     if (t.closest('[data-ex-done]') && s) { doneNow(s); return; }
+    const pic = t.closest('.ex-z img');
+    if (pic && !pic.classList.contains('ex-broken')) { openZoom(pic); return; }       // a photo is opened in every phase, also read-only
     const P = s && s.ph;
     if (!phLive(P) || P.ro) return;                                     // the result shows photos, it never changes them
     const pick = t.closest('[data-ex-pick]');
