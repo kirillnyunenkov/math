@@ -43,6 +43,9 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
      like `3/2`, no letters, no units), no tags. `sol` is required, in the approved format: «Идея» → numbered one-action steps → «Где
      ошибаются» (only if a typical mistake really exists) → the answer.
    - `long` = part 2, `max` from the criteria, `a` is HTML, no solution (it is not shown; do not add one).
+   - A full variant (`full: true`) has exactly 20 tasks: 1-13 `short` (1 point each) and 14-20 `long` with the maxima of the
+     generator's table (14:2, 15:3, 16:2, 17:2, 18:3, 19:4, 20:4; 33 primary points in all, the test score is shown only then).
+     `exam_check` refuses a full exam that has another shape. An exam with `full: false` can have any tasks.
    - Formulas: `$…$` inline, `$$…$$` display, LaTeX. A "less than" sign is `\lt`, never a bare `<` (a `<`
      followed by a letter is an error). A dollar sign in text goes only inside a formula: `$\$5$`.
    - HTML is an allowlist, nothing else passes. Tags: p br hr b i em strong u sup sub span div ul ol li table
