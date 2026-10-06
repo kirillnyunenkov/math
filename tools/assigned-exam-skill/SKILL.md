@@ -53,7 +53,8 @@ with the next free number from `exams`) — the variant is always full (`full: t
    say so in the report. Keep the order: Идея → picture → steps → «Где ошибаются» (only if a mistake really exists; compute the wrong
    answer it leads to and check that it differs from the right one). Exam HTML has no classes: write plain `<p><b>Идея.</b>`, `<ol>`,
    `<table>` (no `table-wrapper`), `<p>$$…$$</p>` (no `math-display`). Part 2 (14–20): only the answer, no solution.
-3. **Pictures.** Statement drawings come from `src/` (render to PNG). Solution figures follow the `solution-visuals` skill: overlay
+3. **Pictures.** Before drawing anything, **load the `solution-visuals` skill with the Skill tool and follow it** (which tasks get a picture
+   and which do not, colours, labels, sizes, the checks) — the owner expects it on every exam. Statement drawings come from `src/` (render to PNG). Solution figures: overlay
    on the statement drawing (graphs, triangles), the bank's own tree/box helpers (`tools/figs/t5.py` `_tree`, `t3.py` BOX) for the rest.
    Work outside the repo: copy `~/math-source/exams/proba-1/mkfigs.py` / `build_exam.py` as the starting point of a new exam (they
    show how to overlay on a dvisvgm drawing: the page group is scaled ×2, grid origin and cell are read from the SVG's axis paths).
