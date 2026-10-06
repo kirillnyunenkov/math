@@ -15,12 +15,13 @@ he approved and what he corrected. Run every command from the repo root. Message
 
 | Thing | Path |
 |---|---|
-| Solutions, one JSON object `id -> html` per task | `img/tN/sol.js` |
-| Statements and bank answers (`TASKDATA[N][id-1] = {art, c, a}`) | `img/tN/data.js` |
+| Solutions: `window.SOLDATA[N] = {id: html}` (a JS file, not pure JSON) | `img/tN/sol.js` |
+| Statements and bank answers: `window.TASKDATA[N][id-1] = {art, c, a}` | `img/tN/data.js` |
 | Statement drawings | `img/tN/gfx/*.svg` (which file — see `src=` in the statement) |
 | Drawing library | `tools/annotate_figs.py` (read it first, it is short) |
 | Figure specs, one file per task number, each with a `FIGS` list | `tools/figs/tN.py` |
 | Built figures | `img/tN/sol/<id>.svg` |
+| Show one task: statement, answer, figure, solution | `tools/sol_show.mjs` |
 | Edit helper for `sol.js` | `tools/sol_edit.mjs` |
 | Checker | `tools/check_solutions.mjs` |
 
@@ -29,7 +30,20 @@ representative (first id of a group in `PROTOTYPES[N]`, `config.js`); similar ta
 
 ## Step 1. Decide whether a picture helps, and which kind
 
-Read the statement and the current solution first. Then pick one:
+Read the statement and the current solution first — do not parse the data files by hand:
+
+```bash
+node tools/sol_show.mjs 5          # prototypes of task 5: id, art, has a visual or not
+```
+
+```bash
+node tools/sol_show.mjs 5 p7       # prototype 7 (or a plain id): statement, bank answer, figure, solution
+```
+
+Кирилл names tasks by prototype number and a nickname («кофейные автоматы», «батарейки»). If the task you
+find does not match his description, do not guess — say in the report what the prototype really is.
+
+Then pick one:
 
 | Situation | Visual |
 |---|---|
@@ -45,8 +59,14 @@ Read the statement and the current solution first. Then pick one:
 | Credit problems (task 13) | Debt table, columns exactly «Долг / Долг после % / Платёж / Долг после платежа» |
 
 Do not draw when the solution is one chain of arithmetic or algebra (most of tasks 7 and 8, "favourable
-over total" in task 4, plain substitution in task 10): a picture there is decoration, and Кирилл does not
-want decoration. Say so in the report instead.
+over total" and "sum of two incompatible events" in task 4, plain substitution in task 10, vectors given
+only by coordinates in task 2): a picture there is decoration, and Кирилл does not want decoration. Say so
+in the report instead.
+
+The test for a borderline case: name the step of the solution the picture replaces or makes obvious. If
+you cannot, do not draw. If you can but the gain is small, draw it and flag it in the report as borderline
+so he can drop it with one word — he has kept such extras before (dice grid, bread scale) but wants the
+choice.
 
 Do not draw over a statement figure that contradicts the numbers of this task. The bank reuses one drawing
 for several prototypes, so a 16° angle may be drawn obtuse or the side labelled 3 may be the longest one.
@@ -58,9 +78,21 @@ a format that works on one type says nothing about the others.
 
 ## Step 2. Draw
 
-Write one function per figure in `tools/figs/tN.py` and add it to `FIGS`. Look at the existing functions in
-that file before writing a new one — most kinds already have a helper (`_tree`, `coin_tree`, `zones`,
-`_Plot`, `unit_circle`, `_mark`, `_angle`, `_right`, `_tick`).
+Write one function per figure in `tools/figs/tN.py` and add it to `FIGS`. Before writing a new kind, read
+the file that already draws it — helpers live in the spec files, not in the library, so copy the pattern
+into your file rather than importing across specs:
+
+| Kind | Where to look |
+|---|---|
+| Probability tree with products | `_tree` in `tools/figs/t5.py`; full coin tree — `coin_tree` in `t4.py` |
+| Zone axis | `zones` in `t4.py` |
+| Euler circles, outcome grid | `t5_44`, `t5_26` in `t5.py` |
+| Graph of a formula with level line and roots | `_Plot` in `t10.py` |
+| Unit circle | `unit_circle` in `t8.py` |
+| Labelled grid points, slope triangle | `_mark` in `t12.py`, `t9_9` in `t9.py` |
+| Angles, right-angle marks, equal-segment ticks | `_angle`, `_right`, `_tick` in `t1.py` |
+| Shaded solids, labelled edges, round bodies | `t3.py` |
+| Vectors on a grid | `t2.py` |
 
 - **Overlay on a graph:** `Fig(src, grid=True)`. All coordinates are in grid cells; the origin and the cell
   size are read from the SVG, so `(4, 2)` lands exactly on the node. A curve's own points come from
@@ -70,7 +102,12 @@ that file before writing a new one — most kinds already have a helper (`_tree`
   Round-body drawings in task 3 are raster images inside the SVG: there `dots()` is empty and positions
   have to be measured on the embedded bitmap.
 - **Diagram from scratch:** `Fig.blank(w, h)`. Structure in `INK` (black, like the statement drawings),
-  the part the solution is about in `ACCENT`.
+  the part the solution is about in `ACCENT`; a background grid, if needed, in `#aaaaaa` like the statement
+  grids. Aim for a canvas about 200–260 pt wide with 7–9 pt labels: on a phone the figure shrinks to a
+  ~300 px column, and smaller labels stop being readable.
+- SVG text quirks: leading and trailing spaces inside a label collapse, so build «7a + b» as one string;
+  `label()` has no italic and no over-arrow — for a vector name draw the arrow with `raw()` or write
+  «вектор a»; `<` and `>` in a label must be written `&lt;` and `&gt;`.
 
 Rules that came from Кирилл's corrections:
 
@@ -97,7 +134,8 @@ python3 tools/annotate_figs.py t9
 qlmanage -t -s 800 -o <scratchpad dir> img/t9/sol/28.svg
 ```
 
-Open the PNG with Read. Look at **every** figure after the final build and fix it if a label sits on a line,
+The file comes out as `<name>.svg.png` and is always square: a white band under a wide figure is the
+thumbnail, not a layout bug. Several SVGs can go in one call. Open the PNG with Read. Look at **every** figure after the final build and fix it if a label sits on a line,
 a letter or another label, runs off the edge, or a mark is not where it should be. Checks do not catch this.
 
 ## Step 3. Put it into the solution
@@ -113,7 +151,8 @@ Figures go right under the "idea" block; the helper replaces an existing figure,
 node tools/sol_edit.mjs <edits.json>
 ```
 
-Keep the edits file in the scratchpad, not in the repo. Marks must match the steps: same points, same
+Keep the edits file in the scratchpad, not in the repo. It is JSON, so every LaTeX backslash in `find` and
+`replace` is doubled (`\\dfrac`); `find` must match exactly once; several edits for one id can go in one file. Marks must match the steps: same points, same
 numbers, same letters. It is fine to add a short pointer to a step («на рисунке это закрашенный треугольник»);
 do not change the method, the numbers or the answer.
 
@@ -139,7 +178,8 @@ do not change the method, the numbers or the answer.
 1. Every number recomputed in Python (standard library only — numpy and sympy are not installed). For a
    debt table: each row satisfies debt × rate = after-interest, after-interest − payment = remainder,
    the last remainder is zero, and the final answer equals the bank answer in `data.js`.
-2. `python3 tools/annotate_figs.py tN` builds without errors.
+2. `python3 tools/annotate_figs.py tN` builds without errors. It rewrites every figure of that task, so
+   `git status` must show only your new files as changed — an old figure that changed is a regression.
 3. `node tools/check_solutions.mjs` — 0 errors (it checks that every figure file exists, has alt text, every
    formula parses, tags are allowed).
 4. `node --test tests/*.test.mjs` passes.
@@ -163,4 +203,5 @@ the first rollout the flagged figures were exactly where the real problems were.
 
 Short, in Russian, plain words: what is shown on which prototype (by prototype number and plain name —
 «№5, кофейные автоматы»), where you did not draw and why, how it was checked, what to look at before the
-merge. Say honestly which figures you looked at yourself and which were only checked by calculation.
+merge. Say honestly which figures you looked at yourself and which were only checked by calculation, which
+calls were borderline, and where his description of a task did not match what is in the bank.
