@@ -84,7 +84,9 @@
     V = V || window.ExamValidate;
     let bad = true;
     try { bad = !V || typeof V.htmlProblem !== 'function' || V.htmlProblem(s) !== ''; } catch (e) { bad = true; }
-    if (!bad) return s;
+    // A table wider than the phone must scroll inside its own wrapper (as the trainer's tasks do); otherwise iOS
+    // shrinks the whole page to fit it. Wrapped after validation, so the validator still sees the author's markup.
+    if (!bad) return s.replace(/<table\b[\s\S]*?<\/table>/gi, '<div class="table-wrapper">$&</div>');
     return '<div class="ex-plain">' + esc(s) + '</div><p class="ex-note">' + NOTE_BAD_HTML + '</p>';
   }
   // Formulas of an inserted container: the same KaTeX pass (and delimiters) as the generator uses.
