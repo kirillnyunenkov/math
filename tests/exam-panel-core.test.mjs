@@ -62,3 +62,12 @@ test('fmtSec coerces and sanitizes input', () => {
   assert.equal(P.fmtSec(undefined), '0:00');
   assert.equal(P.fmtSec(65.9), '1:05');
 });
+
+test('activitySummary does not touch Object.prototype for a hostile task key', () => {
+  const s = P.activitySummary([[5, 'a', '__proto__', 'x'], [6, 'a', '__proto__', 'y'], [7, 'a', 'constructor', 'z']], 0);
+  try {
+    assert.equal(({}).changes, undefined);
+    assert.equal(({}).firstSec, undefined);
+    assert.equal(s.tasks.constructor.changes, 1);
+  } finally { delete Object.prototype.changes; delete Object.prototype.firstSec; delete Object.prototype.lastSec; }
+});

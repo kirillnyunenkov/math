@@ -34,7 +34,11 @@
         const n = e[2];
         if (n !== null && n !== undefined) {
           const nstr = String(n);
-          const k = tasks[nstr] || (tasks[nstr] = { changes: 0, firstSec: t - start, lastSec: t - start });
+          // own properties only: a task key such as "__proto__" or "constructor" must stay plain data
+          if (!Object.prototype.hasOwnProperty.call(tasks, nstr)) {
+            Object.defineProperty(tasks, nstr, { value: { changes: 0, firstSec: t - start, lastSec: t - start }, enumerable: true, writable: true, configurable: true });
+          }
+          const k = tasks[nstr];
           k.changes++; k.lastSec = t - start;
         }
       }

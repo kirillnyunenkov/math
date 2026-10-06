@@ -440,7 +440,8 @@ const nameOf=uid=>{const u=(data.userOf||{})[uid];return u?(u.name||u.login):'�
 const phaseOf=a=>ExamCore.phase({start:a.start,duration:a.duration,opened:a.opened,finished:a.finished,photos_done:a.photos_done,checked:a.checked},nowS());
 const asgOfUser=uid=>(data.asg||[]).filter(a=>a.user===uid);
 const photosOfAsg=id=>(data.photos||[]).filter(p=>p.assignment===id);
-const fmtTs=ts=>fmtDate(ts*1000);
+// timestamps in seconds; anything that is not a sane number is shown as a dash
+const fmtTs=ts=>{const v=Number(ts);return Number.isFinite(v)&&v>0&&Number.isFinite(new Date(v*1000).getTime())?fmtDate(v*1000):'—';};
 const chipFor=ph=>`<span class="chip ex-${ph}">${ExamPanelCore.PHASE_TEXT[ph]}</span>`;
 
 // ---- список учеников ----
@@ -774,7 +775,7 @@ function moveSheet(id,o){
   o=o||{};
   rememberOpener();
   sheet(`<form id="as-form" data-kind="move" data-id="${esc(id)}"><h3>Перенести пробник</h3><p><b>${esc(nameOf(a.user))}</b> · ${esc(examOf(a.exam)?examLabel(examOf(a.exam)):'—')}. Сейчас: ${esc(fmtTs(a.start))}. Если ученик подключён к боту, он получит сообщение в Telegram.</p>
-    ${whenFields(o.when||ExamPanelCore.tsToMoscowInput(a.start),o.min||Math.round(a.duration/60),'Новое начало')}
+    ${whenFields(o.when||ExamPanelCore.tsToMoscowInput(a.start),o.min||Math.round((Number(a.duration)||900)/60),'Новое начало')}
     <div class="acts"><button type="button" class="btn quiet" data-act="close">Отмена</button><button type="submit" class="btn">Перенести</button></div></form>`);
   document.getElementById('as-start').focus();
 }
@@ -843,6 +844,13 @@ function openPhoto(e,a){
   const w=window.open('','_blank');if(w)w.opener=null;
   freshToken(0).then(tok=>{const u=phUrl(a.dataset.ph,tok);setPhotoLinks(tok);if(w)w.location.href=u;else window.open(u,'_blank','noopener');});
 }
+/* Everything read from an exam or a submitted work is untrusted data: the server does not check
+   the content of `tasks`, `key`, `answers`, `part2` or `log`. Numbers are coerced, strings are
+   escaped on output, objects are looked up by own property only. */
+const isObj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+const own=(o,k)=>isObj(o)&&Object.prototype.hasOwnProperty.call(o,k)?o[k]:undefined;
+const numOr=(x,d)=>{const v=Number(x);return Number.isFinite(v)?v:d;};
+const txt=x=>typeof x==='string'?x:typeof x==='number'&&Number.isFinite(x)?String(x):'';
 /* Exam HTML is the teacher's own, but it is checked with the same allowlist as the upload
    (exam-validate.js) before it is put into this signed-in page; anything else is shown as text. */
 function examHtml(html,what,cls){
@@ -872,21 +880,26 @@ async function renderCheck(id){
   catch(e){if(e.message!=='401'&&alive())gone('Нет связи с сервером. Обнови страницу.');return;}
   if(!alive())return;
   if(re.status!==200){gone(`Не удалось открыть пробник (сервер ответил ${esc(re.status)}).`);return;}
-  const e=re.json,tasks=Array.isArray(e.tasks)?e.tasks:[],key=e.key||{},ph=phaseOf(a);
+  const e=isObj(re.json)?re.json:{},ph=phaseOf(a);
+  // task number is kept as the server sees it (String(n)); max is a whole number 1..100, as on the server (max||1)
+  const tasks=(Array.isArray(e.tasks)?e.tasks:[]).filter(isObj).map(t=>({n:String(t.n),kind:t.kind,
+    max:Math.min(100,Math.max(1,Math.trunc(numOr(t.max,1))||1)),cond:txt(t.cond)}));
+  const key=isObj(e.key)?e.key:{},keyOf=n=>{const k=own(key,String(n));return isObj(k)?k:{};};
+  const dur=numOr(a.duration,0),start=numOr(a.start,0);
   const photos=phs||photosOfAsg(id);   // a failed request falls back to the list loaded earlier, with a notice
   const tok=photos.length?await freshToken(60000):'';
   if(!alive())return;
-  const P=ExamPanelCore,act=P.activitySummary(a.log,a.start),part2=a.part2||{},answers=a.answers||{},ok=a.ok||{};
+  const P=ExamPanelCore,act=P.activitySummary(a.log,start),part2=isObj(a.part2)?a.part2:{},answers=isObj(a.answers)?a.answers:{},ok=isObj(a.ok)?a.ok:{};
   const short=tasks.filter(t=>t.kind==='short'),long=tasks.filter(t=>t.kind==='long');
   const botPh=photos.filter(p=>!p.n);   // sent to the bot: no task, the teacher sorts them out
   const ready=!!a.settled,T=ts=>esc(fmtTs(ts));
-  const title=examOf(e.id)?examLabel(examOf(e.id)):e.title;
+  const title=examOf(e.id)?examLabel(examOf(e.id)):txt(e.title);
   // the server caps each entry, not the sum: a total above the work's length is cut and flagged
-  const rawAway=act.away.totalSec,tooMuch=rawAway>a.duration;
-  const away=act.away.count?`записано ${uhodWord(act.away.count)} со страницы, всего ${P.fmtSec(Math.min(rawAway,a.duration))}${tooMuch?' (данные страницы ученика, возможна ошибка)':''}; дольше всего ${P.fmtSec(act.away.longest.sec)} (на задании ${esc(act.away.longest.n)||'—'})`
-    :a.opened?'со страницы не уходил':'работа не открывалась';
+  const rawAway=act.away.totalSec,tooMuch=rawAway>dur;
+  const away=act.away.count?`записано ${uhodWord(act.away.count)} со страницы, всего ${P.fmtSec(Math.min(rawAway,dur))}${tooMuch?' (данные страницы ученика, возможна ошибка)':''}; дольше всего ${P.fmtSec(act.away.longest.sec)} (на задании ${esc(act.away.longest.n)||'—'})`
+    :numOr(a.opened,0)>0?'со страницы не уходил':'работа не открывалась';
   // journal -> per-task answer entries, and the away episodes, in the order they were written
-  const byTask={},aways=[];
+  const byTask=Object.create(null),aways=[];   // no prototype: a task key like "__proto__" is just a key
   (Array.isArray(a.log)?a.log:[]).forEach(x=>{
     if(!Array.isArray(x)||x.length<4||typeof x[0]!=='number')return;
     if(x[1]==='a'&&x[2]!=null)(byTask[String(x[2])]||(byTask[String(x[2])]=[])).push(x);
@@ -895,29 +908,28 @@ async function renderCheck(id){
   const notReady=ready?'':ph==='submitted'
     ?'Работа сдана, но итоги ещё подводятся. Баллы можно будет поставить через минуту: обнови страницу.'
     :`Работа ещё не сдана (${esc(P.PHASE_TEXT[ph]||ph)}). Баллы можно будет поставить после сдачи.`;
-  const keyOf=n=>key[String(n)]||{};
   app.innerHTML=`<p><a href="#/exams">← Пробники</a> · <a href="#/s/${esc(a.user)}">${esc(nameOf(a.user))}</a></p>
     <div class="toolbar"><h2 class="grow">${esc(title)} · ${esc(nameOf(a.user))} ${chipFor(ph)}</h2></div>
-    <p class="lead">Начало: ${T(a.start)} (по Москве) · на работу ${Math.round(a.duration/60)} мин · ${a.opened?'открыл: '+T(a.opened):'не открывал'}${a.finished?' · завершил досрочно: '+T(a.finished):''}${a.photos_done?' · закончил с фото: '+T(a.photos_done):''}</p>
+    <p class="lead">Начало: ${T(start)} (по Москве) · на работу ${Math.round(dur/60)} мин · ${numOr(a.opened,0)>0?'открыл: '+T(a.opened):'не открывал'}${numOr(a.finished,0)>0?' · завершил досрочно: '+T(a.finished):''}${numOr(a.photos_done,0)>0?' · закончил с фото: '+T(a.photos_done):''}</p>
     ${phs?'':'<p class="muted">Не удалось обновить список фото.</p>'}
     ${ready?'':`<div class="panel"><p class="muted" role="status">${notReady}</p></div>`}
     <div class="panel"><h3>Активность</h3>
       <p>${away}.</p>
       <p class="muted">Это только факты из журнала сайта, не доказательство: второй телефон или книгу сайт не видит.</p>
       <details class="ck-tl"><summary>Когда вводились ответы</summary>${tlTasks.length?tlTasks.map(n=>`<h4>Задание ${esc(n)}</h4><div class="list">${byTask[n].map(x=>
-        `<div class="it tl"><span class="muted">${P.fmtSec(x[0]-a.start)}</span><span class="ck-pre">${String(x[3])===''?'<span class="muted">стёр ответ</span>':esc(x[3])}</span></div>`).join('')}</div>`).join(''):'<p class="muted">Ответов по журналу нет.</p>'}</details>
+        `<div class="it tl"><span class="muted">${P.fmtSec(x[0]-start)}</span><span class="ck-pre">${String(x[3])===''?'<span class="muted">стёр ответ</span>':esc(x[3])}</span></div>`).join('')}</div>`).join(''):'<p class="muted">Ответов по журналу нет.</p>'}</details>
       ${aways.length?`<details class="ck-tl"><summary>Уходы со страницы</summary><div class="list">${aways.map(x=>
-        `<div class="it"><span>Задание ${esc(x[2])||'—'}</span><span class="muted">не было на странице ${P.fmtSec(x[3])} · записано на ${P.fmtSec(x[0]-a.start)} от начала</span></div>`).join('')}</div></details>`:''}</div>
-    <div class="panel"><h3>Первая часть: ${ready?esc(a.p1||0):'—'} из ${short.reduce((s,t)=>s+(t.max||1),0)}</h3>
+        `<div class="it"><span>Задание ${esc(x[2])||'—'}</span><span class="muted">не было на странице ${P.fmtSec(x[3])} · записано на ${P.fmtSec(x[0]-start)} от начала</span></div>`).join('')}</div></details>`:''}</div>
+    <div class="panel"><h3>Первая часть: ${ready?esc(numOr(a.p1,0)):'—'} из ${short.reduce((s,t)=>s+t.max,0)}</h3>
       ${short.length?`<div class="table-wrap ck-p1"><table><thead><tr><th>Задание</th><th>Ответ ученика</th><th>Верный ответ</th><th></th></tr></thead><tbody>
-      ${short.map(t=>{const g=answers[t.n];return `<tr><td class="c-n">${esc(t.n)}</td><td class="c-g ck-pre">${g?esc(g):'<span class="muted">—</span>'}</td><td class="c-k ck-pre">${esc(keyOf(t.n).a)}</td>
-        <td class="c-v">${ready?(ok[t.n]?'<span class="chip ex-checked">верно</span>':'<span class="chip ex-missed">неверно</span>'):''}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">В этом пробнике нет заданий с кратким ответом.</p>'}</div>
-    ${long.map(t=>{const g=part2[t.n]||{},ps=photos.filter(p=>String(p.n)===String(t.n)),max=t.max||1,cur=Math.min(max,Math.max(0,Math.trunc(+g.pts)||0));
-      return `<div class="panel" data-ck="${esc(t.n)}"><h3>Задание ${esc(t.n)} <span class="muted">· максимум ${esc(max)}</span></h3>
-        <details><summary>Условие и верный ответ</summary>${examHtml(t.cond,'условии','ck-cond')}<p><b>Ответ:</b></p>${examHtml(keyOf(t.n).a,'ответе')}</details>
+      ${short.map(t=>{const g=txt(own(answers,t.n));return `<tr><td class="c-n">${esc(t.n)}</td><td class="c-g ck-pre">${g?esc(g):'<span class="muted">—</span>'}</td><td class="c-k ck-pre">${esc(txt(keyOf(t.n).a))}</td>
+        <td class="c-v">${ready?(own(ok,t.n)?'<span class="chip ex-checked">верно</span>':'<span class="chip ex-missed">неверно</span>'):''}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">В этом пробнике нет заданий с кратким ответом.</p>'}</div>
+    ${long.map((t,i)=>{const g0=own(part2,t.n),g=isObj(g0)?g0:{},ps=photos.filter(p=>String(p.n)===t.n),max=t.max,cur=Math.min(max,Math.max(0,Math.trunc(numOr(g.pts,0))));
+      return `<div class="panel" data-ck="${i}"><h3>Задание ${esc(t.n)} <span class="muted">· максимум ${esc(max)}</span></h3>
+        <details><summary>Условие и верный ответ</summary>${examHtml(t.cond,'условии','ck-cond')}<p><b>Ответ:</b></p>${examHtml(txt(keyOf(t.n).a),'ответе')}</details>
         <div class="ex-ph">${ps.length?ps.map(p=>phThumb(p,tok,`Фото решения, задание ${t.n}`)).join(''):`<p class="muted">${botPh.length?'К этому заданию фото на сайте нет. Смотри блок «Фото, присланные боту» ниже.':'Фото нет.'}</p>`}</div>
-        <div class="ck-row"><label class="fld">Баллы<select data-ck-pts="${esc(t.n)}" ${ready?'':'disabled'}>${pointsOptions(max,cur)}</select></label>
-          <label class="fld grow">Комментарий ученику<textarea class="field" data-ck-note="${esc(t.n)}" rows="3" maxlength="2000" ${ready?'':'disabled'}>${esc(g.comment||'')}</textarea></label></div></div>`;}).join('')}
+        <div class="ck-row"><label class="fld">Баллы<select data-ck-pts="${i}" ${ready?'':'disabled'}>${pointsOptions(max,cur)}</select></label>
+          <label class="fld grow">Комментарий ученику<textarea class="field" data-ck-note="${i}" rows="3" maxlength="2000" ${ready?'':'disabled'}>${esc(txt(g.comment))}</textarea></label></div></div>`;}).join('')}
     ${botPh.length?`<div class="panel"><h3>Фото, присланные боту <span class="muted">· ${botPh.length}</span></h3>
       <p class="muted">Ученик отправил их боту без указания задания. Они в порядке получения.</p>
       <div class="ex-ph">${botPh.map(p=>phThumb(p,tok,'Фото, присланное боту')).join('')}</div></div>`:''}
@@ -940,8 +952,9 @@ async function checkSend(id,btn){
   const msg=document.getElementById('ck-msg');
   if(sending||!btn||btn.disabled||!msg||!ck||ck.id!==id)return;
   const say=(text,bad)=>{ckNote={id,text,bad:!!bad};msg.textContent=text;msg.className='ck-msg grow '+(bad?'bad':'good');};
-  const part2={};
-  ck.long.forEach(t=>{const s=document.querySelector(`[data-ck-pts="${t.n}"]`),c=document.querySelector(`[data-ck-note="${t.n}"]`);
+  /* controls are found by position, never by building a selector from the task number (which is data) */
+  const part2=Object.create(null);
+  ck.long.forEach((t,i)=>{const s=document.querySelector(`[data-ck-pts="${i}"]`),c=document.querySelector(`[data-ck-note="${i}"]`);
     if(s&&c)part2[t.n]={pts:Number(s.value),comment:c.value};});
   const first=!ck.checked;
   let r;
