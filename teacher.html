@@ -182,7 +182,7 @@
   .list .it:last-child{border-bottom:none;}
   .list .it .vres{flex:1;text-align:right;}
   .list .it .btn{min-height:32px;padding:0 var(--s3);}
-  .list .it{align-items:center;flex-wrap:wrap;}
+  .list.cat .it{align-items:center;flex-wrap:wrap;}
   .chip.ex-open,.chip.ex-photos{background:var(--accent-soft);color:var(--accent);}
   .chip.ex-submitted{background:var(--warn-soft);color:var(--warn-text);}
   .chip.ex-checked{background:var(--ok-soft);color:var(--ok-text);}
@@ -217,6 +217,19 @@
     .panel{padding:var(--s4);}
     .hide-m{display:none;}
     .tasks .t{grid-template-columns:28px minmax(0,1fr) 110px;}
+    /* assignment tables turn into cards: name + status, exam, time + score, actions underneath */
+    .asg thead{display:none;}
+    .asg table,.asg tbody{display:block;}
+    .asg tr.row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--s3);
+      grid-template-areas:"name st" "exam exam" "time score" "acts acts";padding:var(--s3) 0;border-bottom:1px solid var(--line);}
+    .asg tr.row:last-child{border-bottom:0;}
+    .asg td{border:0;padding:2px 0;}
+    .asg td.c-name{grid-area:name;} .asg td.c-st{grid-area:st;text-align:right;} .asg td.c-exam{grid-area:exam;}
+    .asg td.c-time{grid-area:time;color:var(--ink-3);font-size:var(--fs-sm);}
+    .asg td.num{grid-area:score;}
+    .asg td.num::before{content:"1 часть: ";color:var(--ink-3);font-weight:400;}
+    .asg .acts-cell{grid-area:acts;text-align:left;white-space:normal;padding-top:var(--s2);}
+    .asg .acts-cell:empty{display:none;}
   }
 </style>
 <script>
@@ -314,12 +327,14 @@ async function load(){
   /* Exams: a server without the exam collections must not break the panel
      (any error except a 401 gives an empty list). `tasks`/`key` of exams and
      `log` of assignments are never requested here — hence the field lists. */
-  const soft=p=>p.catch(e=>{if(e.message==='401')throw e;return [];});
+  const bad=[];   // statuses of failures other than "collection not found"
+  const soft=p=>p.catch(e=>{if(e.message==='401')throw e;
+    const m=/ (\d+)$/.exec(e.message);if(!m||m[1]!=='404')bad.push(m?m[1]:'net');return [];});
   const [exams,asg,photos]=await Promise.all([
     soft(all('exams',null,'id,title,full,created')),
     soft(all('exam_assignments',null,'id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,via_tg,answers,ok,part2,created')),
     soft(all('exam_photos',null,'id,assignment,user,n,file'))]);
-  data.exams=exams;data.asg=asg;data.photos=photos;
+  data.exams=exams;data.asg=asg;data.photos=photos;data.examErr=bad[0]||null;
 }
 /* A lead's journal is fetched only when their card is opened. */
 async function loadOne(id){
@@ -348,12 +363,12 @@ function ago(ts){
 const fmtDate=ts=>new Date(ts).toLocaleString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 const fmtDay=ts=>new Date(ts).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short'});
 
-// the third tab's badge counts works waiting for a check, else the catalog size
+// the third tab's badge counts works waiting for a check (nothing when there are none)
 const tabs=cur=>{const wait=(data.asg||[]).filter(a=>phaseOf(a)==='submitted').length;
   return `<div class="tabs">
   <a href="#/" class="${cur==='s'?'on':''}">Ученики <span>${data.students.length}</span></a>
   <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a>
-  <a href="#/exams" class="${cur==='x'?'on':''}">Пробники <span>${wait||(data.exams||[]).length}</span></a></div>`;};
+  <a href="#/exams" class="${cur==='x'?'on':''}">Пробники${wait?` <span>${wait}</span>`:''}</a></div>`;};
 /* Telegram usernames are [A-Za-z0-9_]; anything else is shown as plain text. */
 const tgLink=un=>/^[A-Za-z0-9_]{1,64}$/.test(un||'')?`<a href="https://t.me/${un}" target="_blank" rel="noopener">@${un}</a>`:'<span class="muted">—</span>';
 const pbTime=s=>s?Date.parse(String(s).replace(' ','T')):null;
@@ -563,36 +578,44 @@ async function setActive(uid,on){
 }
 
 // ---- пробники: списки и каталог ----
-function asgRow(a,acts){
-  const e=examOf(a.exam),ph=phaseOf(a),ps=photosOfAsg(a.id).length;
+/* kind: "check" and "done" show the score and the photos, "live" and "missed" do not */
+function asgRow(a,acts,kind){
+  const e=examOf(a.exam),ph=phaseOf(a),ps=photosOfAsg(a.id).length,sc=kind==='check'||kind==='done';
   return `<tr class="row" data-act="open-check" data-id="${esc(a.id)}">
-    <td><span class="name">${esc(nameOf(a.user))}</span></td>
-    <td>${e?esc(examLabel(e)):'—'}</td><td>${esc(fmtTs(a.start))}</td><td>${chipFor(ph)}</td>
-    <td class="num">${a.settled?esc(a.p1):'—'}</td>
-    <td class="hide-m">${ps?ps+' фото':'—'}</td>
-    <td class="acts-cell">${acts||''}</td></tr>`;
+    <td class="c-name"><span class="name">${esc(nameOf(a.user))}</span></td>
+    <td class="c-exam">${e?esc(examLabel(e)):'—'}</td><td class="c-time">${esc(fmtTs(a.start))}</td><td class="c-st">${chipFor(ph)}</td>
+    ${sc?`<td class="num">${a.settled?esc(a.p1):'—'}</td><td class="hide-m">${ps?ps+' фото':'—'}</td>`:''}
+    ${kind==='live'||kind==='missed'?`<td class="acts-cell">${acts||''}</td>`:''}</tr>`;
 }
+// the server moves/cancels only an untouched assignment: not yet started or already missed
+const asgActs=a=>{const ph=phaseOf(a);return ph==='scheduled'||ph==='missed'?`<button class="btn quiet" data-act="move" data-id="${esc(a.id)}">Перенести</button> <button class="btn danger" data-act="cancel" data-id="${esc(a.id)}">Отменить</button>`:'';};
+const timesWord=n=>{const m=n%10,c=n%100;return n+(m>=2&&m<=4&&!(c>=12&&c<=14)?' раза':' раз');};
 function renderExams(){
-  const A=data.asg||[],E=data.exams||[],by=ph=>A.filter(a=>phaseOf(a)===ph).sort((x,y)=>y.start-x.start);
-  const table=(rows,withActs)=>rows.length?`<div class="table-wrap"><table>
-    <thead><tr><th>Ученик</th><th>Пробник</th><th>Начало</th><th>Статус</th><th class="num">1 часть</th><th class="hide-m">Вторая часть</th><th></th></tr></thead>
-    <tbody>${rows.map(a=>asgRow(a,withActs?`<button class="btn quiet" data-act="move" data-id="${esc(a.id)}">Перенести</button> <button class="btn danger" data-act="cancel" data-id="${esc(a.id)}">Отменить</button>`:'')).join('')}</tbody></table></div>`:'';
-  const toCheck=by('submitted'),live=[...by('open'),...by('photos'),...by('scheduled')],missed=by('missed'),done=by('checked').slice(0,20);
+  const A=data.asg||[],E=data.exams||[],by=ph=>A.filter(a=>phaseOf(a)===ph);
+  const newest=(x,y)=>y.start-x.start,oldest=(x,y)=>x.start-y.start;
+  const table=(rows,kind)=>rows.length?`<div class="table-wrap asg"><table>
+    <thead><tr><th>Ученик</th><th>Пробник</th><th>Начало</th><th>Статус</th>${kind==='check'||kind==='done'?'<th class="num">1 часть</th><th class="hide-m">Вторая часть</th>':'<th></th>'}</tr></thead>
+    <tbody>${rows.map(a=>asgRow(a,kind==='live'||kind==='missed'?asgActs(a):'',kind)).join('')}</tbody></table></div>`:'';
+  const toCheck=by('submitted').sort(newest),missed=by('missed').sort(newest),done=by('checked').sort(newest).slice(0,20);
+  // running and photo-collecting first, then scheduled with the nearest start on top
+  const live=[...by('open').sort(oldest),...by('photos').sort(oldest),...by('scheduled').sort(oldest)];
   const sec=(title,html,empty)=>`<div class="panel"><h3>${title}</h3>${html||`<p class="muted">${empty}</p>`}</div>`;
   const times=id=>A.filter(a=>a.exam===id).length;
+  const warn=data.examErr?`<p class="muted">Не удалось загрузить часть данных пробников${/^\d+$/.test(data.examErr)?` (код ${esc(data.examErr)})`:''}. Списки могут быть неполными.</p>`:'';
   app.innerHTML=`${tabs('x')}
-    <div class="toolbar"><h2 class="grow">Пробники</h2><button class="btn" data-act="assign">Назначить пробник</button></div>
+    <div class="toolbar"><h2 class="grow">Пробники</h2><button class="btn quiet" data-act="reload">Обновить</button><button class="btn" data-act="assign">Назначить пробник</button></div>
     <p class="lead">Свои пробники лежат в закрытом каталоге. Ученик видит пробник только после того, как ты назначил его на время: выбери ученика, пробник из каталога, дату и время.</p>
-    ${sec('Ждут проверки',table(toCheck),'Работ на проверку нет.')}
-    ${sec('Назначены и идут',table(live,true),'Ничего не назначено.')}
-    ${missed.length?sec('Пропущены',table(missed,true),''):''}
+    ${warn}
+    ${sec('Ждут проверки',table(toCheck,'check'),'Работ на проверку нет.')}
+    ${sec('Назначены и идут',table(live,'live'),'Ничего не назначено.')}
+    ${missed.length?sec('Пропущены',table(missed,'missed'),''):''}
     <div class="panel"><h3>Каталог</h3>
-      ${E.length?`<div class="list">${E.map(e=>`<div class="it"><span><b>№${examNo(e.id)} · ${esc(e.title)}</b>${e.full?' <span class="chip">полный вариант</span>':''} <span class="muted">· загружен ${fmtDay(pbTime(e.created))}${times(e.id)?' · назначен '+times(e.id)+' раз':''}</span></span>
+      ${E.length?`<div class="list cat">${E.map(e=>`<div class="it"><span><b>№${examNo(e.id)} · ${esc(e.title)}</b>${e.full?' <span class="chip">полный вариант</span>':''} <span class="muted">· загружен ${fmtDay(pbTime(e.created))}${times(e.id)?' · назначен '+timesWord(times(e.id)):''}</span></span>
         <span><button class="btn" data-act="assign" data-exam="${esc(e.id)}">Назначить</button></span></div>`).join('')}</div>`
         :'<p class="muted">Каталог пуст. Пробники готовятся и загружаются через Claude Code (навык assigned-exam).</p>'}
       <p class="muted">Новый пробник: пришли исходник в чат Claude Code — он соберёт файл, сверит ответы, покажет предпросмотр и загрузит сюда.</p>
     </div>
-    ${done.length?sec('Проверены (последние 20)',table(done),''):''}`;
+    ${done.length?sec('Проверены (последние 20)',table(done,'done'),''):''}`;
 }
 
 // ---- маршруты ----
