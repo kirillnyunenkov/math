@@ -6,6 +6,9 @@
   'use strict';
 
   const MAX_TASKS_JSON = 4800000, MAX_KEY_JSON = 1900000;
+  // Maxima of part 2 in the full exam: the same table as PART2_CRIT in index.html (14:2 15:3 16:2 17:2 18:3 19:4 20:4 = 20, plus 13 = 33).
+  const FULL_LONG_MAX = { 14: 2, 15: 3, 16: 2, 17: 2, 18: 3, 19: 4, 20: 4 };
+  const pointsWord = function (k) { return k === 1 ? 'балл' : k < 5 ? 'балла' : 'баллов'; };
   // The server limits are in bytes of UTF-8, not characters (Cyrillic is 2 bytes a letter).
   const jsonBytes = (v) => new TextEncoder().encode(JSON.stringify(v)).length;
 
@@ -307,6 +310,19 @@
         }
       }
     });
+    // A full exam has the shape of the real one (the generator's table in index.html: PART2_CRIT): tasks 1-13 are part 1
+    // (1 point each), tasks 14-20 are part 2 with their own maxima, 33 primary points in all.
+    if (x.full === true) {
+      for (let n = 1; n <= 20; n++) if (!seen[n]) errors.push('Полный пробник: нет задания ' + n + ' (в полном варианте ровно 20 заданий, номера 1–20).');
+      x.tasks.forEach(function (t) {
+        if (!t || typeof t !== 'object' || !isInt(t.n, 1, 40)) return;
+        const where = 'Задание ' + t.n + ': ';
+        if (t.n > 20) { errors.push(where + 'в полном пробнике заданий больше 20 не бывает (номера 1–20).'); return; }
+        const long = t.n >= 14;
+        if (t.kind !== (long ? 'long' : 'short')) errors.push(where + (long ? 'в полном пробнике это задание второй части (kind "long").' : 'в полном пробнике это задание первой части (kind "short").'));
+        else if (long && t.max !== FULL_LONG_MAX[t.n]) errors.push(where + 'в полном пробнике оно стоит ' + FULL_LONG_MAX[t.n] + ' ' + pointsWord(FULL_LONG_MAX[t.n]) + ' (по таблице генератора).');
+      });
+    }
     Object.keys(x.key).forEach(function (n) { if (!seen[n]) warnings.push('В key есть ответ для задания ' + n + ', а самого задания нет.'); });
 
     if (jsonBytes(x.tasks) > MAX_TASKS_JSON) errors.push('Размер условий заданий больше допустимого (картинки лучше ужать).');

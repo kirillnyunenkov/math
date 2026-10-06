@@ -391,3 +391,47 @@ test('htmlProblem is exported for the teacher panel (the same gate as the upload
   assert.notEqual(V.htmlProblem('<img src=x onerror=1>'), '');
   assert.notEqual(V.htmlProblem('<!-- <a title="--><img src=x onerror=1> "> -->'), '');
 });
+
+// A full exam has the shape of the real one: tasks 1-13 short (1 point each), tasks 14-20 long with the maxima of the
+// generator's table (14:2 15:3 16:2 17:2 18:3 19:4 20:4), 33 primary points in all.
+const LONG_MAX = { 14: 2, 15: 3, 16: 2, 17: 2, 18: 3, 19: 4, 20: 4 };
+function fullExam() {
+  const tasks = [], key = {};
+  for (let n = 1; n <= 20; n++) {
+    const long = n >= 14;
+    tasks.push({ n, kind: long ? 'long' : 'short', max: long ? LONG_MAX[n] : 1, cond: '<p>Задание ' + n + ': $' + n + '+1$.</p>' });
+    key[String(n)] = long ? { a: '<p>$' + (n + 1) + '$</p>' } : { a: String(n + 1), sol: '<p>$' + n + '+1=' + (n + 1) + '$.</p>' };
+  }
+  return { title: 'Полный', full: true, tasks, key };
+}
+
+test('a full exam with the real shape is valid: 13 short + 7 long, 33 points', () => {
+  const r = V.validateExam(fullExam());
+  assert.deepEqual(r.errors, []);
+  assert.deepEqual(r.stats, { short: 13, long: 7 });
+  assert.equal(fullExam().tasks.reduce((s, t) => s + t.max, 0), 33);
+});
+
+test('a full exam must have exactly the tasks 1-20 with the right kinds and maxima', () => {
+  let x = fullExam(); x.tasks.pop(); delete x.key['20'];
+  assert.ok(errs(x).some((e) => /полный/i.test(e) && /20/.test(e) && /нет задания 20/i.test(e)), 'task 20 missing');
+  x = fullExam(); x.tasks.splice(5, 1); delete x.key['6'];
+  assert.ok(errs(x).some((e) => /нет задания 6/i.test(e)), 'task 6 missing');
+  x = fullExam(); x.tasks.push({ n: 21, kind: 'short', max: 1, cond: '<p>$1$</p>' }); x.key['21'] = { a: '1', sol: '<p>$1$</p>' };
+  assert.ok(errs(x).some((e) => /задание 21/i.test(e) && /лишн|только 1.20|не бывает/i.test(e)), 'task 21 extra');
+  x = fullExam(); x.tasks[2].kind = 'long'; x.tasks[2].max = 2; x.key['3'] = { a: '<p>$4$</p>' };
+  assert.ok(errs(x).some((e) => /задание 3/i.test(e) && /первой части/i.test(e)), 'task 3 must be short');
+  x = fullExam(); x.tasks[14].kind = 'short'; x.tasks[14].max = 1; x.key['15'] = { a: '4', sol: '<p>$4$</p>' };
+  assert.ok(errs(x).some((e) => /задание 15/i.test(e) && /второй части/i.test(e)), 'task 15 must be long');
+  x = fullExam(); x.tasks[18].max = 3;
+  assert.ok(errs(x).some((e) => /задание 19/i.test(e) && /4 балл/i.test(e)), 'task 19 is worth 4');
+  x = fullExam(); x.tasks[13].max = 3;
+  assert.ok(errs(x).some((e) => /задание 14/i.test(e) && /2 балл/i.test(e)), 'task 14 is worth 2');
+});
+
+test('only a full exam is held to the real shape; any other exam stays free', () => {
+  const x = fullExam(); x.full = false; x.tasks.pop(); delete x.key['20'];
+  assert.deepEqual(errs(x), []);
+  const y = fullExam(); delete y.full; y.tasks[3].max = 1;
+  assert.deepEqual(errs(y), []);
+});
