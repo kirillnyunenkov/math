@@ -205,9 +205,19 @@ function own(e) {
   return { rec: rec, exam: $app.findRecordById("exams", rec.getString("exam")) };
 }
 
+// The moment the current phase ends, for the page's countdown: the start while
+// scheduled, the end of the window while open, the photo deadline in the photo phase.
+function untilOf(a, phase) {
+  const t = Core.times(a);
+  if (phase === "scheduled") return a.start;
+  if (phase === "open") return t.stop;
+  if (phase === "photos") return t.photoUntil;
+  return 0;
+}
 function meta(rec, exam, t) {
+  const a = shape(rec), phase = Core.phase(a, t);
   return { id: rec.id, title: exam.getString("title"), full: exam.getBool("full"), start: rec.getInt("start"),
-    duration: rec.getInt("duration"), phase: Core.phase(shape(rec), t), via_tg: rec.getBool("via_tg") };
+    duration: rec.getInt("duration"), phase: phase, via_tg: rec.getBool("via_tg"), until: untilOf(a, phase) };
 }
 
 function photosOf(rec) {
