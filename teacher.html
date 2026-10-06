@@ -218,6 +218,28 @@
     background:var(--input-bg);color:var(--ink);}
   .linkbox{word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:var(--fs-xs);
     background:var(--surface-2);border-radius:var(--r-sm);padding:var(--s3);color:var(--ink-2);}
+  /* check page */
+  .ex-ph{display:flex;flex-wrap:wrap;gap:var(--s3);margin:var(--s4) 0;}
+  .ex-ph a{display:block;max-width:100%;}
+  .ex-ph img{height:180px;min-width:80px;width:auto;max-width:100%;object-fit:contain;border:1px solid var(--line);
+    border-radius:var(--r-md);display:block;background:var(--surface-2);}
+  .ck-row{display:flex;gap:var(--s4);flex-wrap:wrap;align-items:flex-start;}
+  .ck-row .fld{margin:0;flex:0 0 140px;min-width:0;}
+  .ck-row .fld.grow{flex:1 1 280px;}
+  .ck-row textarea{resize:vertical;min-height:88px;}
+  .ck-row textarea:disabled,.ck-row select:disabled{opacity:.6;}
+  .ck-pre{white-space:pre-wrap;overflow-wrap:anywhere;}
+  .ck-cond img{max-width:100%;height:auto;filter:var(--img-filter);}
+  .tex{overflow-x:auto;overflow-y:hidden;}
+  .ck-note{margin:var(--s3) 0 0;}
+  .ck-msg{margin:0;font-size:var(--fs-sm);font-weight:500;}
+  .ck-msg.bad{color:var(--err-text);} .ck-msg.good{color:var(--ok-text);}
+  .ck-tl h4{margin:var(--s3) 0 var(--s1);font-size:var(--fs-sm);}
+  .ck-tl .it.tl{justify-content:flex-start;}
+  .ck-tl .it.tl .muted{flex:0 0 52px;font-variant-numeric:tabular-nums;}
+  .ck-tl .it.tl .ck-pre{flex:1;min-width:0;}
+  details summary{cursor:pointer;color:var(--accent);font-size:var(--fs-sm);}
+  details[open] summary{margin-bottom:var(--s2);}
   .ic-sun{display:none;} html[data-theme="dark"] .ic-moon{display:none;} html[data-theme="dark"] .ic-sun{display:block;}
   @media (max-width:760px){
     .head-inner{padding:var(--s2) var(--s4);}
@@ -239,6 +261,8 @@
     .asg .acts-cell{grid-area:acts;text-align:left;white-space:normal;padding-top:var(--s2);}
     .asg .acts-cell:empty{display:none;}
     .list.cat .it .btn{min-height:40px;}
+    .ck-row .fld{flex:1 1 100%;}
+    .ex-ph img{height:150px;}
   }
 </style>
 <script>
@@ -755,6 +779,149 @@ function examBlock(uid){
       :'<p class="muted">Своих пробников этому ученику ещё не назначали.</p>'}</div>`;
 }
 
+// ---- проверка работы ----
+/* The check page for one submitted work (#/check/<assignment id>, the target of the bot's
+   "Проверить" button). The assignment and the exam are read fresh from the server: the lists
+   in `data` leave out the journal (`log`) and the exam text and key on purpose. */
+const pointsOptions=(max,cur)=>Array.from({length:max+1},(_,k)=>`<option value="${k}"${k===cur?' selected':''}>${k}</option>`).join('');
+let ckGen=0;        // a newer draw of the page makes an older, slower one stop
+let ckShown=null;   // id of the check page that is on screen now (a redraw then does not blank it)
+let ckNote=null;    // {id,text,bad}: the status line, kept over the redraw after a save
+let ck=null;        // {id,long:[{n,max}],checked} of the page on screen, for the save button
+/* File tokens are short-lived (PocketBase: about two minutes). A token younger than maxAgeMs is reused. */
+let ckTok={v:'',t:0},ckTokP=null;
+function freshToken(maxAgeMs){
+  if(ckTok.v&&Date.now()-ckTok.t<maxAgeMs)return Promise.resolve(ckTok.v);
+  return ckTokP||(ckTokP=(async()=>{
+    try{const r=await api('/files/token',{method:'POST'});
+      if(r.status===200&&r.json&&r.json.token)ckTok={v:r.json.token,t:Date.now()};}
+    catch(e){}finally{ckTokP=null;}
+    return ckTok.v;})());
+}
+const phUrl=(path,tok)=>`${API}/files/exam_photos/${path.split('/').map(encodeURIComponent).join('/')}?token=${encodeURIComponent(tok)}`;
+const phPath=p=>`${p.id}/${p.file}`;
+function phThumb(p,tok,alt){
+  return `<a href="${esc(phUrl(phPath(p),tok))}" data-ph="${esc(phPath(p))}" target="_blank" rel="noopener"><img data-phi loading="lazy" src="${esc(phUrl(phPath(p),tok))}" alt="${esc(alt)}"></a>`;
+}
+function setPhotoLinks(tok){app.querySelectorAll('a[data-ph]').forEach(a=>{a.href=phUrl(a.dataset.ph,tok);});}
+// an image that fails to load gets one more try with a new token (the page may have been open for a while)
+app.addEventListener('error',async e=>{
+  const img=e.target;if(!img||img.tagName!=='IMG'||!('phi' in img.dataset)||img.dataset.retried)return;
+  img.dataset.retried='1';
+  const tok=await freshToken(10000);if(!tok||!img.isConnected)return;
+  setPhotoLinks(tok);
+  const a=img.closest('a[data-ph]');if(a)img.src=phUrl(a.dataset.ph,tok);
+},true);
+// a link opened long after the page was drawn would carry a dead token: get a new one first
+function openPhoto(e,a){
+  if(Date.now()-ckTok.t<60000)return;
+  e.preventDefault();
+  const w=window.open('','_blank');if(w)w.opener=null;
+  freshToken(0).then(tok=>{const u=phUrl(a.dataset.ph,tok);setPhotoLinks(tok);if(w)w.location.href=u;else window.open(u,'_blank','noopener');});
+}
+const mskTime=ms=>new Date(ms).toLocaleTimeString('ru-RU',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit'});
+function ckNoteHtml(id){return ckNote&&ckNote.id===id?esc(ckNote.text):'';}
+
+async function renderCheck(id){
+  const gen=++ckGen,alive=()=>gen===ckGen&&location.hash==='#/check/'+id;
+  if(ckShown!==id)app.innerHTML='<p class="center muted">Загружаю работу…</p>';
+  const gone=html=>{ckShown=null;ck=null;keepY=null;app.innerHTML=`<div class="center"><p class="muted">${html}</p><p><a href="#/exams">К списку пробников</a></p></div>`;};
+  let ra;
+  try{ra=await api('/collections/exam_assignments/records/'+id);}
+  catch(e){if(e.message!=='401'&&alive())gone('Нет связи с сервером. Обнови страницу.');return;}
+  if(!alive())return;
+  if(ra.status!==200){gone(ra.status===404?'Такой работы нет. Возможно, пробник отменили, ссылка неверная или вход больше не действует.':`Не удалось открыть работу (сервер ответил ${esc(ra.status)}).`);return;}
+  const a=ra.json;
+  let re,phs;
+  try{[re,phs]=await Promise.all([api('/collections/exams/records/'+a.exam),
+    all('exam_photos',`assignment="${id}"`,'id,assignment,user,n,file').catch(()=>null)]);}
+  catch(e){if(e.message!=='401'&&alive())gone('Нет связи с сервером. Обнови страницу.');return;}
+  if(!alive())return;
+  if(re.status!==200){gone(`Не удалось открыть пробник (сервер ответил ${esc(re.status)}).`);return;}
+  const e=re.json,tasks=Array.isArray(e.tasks)?e.tasks:[],key=e.key||{},ph=phaseOf(a);
+  const photos=phs||photosOfAsg(id);
+  const tok=photos.length?await freshToken(60000):'';
+  if(!alive())return;
+  const P=ExamPanelCore,act=P.activitySummary(a.log,a.start),part2=a.part2||{},answers=a.answers||{},ok=a.ok||{};
+  const short=tasks.filter(t=>t.kind==='short'),long=tasks.filter(t=>t.kind==='long');
+  const botPh=photos.filter(p=>!p.n);   // sent to the bot: no task, the teacher sorts them out
+  const ready=!!a.settled,T=ts=>esc(fmtTs(ts));
+  const title=examOf(e.id)?examLabel(examOf(e.id)):e.title;
+  const away=act.away.count?`уходил со страницы ${timesWord(act.away.count)}, всего ${P.fmtSec(act.away.totalSec)}; дольше всего ${P.fmtSec(act.away.longest.sec)} (на задании ${esc(act.away.longest.n)||'—'})`:'со страницы не уходил';
+  // journal -> per-task answer entries, and the away episodes, in the order they were written
+  const byTask={},aways=[];
+  (Array.isArray(a.log)?a.log:[]).forEach(x=>{
+    if(!Array.isArray(x)||x.length<4||typeof x[0]!=='number')return;
+    if(x[1]==='a'&&x[2]!=null)(byTask[String(x[2])]||(byTask[String(x[2])]=[])).push(x);
+    else if(x[1]==='w'&&typeof x[3]==='number'&&x[3]>0)aways.push(x);});
+  const tlTasks=Object.keys(byTask).sort((p,q)=>(Number(p)-Number(q))||(p<q?-1:1));
+  const notReady=ready?'':ph==='submitted'
+    ?'Работа сдана, но итоги ещё подводятся. Баллы можно будет поставить через минуту: обнови страницу.'
+    :`Работа ещё не сдана (${esc(P.PHASE_TEXT[ph]||ph)}). Баллы можно будет поставить после сдачи.`;
+  const keyOf=n=>key[String(n)]||{};
+  app.innerHTML=`<p><a href="#/exams">← Пробники</a> · <a href="#/s/${esc(a.user)}">${esc(nameOf(a.user))}</a></p>
+    <div class="toolbar"><h2 class="grow">${esc(title)} · ${esc(nameOf(a.user))} ${chipFor(ph)}</h2></div>
+    <p class="lead">Начало: ${T(a.start)} (по Москве) · на работу ${Math.round(a.duration/60)} мин · ${a.opened?'открыл: '+T(a.opened):'не открывал'}${a.finished?' · завершил досрочно: '+T(a.finished):''}${a.photos_done?' · закончил с фото: '+T(a.photos_done):''}</p>
+    ${ready?'':`<div class="panel"><p class="muted" role="status">${notReady}</p></div>`}
+    <div class="panel"><h3>Активность</h3>
+      <p>${away}.</p>
+      <p class="muted">Это только факты из журнала сайта, не доказательство: второй телефон или книгу сайт не видит.</p>
+      <details class="ck-tl"><summary>Когда вводились ответы</summary>${tlTasks.length?tlTasks.map(n=>`<h4>Задание ${esc(n)}</h4><div class="list">${byTask[n].map(x=>
+        `<div class="it tl"><span class="muted">${P.fmtSec(x[0]-a.start)}</span><span class="ck-pre">${String(x[3])===''?'<span class="muted">стёр ответ</span>':esc(x[3])}</span></div>`).join('')}</div>`).join(''):'<p class="muted">Ответов по журналу нет.</p>'}</details>
+      ${aways.length?`<details class="ck-tl"><summary>Уходы со страницы</summary><div class="list">${aways.map(x=>
+        `<div class="it"><span>Задание ${esc(x[2])||'—'}</span><span class="muted">не было на странице ${P.fmtSec(x[3])} · записано на ${P.fmtSec(x[0]-a.start)} от начала</span></div>`).join('')}</div></details>`:''}</div>
+    <div class="panel"><h3>Первая часть: ${ready?esc(a.p1||0):'—'} из ${short.reduce((s,t)=>s+(t.max||1),0)}</h3>
+      ${short.length?`<div class="table-wrap"><table><thead><tr><th>Задание</th><th>Ответ ученика</th><th>Верный ответ</th><th></th></tr></thead><tbody>
+      ${short.map(t=>{const g=answers[t.n];return `<tr><td>${esc(t.n)}</td><td class="ck-pre">${g?esc(g):'<span class="muted">—</span>'}</td><td class="ck-pre">${esc(keyOf(t.n).a)}</td>
+        <td>${ready?(ok[t.n]?'<span class="chip ex-checked">верно</span>':'<span class="chip ex-missed">неверно</span>'):''}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">В этом пробнике нет заданий с кратким ответом.</p>'}</div>
+    ${long.map(t=>{const g=part2[t.n]||{},ps=photos.filter(p=>String(p.n)===String(t.n)),max=t.max||1,cur=Math.min(max,Math.max(0,Math.trunc(+g.pts)||0));
+      return `<div class="panel" data-ck="${esc(t.n)}"><h3>Задание ${esc(t.n)} <span class="muted">· максимум ${esc(max)}</span></h3>
+        <details><summary>Условие и верный ответ</summary><div class="tex ck-cond">${t.cond||''}</div><p><b>Ответ:</b></p><div class="tex">${keyOf(t.n).a||''}</div></details>
+        <div class="ex-ph">${ps.length?ps.map(p=>phThumb(p,tok,`Фото решения, задание ${t.n}`)).join(''):`<p class="muted">${botPh.length?'К этому заданию фото на сайте нет. Смотри блок «Фото, присланные боту» ниже.':'Фото нет.'}</p>`}</div>
+        <div class="ck-row"><label class="fld">Баллы<select data-ck-pts="${esc(t.n)}" ${ready?'':'disabled'}>${pointsOptions(max,cur)}</select></label>
+          <label class="fld grow">Комментарий ученику<textarea class="field" data-ck-note="${esc(t.n)}" rows="3" maxlength="2000" ${ready?'':'disabled'}>${esc(g.comment||'')}</textarea></label></div></div>`;}).join('')}
+    ${botPh.length?`<div class="panel"><h3>Фото, присланные боту <span class="muted">· ${botPh.length}</span></h3>
+      <p class="muted">Ученик отправил их боту без указания задания. Они в порядке получения.</p>
+      <div class="ex-ph">${botPh.map(p=>phThumb(p,tok,'Фото, присланное боту')).join('')}</div></div>`:''}
+    <div class="toolbar"><p class="ck-msg grow${ckNote&&ckNote.id===id&&ckNote.bad?' bad':ckNote&&ckNote.id===id?' good':''}" id="ck-msg" role="status">${ckNoteHtml(id)}</p>
+      <button class="btn" data-act="check-send" data-id="${esc(id)}" ${ready?'':'disabled'}>${a.checked?'Сохранить изменения':'Проверено, отправить ученику'}</button></div>
+    <p class="muted ck-note">Ученик получит сообщение в Telegram при первой проверке.${a.checked?' Повторное сохранение только обновляет баллы и комментарии.':''}</p>`;
+  ck={id,long:long.map(t=>({n:t.n})),checked:!!a.checked};ckShown=id;
+  // only the teacher's own HTML is typeset; student answers stay plain text
+  if(window.renderMathInElement)app.querySelectorAll('.tex').forEach(el=>{try{renderMathInElement(el,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});}catch(err){}});
+  if(keepY!==null){window.scrollTo(0,keepY);keepY=null;}
+}
+const ckErr=st=>st===409?'Работа ещё не сдана. Баллы можно будет поставить после сдачи.'
+  :st===400?'Проверь баллы: целые числа от нуля до максимума.'
+  :st===403?'Нет доступа: вход мог истечь. Открой свою ссылку преподавателя заново.'
+  :st===404?'Такой работы уже нет, возможно, пробник отменили.'
+  :`Сервер ответил ${st}.`;
+/* Same double-submit guard as the assign sheet: the `sending` flag is released in `finally`,
+   the button is off while the request runs. The status line survives the redraw (ckNote). */
+async function checkSend(id,btn){
+  const msg=document.getElementById('ck-msg');
+  if(sending||!btn||btn.disabled||!msg||!ck||ck.id!==id)return;
+  const say=(text,bad)=>{ckNote={id,text,bad:!!bad};msg.textContent=text;msg.className='ck-msg grow '+(bad?'bad':'good');};
+  const part2={};
+  ck.long.forEach(t=>{const s=document.querySelector(`[data-ck-pts="${t.n}"]`),c=document.querySelector(`[data-ck-note="${t.n}"]`);
+    if(s&&c)part2[t.n]={pts:Number(s.value),comment:c.value};});
+  const first=!ck.checked;
+  let r;
+  sending=true;
+  try{
+    btn.disabled=true;say('Отправляю…');
+    try{r=await api(`/ege/exams/${id}/check`,{method:'POST',body:{part2}});}
+    catch(err){if(err.message!=='401'){say('Нет связи с сервером. Ничего не сохранено.',true);btn.disabled=false;}return;}
+  }finally{sending=false;}
+  if(r.status!==200){
+    say(ckErr(r.status),true);
+    if(r.status===409||r.status===404)refreshKeep().catch(()=>{});   // the state changed: redraw it, the message stays
+    else btn.disabled=false;
+    return;}
+  say(`${first?'Готово. Работа проверена, ученик получит сообщение в Telegram.':'Изменения сохранены, новое сообщение ученику не уходит.'} ${mskTime(Date.now())}`);
+  try{await refreshKeep();}catch(err){if(err.message!=='401')say('Сохранено, но список не обновился. Обнови страницу.',true);}
+}
+
 // ---- маршруты ----
 async function refresh(){await load();for(const k in summaries)delete summaries[k];route();}
 /* Refresh that keeps the scroll position (route() otherwise scrolls to the top): after an
@@ -766,11 +933,15 @@ async function refreshKeep(y){
   try{await refresh();}catch(e){keepY=null;throw e;}
   if(keepY!==null){window.scrollTo(0,keepY);
     const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
-    if(!(m&&!data.byUser[m[1]]))keepY=null;}
+    // the check page and a lead's card draw after a request: they apply the scroll themselves
+    if(!(/^#\/check\/[a-z0-9]+$/.test(location.hash)||(m&&!data.byUser[m[1]])))keepY=null;}
 }
 function route(){
   const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
-  if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else if(location.hash==='#/exams')renderExams();else renderList();
+  const mc=location.hash.match(/^#\/check\/([a-z0-9]+)$/);
+  if(!mc){ckShown=null;ckGen++;}   // leaving the check page: a draw still in flight must not paint over the new page
+  if(mc)renderCheck(mc[1]).catch(err=>{keepY=null;ckShown=null;if(err.message!=='401')app.innerHTML=`<p class="center muted">Не удалось открыть работу: ${esc(err.message)}</p>`;});
+  else if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else if(location.hash==='#/exams')renderExams();else renderList();
   if(keepY===null)window.scrollTo(0,0);
 }
 function render(msg){
@@ -783,6 +954,8 @@ function render(msg){
 document.addEventListener('click',e=>{
   const th=e.target.closest('th[data-sort]');
   if(th){const k=th.dataset.sort;if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=k==='name'?1:-1;}renderList();return;}
+  const pa=e.target.closest('a[data-ph]');
+  if(pa){openPhoto(e,pa);return;}
   const b=e.target.closest('[data-act]');
   if(!b){
     /* buttons and the Telegram link inside a row must not open the card */
@@ -802,6 +975,7 @@ document.addEventListener('click',e=>{
   else if(a==='vdel')delVariant(b.dataset.user,id);
   else if(a==='vdel-go')delVariantGo(b.dataset.user,id);
   else if(a==='open-check')location.hash='#/check/'+id;
+  else if(a==='check-send')checkSend(id,b);
   else if(a==='assign')assignSheet({exam:b.dataset.exam,user:b.dataset.user});
   else if(a==='past-go')pastGo(b);
   else if(a==='past-back')pastBack();
@@ -825,7 +999,7 @@ document.addEventListener('submit',e=>{
   if(!b||b.disabled)return;
   if(f.dataset.kind==='assign')assignGo(b);else moveGo(f.dataset.id,b);
 });
-window.addEventListener('hashchange',async()=>{keepY=null;
+window.addEventListener('hashchange',async()=>{keepY=null;ckNote=null;
   if(/^#\/login\//.test(location.hash)){await loginFromHash();render();return;}
   if(data)route();});
 (async()=>{await loginFromHash();render();})();
