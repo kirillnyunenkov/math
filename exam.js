@@ -15,7 +15,8 @@
 
   const st = { mine: null, mineAt: 0, loading: false, hubTimer: 0, hubMiss: 0, user: '', gen: 0, req: 0, schedMiss: 0, id: null, view: null, offset: 0, synced: false, timers: [],
     save: null, leaving: null, det: {}, listeners: [], saveTimer: 0, retryTimer: 0,
-    picker: 0, lost: 0,                // picker: when the file dialog was opened; lost: photos dropped by the last leave()
+    picker: 0, carry: null,            // picker: when the file dialog was opened; carry: photos handed from the open to the photo screen
+    noLong: {}, lostBy: Object.create(null),   // exams seen without a part 2; photos lost on leaving, per exam, until the note is shown
     shownPhase: '', shownId: '' };
 
   const seen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || []; } catch (e) { return []; } };
@@ -51,9 +52,9 @@
     clearTimeout(st.saveTimer); clearTimeout(st.retryTimer); st.saveTimer = 0; st.retryTimer = 0;
   }
   // Listeners of the open screen on document / window / appEl: all removed together by leave().
-  function listen(target, type, fn) {
-    target.addEventListener(type, fn);
-    st.listeners.push(() => target.removeEventListener(type, fn));
+  function listen(target, type, fn, opts) {
+    target.addEventListener(type, fn, opts);
+    st.listeners.push(() => target.removeEventListener(type, fn, opts));
   }
   // Every delay goes through ExamClientCore.clampDelay: a NaN or a start weeks away must not fire at once.
   function later(fn, ms) { const t = setTimeout(fn, C.clampDelay(ms)); st.timers.push(t); return t; }
@@ -110,7 +111,7 @@
       (act ? '<button class="btn primary" data-exam="' + esc(it.id) + '">' + act + '</button>' : '') + '</div>';
     if (it.phase === 'scheduled') return row(t, C.whenText(it.start) + ' · время московское', '');
     if (it.phase === 'open') return row(t + ' идёт', 'Время на работу уже идёт', 'Открыть');
-    if (it.phase === 'photos') return row(t, 'Осталось прикрепить фото второй части', 'Открыть');
+    if (it.phase === 'photos') return row(t, st.noLong[it.id] ? 'Время работы вышло, осталось сдать' : 'Осталось прикрепить фото второй части', 'Открыть');
     if (it.phase === 'submitted') return row(t + ' сдан', 'Вторую часть проверяет преподаватель', 'Результат');
     return row(t + ' проверен', 'Баллы и комментарии готовы', 'Результат');
   }
@@ -121,6 +122,11 @@
     clearTimeout(st.hubTimer); st.hubTimer = 0;
     Object.keys(drawnPhase).forEach((k) => { delete drawnPhase[k]; });
   }
+  // What the page remembers about one user's exams (not shown to the next user).
+  function forgetUser() { st.noLong = {}; st.lostBy = Object.create(null); }
+  // Photos that were on their way when the student left an exam: the next time that exam is opened a note says so, once.
+  const addLost = (id, n) => { if (n > 0 && typeof id === 'string') st.lostBy[id] = (st.lostBy[id] || 0) + n; };
+  function takeLost(id) { const n = st.lostBy[id] || 0; delete st.lostBy[id]; return n; }
   // Sign-out, expiry or a login: the exam screen and the cached list both go.
   function reset() {
     leave();
@@ -133,7 +139,7 @@
       const d = st.det[id];
       if (!uid || d.uid !== uid) { d.noRetry = true; stopSender(d, true); delete st.det[id]; }
     });
-    resetCache(); st.user = auth ? String(auth.userId || '') : '';
+    resetCache(); forgetUser(); st.user = auth ? String(auth.userId || '') : '';
   }
 
   // Called from renderHub on every render; asks the server at most every 30 s. It must never throw:
@@ -141,7 +147,7 @@
   function bannerHTML() {
     try {
       if (!auth || !C) return '';
-      if (st.user !== String(auth.userId || '')) { resetCache(); st.user = String(auth.userId || ''); }
+      if (st.user !== String(auth.userId || '')) { const had = st.user; resetCache(); if (had) forgetUser(); st.user = String(auth.userId || ''); }
       loadMine();
       return (st.mine || []).filter(shown).sort((a, b) => PRIO[a.phase] - PRIO[b.phase]).slice(0, 3).map(bannerOf).join('');
     } catch (e) { return ''; }
@@ -184,14 +190,16 @@
 
   // Stops this module's timers and listeners and forgets the open exam. Called by render() before every screen.
   // Typed answers that are still unsent go on in the background (see drain); renderExam waits a moment for it.
-  function leave() {
+  // `carry`: the photos go on to the next screen (the open phase turning into the photo phase): they are detached, not dropped.
+  function leave(carry) {
     clearTimers();
     st.listeners.splice(0).forEach((off) => off());
+    if (st.carry) { dropPhotos(st.carry); st.carry = null; }   // nobody took them over
     const s = st.save; st.save = null;
-    st.lost = 0;
     if (s) {
       s.dead = true;
-      st.lost = dropPhotos(s);                           // uploads in flight are cancelled, previews and the file token dropped
+      // Uploads in flight are cancelled, previews and the file token dropped, and the exam remembers that photos were lost.
+      if (s.ph) { if (carry === true && !s.ph.dead) { detachPhotos(s.ph); st.carry = s.ph; } else addLost(s.id, dropPhotos(s.ph)); }
       // Unsent answers are handed to a detached sender: it keeps the screen's token and retries a few times (5, 15, 30 s).
       if (!s.closed && !s.fatal && s.q.has()) { st.det[s.id] = s; st.leaving = { id: s.id, p: drain(s) }; }
     }
@@ -234,7 +242,6 @@
     if (v.phase === 'missed') return paintMissed(v);
     if (v.phase === 'open') return paintOpen(v);
     if (v.phase === 'photos') return paintPhotos(v);
-    st.lost = 0;
     appEl.innerHTML = shell('<p class="lead">' + esc(v.phase) + '</p>');   // replaced by later tasks
   }
 
@@ -304,6 +311,9 @@
     if (pend) { typed = C.mergePending(typed, pendSnap, tasks); stopSender(pend); delete st.det[id]; }
     const dropped = !Array.isArray(v.tasks) || v.tasks.length !== tasks.length;
     const s = st.save = makeSession(id, v, tasks);
+    s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s;
+    if (hasLong) delete st.noLong[id]; else st.noLong[id] = true;
+    const lost = takeLost(id);
     if (pendSnap) tasks.forEach((t) => {
       const k = String(t.n);
       if (t.kind === 'short' && Object.prototype.hasOwnProperty.call(pendSnap, k) && typeof pendSnap[k] === 'string') s.q.set(k, pendSnap[k]);
@@ -311,6 +321,7 @@
     bindOpen(s);
     stageAndMount(shell(barHTML() +
         (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши преподавателю.</p>' : '') +
+        (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') +
         tasks.map((t) => cardHTML(t, typed)).join('') +
         (hasLong ? tgBlockHTML() : '') +
         '<div style="text-align:center;margin-top:8px"><button class="btn primary" data-ex-finish>Завершить пробник</button></div>'),
@@ -324,7 +335,7 @@
     return { id: id, phase: v.phase, q: new C.SaveQueue(), busy: null, fails: 0, nextAt: 0, dead: false, closed: false,
       syncing: false, finishing: false, away: new C.AwayTracker(2), until: v.until, tick: null,
       token: (auth && auth.token) || '', uid: auth ? String(auth.userId || '') : '', hasLong: tasks.some((t) => t.kind === 'long'),
-      fatal: '', lastKind: '', inflight: null, noRetry: false, stop: false, ph: newPhotos(tasks, v.photos) };
+      fatal: '', lastKind: '', inflight: null, noRetry: false, stop: false, ph: null };
   }
   // The token a request of this screen goes with: the signed-in one while the screen is alive (it rotates), else the kept one.
   function tokOf(s) { if (live(s) && auth && auth.token) s.token = auth.token; return s.token; }
@@ -347,7 +358,7 @@
   // The screen takes the next phase from the server, never from the device clock: flush what is typed,
   // ask, and if the server still says the same phase ask again (2 s five times, then every 10 s). Replaces the screen only on a phase change.
   function syncPhase(s) {
-    if (s.dead || s.syncing) return;
+    if (!s || s.dead || s.syncing) return;
     s.syncing = true;
     let tries = 0;
     const step = async () => {
@@ -369,11 +380,14 @@
     step();
   }
   // Shows a phase fetched by syncPhase: the same as renderExam, without a second request.
+  // Photos still on their way go with it when the next screen is the photo phase (open -> photos); otherwise they are dropped.
   function adopt(id, json) {
     const kp = st.shownPhase, ki = st.shownId;
-    leave(); st.shownPhase = kp; st.shownId = ki;
+    leave(json.phase === 'photos');
+    st.shownPhase = kp; st.shownId = ki;
     st.id = id; st.req++; st.view = json; setOffset(json.now);
     paint(json);
+    if (st.carry) { addLost(id, dropPhotos(st.carry)); st.carry = null; }   // the new screen did not take them
   }
 
   // ---- autosave of part 1 ----
@@ -410,8 +424,7 @@
     }
     if (!live(s)) return false;
     if (kind === 'closed') { s.closed = true; setSaveText(''); syncPhase(s); return false; }   // the window is over: the server decides what comes next
-    if (kind === 'auth') { s.fatal = 'auth'; clearTimeout(st.retryTimer); setSaveText('Войди заново', true); return false; }
-    if (kind === 'gone') { s.fatal = 'gone'; clearTimeout(st.retryTimer); setSaveText('Пробник недоступен', true); return false; }
+    if (kind === 'auth' || kind === 'gone') { s.fatal = ''; fatalStop(s, kind); return false; }
     s.fails++; s.lastKind = kind;
     const d = C.retryDelay(s.fails);
     s.nextAt = Date.now() + d;
@@ -479,8 +492,10 @@
       return;
     }
     if (uploading(s)) { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Завершить» ещё раз.'); return; }
+    const failedPh = !!s.ph && s.ph.pending.length > 0;
     const ok = await ask({ title: 'Завершить пробник?',
-      text: 'Ответы первой части после этого изменить нельзя.' + (s.hasLong ? ' Фото второй части можно будет прикрепить ещё 10 минут.' : ''),
+      text: 'Ответы первой части после этого изменить нельзя.' + (s.hasLong ? ' Фото второй части можно будет прикрепить ещё 10 минут.' : '') +
+        (failedPh ? ' Фото, которые не загрузились, пропадут: прикрепишь их заново.' : ''),
       ok: 'Завершить', cancel: 'Вернуться' });
     if (!ok || s.dead) return;
     s.finishing = true;
@@ -519,7 +534,7 @@
   const openNow = (s) => !s.dead && !!st.view && st.view.phase === 'open' && timeLeft(s) !== 0;
   // The native file dialog blurs the window (and on a phone may hide the page): that is not "away". The mark expires,
   // so a dialog that never reported its end cannot hide a real absence for ever.
-  const pickerOn = () => !!st.picker && Date.now() - st.picker < 300000;
+  const pickerOn = () => C.pickerActive(st.picker, Date.now());
   function awayOut(s) { if (openNow(s) && !pickerOn()) s.away.hide(Date.now(), currentTask()); }
   function awayBack(s) {
     if (s.dead) return;
@@ -557,21 +572,28 @@
     listen(window, 'pagehide', () => flush(s, { force: true, keep: true }));
     listen(window, 'blur', () => awayOut(s));
     listen(window, 'focus', () => awayBack(s));
-    listen(window, 'online', () => { flush(s, { force: true }); wakeUploads(s); });
+    listen(window, 'online', () => { flush(s, { force: true }); wakeUploads(s.ph); });
+    listen(document, 'click', (e) => leaveGuard(s, e), true);
   }
 
   // ---- photos of part 2: from the site and from the bot ----
   /* Every long task has a block with its own photos (up to five); photos sent to the bot belong to no task and are shown
      in one more block. The server list is the truth: it is polled every 15 s while this screen is up, the photos attached
-     here are shown at once from the local preview. All of it lives in `s.ph` of the screen's session and is dropped
-     together with it by leave(): uploads are aborted, previews revoked, the file token forgotten. A late answer for a screen
-     that is gone paints nothing. Nothing from the server reaches the page other than through esc() / encodeURIComponent,
-     and no selector is built from a task number (blocks are found through dataset). */
+     here are shown at once from the local preview.
+     All of it lives in one object `P` (the photos of one exam screen): lists, uploads in flight, local previews, the file
+     token, timers, AbortControllers. `P.s` is the session of the screen that shows it now. When the open phase turns into
+     the photo phase, `P` is handed over to the new session (adopt -> paintPhotos) and the uploads simply go on; every other
+     way out of the screen (leave, reset, the end of the photo phase) drops it with dropPhotos(): uploads are aborted,
+     previews revoked, the file token forgotten. A late answer for a dead `P` paints nothing. Nothing from the server
+     reaches the page other than through esc() / encodeURIComponent, and no selector is built from a task number (blocks
+     are found through dataset). */
   const PH = C.PHOTO;
   const BAD_FILE = 'Этот файл не получается обработать. Прикрепи его с телефона или отправь фото боту в Telegram.';
   const TEXT_PH = {
     tooMany: 'К заданию уже прикреплено ' + PH.PER_TASK + ' фото — больше нельзя. Лишнее можно убрать крестиком.',
     badFile: 'Сервер не принял это фото. Нужна картинка JPEG, PNG или WebP до 10 МБ.',
+    badFileNeutral: 'Не получилось отправить это фото. Нажми «Ещё раз» или отправь фото боту в Telegram.',
+    badFileGiveUp: 'Сервер не принимает это фото. Убери его и отправь фото боту в Telegram.',
     badTask: 'Это задание не принимает фото. Обнови страницу.',
     retry: 'Не загрузилось — проверь интернет и нажми «Ещё раз» на фото.',
     auth: 'Войди в тренажёр заново — пока ты не вошёл, фото не загрузятся.',
@@ -579,6 +601,7 @@
     closed: 'Время для фото вышло. Смотрю, что дальше…',
     delFail: 'Не получилось удалить фото — попробуй ещё раз.',
   };
+  const LOST_NOTE = 'Часть фото не успела загрузиться. Прикрепи их ещё раз.';
 
   const photoBlockHTML = (n) => '<div class="ex-photos" data-ex-ph="' + Number(n) + '">' +
     '<div class="ex-thumbs"></div>' +
@@ -593,18 +616,27 @@
     '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div>' +
     '<p class="ex-msg" data-ex-msg role="status" aria-live="polite"></p></div>';
 
-  function newPhotos(tasks, list) {
+  function newPhotos(id, tasks, list) {
     const known = tasks.filter((t) => t.kind === 'long').map((t) => String(t.n));
-    return { known: known, server: C.wellFormedPhotos(list, known), pending: [], local: new Map(), urls: new Set(), msgs: new Map(),
+    return { id: id, s: null, known: known, server: C.wellFormedPhotos(list, known), pending: [], local: new Map(), urls: new Set(), msgs: new Map(),
       deleting: new Set(), ctls: new Set(), timers: new Set(), ftoken: '', ftokenAt: 0, tokP: null, rev: 0, seq: 0, busy: null,
-      polling: false, pollT: 0, pollFails: 0, polledAt: 0, dead: false };
+      polling: false, pollT: 0, pollFails: 0, polledAt: 0, gen: 0, guard: null, dead: false };
   }
-  const phLive = (s) => live(s) && !!s.ph && !s.ph.dead;
-  const uploading = (s) => !!s && !!s.ph && s.ph.pending.some((x) => x.state !== 'err');
+  const phLive = (P) => !!P && !P.dead && !!P.s && live(P.s);
+  const uploadingP = (P) => !!P && P.pending.some((x) => x.state !== 'err');
+  const uploading = (s) => !!s && uploadingP(s.ph);
+
+  // The page must not be closed or reloaded silently while photos are still on their way (or failed): only while there are any.
+  function syncGuard(P) {
+    const need = !P.dead && P.pending.length > 0;
+    if (need && !P.guard) {
+      P.guard = (e) => { e.preventDefault(); e.returnValue = ''; return ''; };
+      window.addEventListener('beforeunload', P.guard);
+    } else if (!need && P.guard) { window.removeEventListener('beforeunload', P.guard); P.guard = null; }
+  }
 
   // Cancels everything a screen holds for its photos; returns how many photos were still on their way or failed (lost).
-  function dropPhotos(s) {
-    const P = s.ph;
+  function dropPhotos(P) {
     if (!P || P.dead) return 0;
     P.dead = true;
     const lost = P.pending.length;
@@ -612,8 +644,27 @@
     clearTimeout(P.pollT); P.pollT = 0;
     P.timers.forEach((t) => clearTimeout(t)); P.timers.clear();
     P.urls.forEach((u) => { try { URL.revokeObjectURL(u); } catch (e) {} }); P.urls.clear();
-    P.pending = []; P.server = []; P.local.clear(); P.msgs.clear(); P.deleting.clear(); P.ftoken = ''; P.tokP = null;
+    P.pending = []; P.server = []; P.local.clear(); P.msgs.clear(); P.deleting.clear(); P.ftoken = ''; P.tokP = null; P.s = null;
+    syncGuard(P);
     return lost;
+  }
+  // The open screen goes away but its photos go on: nobody owns them until the next screen takes them over.
+  function detachPhotos(P) {
+    P.s = null; P.gen++; P.polling = false;
+    clearTimeout(P.pollT); P.pollT = 0;
+  }
+  // A new session takes over photos that were detached: the task list may differ, what does not fit is let go.
+  function attachPhotos(P, s, tasks) {
+    P.s = s; s.ph = P;
+    P.known = tasks.filter((t) => t.kind === 'long').map((t) => String(t.n));
+    P.server = C.wellFormedPhotos(P.server, P.known);
+    P.pending.filter((x) => P.known.indexOf(x.n) < 0).forEach((x) => dropPending(P, x));
+  }
+  function dropPending(P, it) {
+    if (it.ctl) { try { it.ctl.abort(); } catch (e) {} P.ctls.delete(it.ctl); }
+    clearTimeout(it.timer);
+    P.pending = P.pending.filter((x) => x !== it);
+    revokeUrl(P, it.url);
   }
   function phLater(P, fn, ms) {
     const t = setTimeout(() => { P.timers.delete(t); if (!P.dead) fn(); }, C.clampDelay(ms));
@@ -627,14 +678,13 @@
   function revokeUrl(P, u) { if (!u) return; P.urls.delete(u); try { URL.revokeObjectURL(u); } catch (e) {} }
 
   // ---- file access: a short-lived token, refreshed before it expires (the token itself is never printed or stored) ----
-  function freshFileToken(s, maxAge) {
-    const P = s.ph;
-    if (!P || P.dead) return Promise.resolve('');
+  function freshFileToken(P, maxAge) {
+    if (!P || P.dead || !P.s) return Promise.resolve('');
     if (P.ftoken && Date.now() - P.ftokenAt < maxAge) return Promise.resolve(P.ftoken);
     if (P.tokP) return P.tokP;
     const p = (async () => {
       try {
-        const r = await xapi('/files/token', { method: 'POST', root: true, token: tokOf(s), timeout: 10000 });
+        const r = await xapi('/files/token', { method: 'POST', root: true, token: tokOf(P.s), timeout: 10000 });
         if (!P.dead && r.status === 200 && r.json && typeof r.json.token === 'string' && r.json.token) { P.ftoken = r.json.token; P.ftokenAt = Date.now(); }
       } catch (e) { /* thumbnails stay as they are until the next try */ }
       finally { if (P.tokP === p) P.tokP = null; }
@@ -655,8 +705,10 @@
     return null;
   }
   const altOf = (n) => n === '' ? 'Фото решения, присланное боту' : 'Фото решения, задание ' + n;
-  function serverFig(P, p) {
-    const src = P.local.get(p.id) || (P.ftoken ? thumbUrl(P.ftoken, p) : '');
+  // `tok` is what goes into the thumbnail address; the screen compares tiles with a stand-in token, so a new token alone
+  // never redraws (and so never reloads) a tile that is on screen.
+  function serverFig(P, p, tok) {
+    const src = P.local.get(p.id) || (tok ? thumbUrl(tok, p) : '');
     return '<figure class="ex-thumb">' + (src ? '<img data-ex-img="' + esc(p.id) + '" src="' + esc(src) + '" alt="' + esc(altOf(p.n)) + '" loading="lazy" decoding="async">'
         : '<span class="ex-nopic" aria-hidden="true"></span>') +
       '<button type="button" class="ex-del" data-ex-del="' + esc(p.id) + '" aria-label="Удалить фото"' + (P.deleting.has(p.id) ? ' disabled' : '') + '>×</button></figure>';
@@ -666,114 +718,130 @@
     const label = x.state === 'prep' ? 'Готовлю…' : x.state === 'wait' ? 'Ждём связь…' : 'Загружаю…';
     return '<figure class="ex-thumb ' + (bad ? 'ex-err' : 'ex-busy') + '">' +
       (x.url ? '<img src="' + esc(x.url) + '" alt="' + esc(altOf(x.n)) + '">' : '<span class="ex-nopic" aria-hidden="true"></span>') +
-      (bad ? '<button type="button" class="ex-st ex-retry" data-ex-rt="' + esc(x.key) + '">Ещё раз</button>' : '<span class="ex-st">' + label + '</span>') +
+      (bad ? (x.fatal ? '<span class="ex-st">Не принято</span>' : '<button type="button" class="ex-st ex-retry" data-ex-rt="' + esc(x.key) + '">Ещё раз</button>')
+        : '<span class="ex-st">' + label + '</span>') +
       '<button type="button" class="ex-del" data-ex-rm="' + esc(x.key) + '" aria-label="Убрать фото">×</button></figure>';
   }
-  function drawBlock(s, n) {
-    const P = s.ph;
+  function drawBlock(P, n) {
     if (!P || P.dead) return;
+    syncGuard(P);
     n = String(n);
     const root = phRoot(n);
     if (!root) return;
-    const items = P.server.filter((p) => p.n === n).map((p) => serverFig(P, p)).concat(P.pending.filter((x) => x.n === n).map(pendFig));
-    const box = root.querySelector('.ex-thumbs'), html = items.join('');
-    if (box && box._exHtml !== html) { box.innerHTML = html; box._exHtml = html; }
-    if (n === '') root.hidden = !items.length;
+    const mine = P.server.filter((p) => p.n === n), pend = P.pending.filter((x) => x.n === n);
+    const tail = pend.map(pendFig).join('');
+    const html = mine.map((p) => serverFig(P, p, P.ftoken)).join('') + tail;
+    const sig = mine.map((p) => serverFig(P, p, P.ftoken ? 'T' : '')).join('') + tail;
+    const box = root.querySelector('.ex-thumbs');
+    if (box && box._exSig !== sig) { box.innerHTML = html; box._exSig = sig; }
+    if (n === '') root.hidden = !mine.length && !pend.length;
     const msg = root.querySelector('[data-ex-msg]');
     if (msg) msg.textContent = (P.msgs.get(n) || {}).t || '';
     if (n === '') return;
-    const held = P.server.filter((p) => p.n === n).length, coming = P.pending.filter((x) => x.n === n && x.state !== 'err').length;
+    const held = mine.length, coming = pend.filter((x) => x.state !== 'err').length;
     const cnt = root.querySelector('.ex-cnt'), add = root.querySelector('[data-ex-pick]');
     if (cnt) cnt.textContent = held + coming ? (held + coming) + ' из ' + PH.PER_TASK : '';
     if (add) add.disabled = C.photoRoom(held, coming) === 0;
   }
-  function drawAll(s) {
-    const P = s.ph;
+  function drawAll(P) {
     if (!P || P.dead) return;
-    P.known.forEach((n) => drawBlock(s, n));
-    drawBlock(s, '');
+    P.known.forEach((n) => drawBlock(P, n));
+    drawBlock(P, '');
   }
   // The line under a block. A problem stays until the next success or the next try; a `keep` notice (some of the chosen
   // files were left out) also survives the uploads that follow, until the student acts on that block again.
   function putMsg(P, n, text, keep) { if (text) P.msgs.set(String(n), { t: text, keep: !!keep }); else P.msgs.delete(String(n)); }
-  function setMsg(s, n, text, keep) {
-    const P = s.ph;
+  function setMsg(P, n, text, keep) {
     if (!P || P.dead) return;
     putMsg(P, n, text, keep);
-    drawBlock(s, n);
+    drawBlock(P, n);
   }
   // A thumbnail that does not load (the token ran out while the page stayed open) gets one more try with a new token.
   appEl.addEventListener('error', (e) => {
     const img = e.target;
     if (!img || img.tagName !== 'IMG' || !img.hasAttribute('data-ex-img')) return;
-    const s = st.save;
-    if (!phLive(s)) return;
+    const P = st.save && st.save.ph;
+    if (!phLive(P)) return;
     if (img.dataset.exTried) { img.classList.add('ex-broken'); return; }
     img.dataset.exTried = '1';
-    const p = s.ph.server.find((x) => x.id === img.dataset.exImg);
+    const p = P.server.find((x) => x.id === img.dataset.exImg);
     if (!p) return;
-    freshFileToken(s, 10000).then((tok) => { if (phLive(s) && tok && img.isConnected) img.src = thumbUrl(tok, p); });
+    freshFileToken(P, 10000).then((tok) => { if (phLive(P) && tok && img.isConnected) img.src = thumbUrl(tok, p); });
   }, true);
 
   // The server list became the truth: show it (the token is looked at next, so that new thumbnails can load).
-  function applyList(s, raw) {
-    const P = s.ph, next = C.wellFormedPhotos(raw, P.known);
+  function applyList(P, raw) {
+    const next = C.wellFormedPhotos(raw, P.known);
     if (C.photoSig(next) === C.photoSig(P.server)) return;
     P.server = next;
     P.local.forEach((u, id) => { if (!next.some((q) => q.id === id)) { revokeUrl(P, u); P.local.delete(id); } });   // gone from the server
     P.deleting.forEach((id) => { if (!next.some((q) => q.id === id)) P.deleting.delete(id); });
-    drawAll(s);
-    refreshPics(s);
+    drawAll(P);
+    refreshPics(P);
   }
-  function refreshPics(s) {
-    const P = s.ph;
+  function refreshPics(P) {
     if (!P || P.dead || !needsToken(P)) return;
     const had = P.ftoken;
-    freshFileToken(s, 60000).then((tok) => { if (phLive(s) && tok && tok !== had) drawAll(s); });
+    freshFileToken(P, 60000).then((tok) => { if (phLive(P) && tok && !had) drawAll(P); });   // a new token alone redraws nothing
+  }
+
+  // A permanent answer to a request of the screen (sign in again / the exam is gone): shown in the status of the bar, no more
+  // retries of the answers; the photo poll stops by itself.
+  function fatalStop(s, kind) {
+    if (!s || s.dead) return;
+    s.fatal = s.fatal || kind;
+    clearTimeout(st.retryTimer);
+    setSaveText(kind === 'auth' ? 'Войди заново' : 'Пробник недоступен', true);
   }
 
   // ---- the server list every 15 s while the screen is up (paused when the tab is hidden, backs off on failures) ----
-  function startPoll(s) {
-    const P = s.ph;
-    const schedule = (ms) => { clearTimeout(P.pollT); P.pollT = P.dead ? 0 : setTimeout(tick, C.clampDelay(ms)); };
+  function startPoll(P) {
+    const gen = ++P.gen;
+    const schedule = (ms) => { clearTimeout(P.pollT); P.pollT = P.dead || gen !== P.gen ? 0 : setTimeout(tick, C.clampDelay(ms)); };
     const tick = async () => {
+      if (gen !== P.gen) return;
       P.pollT = 0;
-      if (!phLive(s) || P.polling) return;
+      if (!phLive(P)) return;
+      if (P.polling) { schedule(1000); return; }
       if (document.visibilityState === 'hidden') return;                // paused: coming back to the page asks at once
       P.polling = true; P.polledAt = Date.now();
-      const rev = P.rev;
+      const rev = P.rev, s = P.s;
       let r = null;
-      try { r = await xapi('/' + encodeURIComponent(s.id) + '/photos', { token: tokOf(s), timeout: 15000 }); } catch (e) { r = null; }
+      try { r = await xapi('/' + encodeURIComponent(P.id) + '/photos', { token: tokOf(s), timeout: 15000 }); } catch (e) { r = null; }
+      if (gen !== P.gen) return;                                        // superseded (the photos moved to a new screen)
       P.polling = false;
-      if (!phLive(s)) return;                                           // stale: the screen is gone
+      if (!phLive(P)) return;                                           // stale: the screen is gone
       const kind = C.classifyStatus(r && r.status);
       if (kind === 'ok' && r.json && Array.isArray(r.json.photos)) {
         P.pollFails = 0;
         // An answer older than a photo added or deleted here meanwhile must not undo it: ask again soon instead.
-        if (P.rev === rev) applyList(s, r.json.photos);
+        if (P.rev === rev) applyList(P, r.json.photos);
         schedule(P.rev === rev ? C.pollDelay(0) : 2000);
         return;
       }
-      if (kind === 'auth' || kind === 'gone') return;                   // nothing to wait for
-      if (kind === 'closed') syncPhase(s);                              // the server decides which screen is next
+      if (kind === 'auth' || kind === 'gone') { fatalStop(P.s, kind); return; }   // nothing to wait for: say so and stop
+      if (kind === 'closed') syncPhase(P.s);                            // the server decides which screen is next
       P.pollFails++;
       schedule(C.pollDelay(P.pollFails));
     };
     const resume = () => {
-      if (!phLive(s) || P.polling) return;
+      if (!phLive(P) || P.polling || gen !== P.gen) return;
       schedule(Math.max(0, 3000 - (Date.now() - P.polledAt)));          // never faster than every 3 s
     };
     listen(document, 'visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
     listen(window, 'online', resume);
-    schedule(C.pollDelay(0));
+    schedule(P.polledAt ? 0 : C.pollDelay(0));
   }
 
   function mountPhotos(s) {
     const P = s.ph;
-    if (!phLive(s) || !P.known.length) return;
-    drawAll(s);
-    refreshPics(s);
-    startPoll(s);
+    if (!phLive(P)) return;
+    syncGuard(P);
+    if (!P.known.length) return;
+    drawAll(P);
+    refreshPics(P);
+    wakeUploads(P);                                                     // photos carried over from the open phase go on
+    startPoll(P);
   }
 
   // ---- downscale before upload: phone originals are tens of MB; the original is never sent ----
@@ -812,33 +880,31 @@
   }
 
   // ---- adding photos: one upload at a time, a bounded number of tries each ----
-  function addFiles(s, n, files) {
-    const P = s.ph;
-    if (!phLive(s) || P.known.indexOf(String(n)) < 0) return;
+  function addFiles(P, n, files) {
+    if (!phLive(P) || P.known.indexOf(String(n)) < 0) return;
     n = String(n);
     const held = P.server.filter((p) => p.n === n).length, coming = P.pending.filter((x) => x.n === n && x.state !== 'err').length;
     const room = C.photoRoom(held, coming), take = files.slice(0, room);
-    if (!take.length) { setMsg(s, n, TEXT_PH.tooMany); return; }
-    take.forEach((f) => P.pending.push({ key: 'u' + (++P.seq), n: n, file: f, blob: null, url: '', state: 'queued', tries: 0, ctl: null, timer: 0 }));
+    if (!take.length) { setMsg(P, n, TEXT_PH.tooMany); return; }
+    take.forEach((f) => P.pending.push({ key: 'u' + (++P.seq), n: n, file: f, blob: null, url: '', state: 'queued', tries: 0, manual: 0, bad: false, fatal: false, ctl: null, timer: 0 }));
     putMsg(P, n, take.length < files.length ? 'Прикрепляю ' + take.length + ' из ' + files.length + ': на задание можно не больше ' + PH.PER_TASK + ' фото.' : '', true);
-    drawBlock(s, n);
-    pump(s);
+    drawBlock(P, n);
+    pump(P);
   }
-  function pump(s) {
-    const P = s.ph;
-    if (!phLive(s) || P.busy) return;
+  function pump(P) {
+    if (!phLive(P) || P.busy) return;
     const it = P.pending.find((x) => x.state === 'queued');
     if (!it) return;
     P.busy = it;
-    run(s, it).catch(() => { if (phLive(s) && P.pending.indexOf(it) >= 0) { it.state = 'err'; setMsg(s, it.n, TEXT_PH.retry); } })
-      .then(() => { if (P.busy === it) P.busy = null; pump(s); });
+    run(P, it).catch(() => { if (phLive(P) && P.pending.indexOf(it) >= 0) { it.state = 'err'; setMsg(P, it.n, TEXT_PH.retry); } })
+      .then(() => { if (P.busy === it) P.busy = null; pump(P); });
   }
-  async function run(s, it) {
-    const P = s.ph, n = it.n;
-    const alive = () => phLive(s) && P.pending.indexOf(it) >= 0;       // the screen is still ours and the student did not remove it
-    const drop = (text) => { P.pending = P.pending.filter((x) => x !== it); revokeUrl(P, it.url); setMsg(s, n, text); };
+  async function run(P, it) {
+    const n = it.n;
+    const alive = () => !P.dead && P.pending.indexOf(it) >= 0;          // the photos still exist and the student did not remove this one
+    const drop = (text) => { dropPending(P, it); setMsg(P, n, text); };
     if (!it.blob) {
-      it.state = 'prep'; drawBlock(s, n);
+      it.state = 'prep'; drawBlock(P, n);
       let blob = null;
       try { if (it.file.size > 0 && it.file.size <= PH.SRC_MAX) blob = await downscale(it.file); } catch (e) { blob = null; }
       it.file = null;                                                   // the original is not needed (or sent) any more
@@ -846,100 +912,124 @@
       if (!blob) { drop(BAD_FILE); return; }
       it.blob = blob; it.url = makeUrl(P, blob);
     }
-    it.state = 'up'; drawBlock(s, n);
+    it.state = 'up'; drawBlock(P, n);
     const fd = new FormData();
     fd.append('n', n); fd.append('file', it.blob, 'photo.jpg');
     const ctl = typeof AbortController === 'function' ? new AbortController() : null;
     if (ctl) { it.ctl = ctl; P.ctls.add(ctl); }
     let r = null;
-    try { r = await xapi('/' + encodeURIComponent(s.id) + '/photos', { method: 'POST', form: fd, token: tokOf(s), signal: ctl ? ctl.signal : undefined }); } catch (e) { r = null; }
+    try { r = await xapi('/' + encodeURIComponent(P.id) + '/photos', { method: 'POST', form: fd, token: P.s ? tokOf(P.s) : '', signal: ctl ? ctl.signal : undefined }); } catch (e) { r = null; }
     if (ctl) { P.ctls.delete(ctl); it.ctl = null; }
     if (!alive()) return;                                               // left meanwhile: nothing is painted
-    const v = C.uploadVerdict(r && r.status, r && r.json && r.json.message);
+    const msg = r && r.json && r.json.message;
+    const v = C.uploadVerdict(r && r.status, msg);
     if (v === 'ok') {
       const got = C.wellFormedPhotos([r.json], P.known)[0];
       P.pending = P.pending.filter((x) => x !== it);
       P.rev++;
       if (got && got.n === n) {
-        if (!P.server.some((p) => p.id === got.id)) P.server.push(got);
+        if (!P.server.some((p) => p.id === got.id)) P.server.push(got);   // a poll may have listed it already: never twice
         P.local.set(got.id, it.url);                                    // the thumbnail is the local preview, no download needed
       } else revokeUrl(P, it.url);                                      // an odd answer: the next poll shows what the server has
       if (!(P.msgs.get(n) || {}).keep) P.msgs.delete(n);
-      drawBlock(s, n);
+      drawBlock(P, n);
       return;
     }
-    if (v === 'closed') { it.state = 'err'; setMsg(s, n, TEXT_PH.closed); syncPhase(s); return; }
-    if (v === 'badFile') { drop(TEXT_PH.badFile); return; }
+    if (v === 'closed') { it.state = 'err'; it.fatal = true; setMsg(P, n, TEXT_PH.closed); syncPhase(P.s); return; }
     if (v === 'badTask') { drop(TEXT_PH.badTask); return; }
+    if (v === 'badFile') {
+      // The server did not take it; the photo and its blob stay (a few manual tries), the text stays neutral unless the
+      // server's own words are about the type or the size.
+      it.state = 'err'; it.bad = true; it.fatal = !C.canRetry(it.manual);
+      setMsg(P, n, it.fatal ? TEXT_PH.badFileGiveUp : C.fileRefusal(msg) === 'typeSize' ? TEXT_PH.badFile : TEXT_PH.badFileNeutral);
+      return;
+    }
     if (v === 'retry') {
       it.tries++;
       const d = C.uploadRetryDelay(it.tries);
       if (d !== null) {
-        it.state = 'wait'; drawBlock(s, n);
-        it.timer = phLater(P, () => { if (it.state === 'wait' && P.pending.indexOf(it) >= 0) { it.state = 'queued'; pump(s); } }, d);
+        it.state = 'wait'; drawBlock(P, n);
+        it.timer = phLater(P, () => { if (it.state === 'wait' && P.pending.indexOf(it) >= 0) { it.state = 'queued'; pump(P); } }, d);
         return;
       }
     }
     it.state = 'err';                                                   // tooMany, auth, gone, or the tries ran out
-    setMsg(s, n, v === 'tooMany' ? TEXT_PH.tooMany : v === 'auth' ? TEXT_PH.auth : v === 'gone' ? TEXT_PH.gone : TEXT_PH.retry);
+    if (v === 'tooMany') it.fatal = true;
+    if (v === 'auth' || v === 'gone') fatalStop(P.s, v);
+    setMsg(P, n, v === 'tooMany' ? TEXT_PH.tooMany : v === 'auth' ? TEXT_PH.auth : v === 'gone' ? TEXT_PH.gone : TEXT_PH.retry);
   }
-  // The connection is back: photos waiting for it go at once.
-  function wakeUploads(s) {
-    const P = s && s.ph;
-    if (!phLive(s)) return;
+  // The connection is back (or the photos just came to a new screen): photos waiting for it go at once.
+  function wakeUploads(P) {
+    if (!phLive(P)) return;
     P.pending.forEach((x) => { if (x.state === 'wait') { clearTimeout(x.timer); x.state = 'queued'; } });
-    pump(s);
+    pump(P);
   }
-  function retryPhoto(s, key) {
-    const P = s.ph, it = P && P.pending.find((x) => x.key === key);
-    if (!phLive(s) || !it || it.state !== 'err') return;
+  function retryPhoto(P, key) {
+    const it = P.pending.find((x) => x.key === key);
+    if (!phLive(P) || !it || it.state !== 'err' || it.fatal) return;
+    if (it.bad) { if (!C.canRetry(it.manual)) return; it.manual++; }
     it.state = 'queued'; it.tries = 0; putMsg(P, it.n, '');
-    drawBlock(s, it.n); pump(s);
+    drawBlock(P, it.n); pump(P);
   }
   // A photo of the list that is still being prepared or sent: cancelled and forgotten.
-  function removePending(s, key) {
-    const P = s.ph, it = P && P.pending.find((x) => x.key === key);
-    if (!phLive(s) || !it) return;
-    if (it.ctl) { try { it.ctl.abort(); } catch (e) {} P.ctls.delete(it.ctl); }
-    clearTimeout(it.timer);
-    P.pending = P.pending.filter((x) => x !== it);
-    revokeUrl(P, it.url);
-    drawBlock(s, it.n); pump(s);
+  function removePending(P, key) {
+    const it = P.pending.find((x) => x.key === key);
+    if (!phLive(P) || !it) return;
+    dropPending(P, it);
+    drawBlock(P, it.n); pump(P);
   }
-  async function removePhoto(s, pid) {
-    const P = s.ph, p = P && P.server.find((x) => x.id === pid);
-    if (!phLive(s) || !p || P.deleting.has(pid)) return;
+  async function removePhoto(P, pid) {
+    const p = P.server.find((x) => x.id === pid);
+    if (!phLive(P) || !p || P.deleting.has(pid)) return;
     const sure = await ask({ title: 'Удалить фото?', text: 'Оно пропадёт из пробника.', ok: 'Удалить', cancel: 'Оставить', danger: true });
-    if (!sure || !phLive(s) || !P.server.some((x) => x.id === pid)) return;
-    P.deleting.add(pid); drawBlock(s, p.n);
+    if (!sure || !phLive(P) || !P.server.some((x) => x.id === pid)) return;
+    P.deleting.add(pid); drawBlock(P, p.n);
     let r = null;
-    try { r = await xapi('/' + encodeURIComponent(s.id) + '/photos/' + encodeURIComponent(pid), { method: 'DELETE', token: tokOf(s) }); } catch (e) { r = null; }
-    if (!phLive(s)) return;
+    try { r = await xapi('/' + encodeURIComponent(P.id) + '/photos/' + encodeURIComponent(pid), { method: 'DELETE', token: tokOf(P.s) }); } catch (e) { r = null; }
+    if (!phLive(P)) return;
     P.deleting.delete(pid);
     const kind = C.classifyStatus(r && r.status);
     if (kind === 'ok' || kind === 'gone') {                              // gone: the photo is not there any more either
       P.server = P.server.filter((x) => x.id !== pid);
       const u = P.local.get(pid); if (u) { revokeUrl(P, u); P.local.delete(pid); }
-      P.rev++; putMsg(P, p.n, ''); drawBlock(s, p.n);
+      P.rev++; putMsg(P, p.n, ''); drawBlock(P, p.n);
       return;
     }
-    setMsg(s, p.n, kind === 'closed' ? TEXT_PH.closed : kind === 'auth' ? TEXT_PH.auth : TEXT_PH.delFail);
-    if (kind === 'closed') syncPhase(s);
+    setMsg(P, p.n, kind === 'closed' ? TEXT_PH.closed : kind === 'auth' ? TEXT_PH.auth : TEXT_PH.delFail);
+    if (kind === 'auth') fatalStop(P.s, 'auth');
+    if (kind === 'closed') syncPhase(P.s);
   }
 
   // ---- the photo phase: only photos are left, for a few minutes ----
   function paintPhotos(v) {
-    const id = st.id, tasks = C.wellFormedTasks(v.tasks, { noCond: true }).filter((t) => t.kind === 'long');
-    if (!tasks.length) { st.lost = 0; fail('Не получилось загрузить задания пробника.', true); return; }
-    const lost = st.lost; st.lost = 0;
-    const s = st.save = makeSession(id, v, tasks);
-    bindOpen(s);
+    const id = st.id, carry = st.carry; st.carry = null;
+    const raw = Array.isArray(v.tasks) ? v.tasks : [];
+    const tasks = C.wellFormedTasks(v.tasks, { noCond: true }).filter((t) => t.kind === 'long');
     const done = '<button class="btn primary" data-ex-done>Готово</button>';
-    appEl.innerHTML = shell('<div class="vbar"><span class="vtimer" id="ex-timer" role="timer"></span>' +
-      '<span class="vprog">Фото решений</span><span class="spacer"></span>' + done + '</div>' +
+    const bar = '<div class="vbar"><span class="vtimer" id="ex-timer" role="timer"></span>' +
+      '<span class="vprog" id="ex-save" role="status" aria-live="polite">' + (tasks.length ? 'Фото решений' : 'Фото не нужны') + '</span><span class="spacer"></span>' + done + '</div>';
+    if (!tasks.length) {
+      if (carry) dropPhotos(carry);
+      if (raw.length) { fail('Не получилось загрузить задания пробника.', true); return; }
+      // An exam without a part 2: nothing to attach, the student just hands the work in.
+      st.noLong[id] = true;
+      const s0 = st.save = makeSession(id, v, []);
+      s0.ph = newPhotos(id, [], []); s0.ph.s = s0;
+      bindOpen(s0);
+      appEl.innerHTML = shell(bar + '<div class="vintro ex-pintro"><h2>Фото не нужны</h2><p class="lead">В этом пробнике нет заданий второй части, поэтому ничего прикреплять не надо. ' +
+        'Нажми «Готово», чтобы сдать работу.</p></div>');
+      startTimer(s0);
+      return;
+    }
+    delete st.noLong[id];
+    const lost = takeLost(id);
+    const s = st.save = makeSession(id, v, tasks);
+    if (carry) attachPhotos(carry, s, tasks); else { s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s; }
+    bindOpen(s);
+    appEl.innerHTML = shell(bar +
       '<div class="vintro ex-pintro"><p class="lead">Ответы первой части сохранены. Сфотографируй решения второй части и прикрепи к заданиям — ' +
       'или отправь фото боту. Время на это идёт на таймере вверху.</p>' +
-      (lost ? '<p class="ex-note">Часть фото не успела загрузиться. Прикрепи их ещё раз.</p>' : '') + '</div>' +
+      (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') + '</div>' +
       tasks.map((t) => '<div class="vcard" data-n="' + t.n + '" data-exn="' + t.n + '"><div class="vlabel">Задание ' + t.n +
         (t.max ? '<span class="vlabel-art"> · максимум ' + t.max + ' ' + ballWordOf(t.max) + '</span>' : '') + '</div>' +
         photoBlockHTML(t.n) + '</div>').join('') + tgBlockHTML() +
@@ -949,13 +1039,16 @@
 
   async function doneNow(s) {
     if (!live(s) || s.finishing) return;
-    const wait = () => { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Готово» ещё раз.'); };
+    const P = s.ph, wait = () => { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Готово» ещё раз.'); };
     if (uploading(s)) { wait(); return; }
-    const failed = !!s.ph && s.ph.pending.length > 0;
-    const ok = await ask({ title: 'Всё прикреплено?',
-      text: 'После этого фото добавить уже нельзя.' + (failed ? ' Фото, которые не загрузились, пропадут.' : ''), ok: 'Готово', cancel: 'Ещё добавлю' });
-    if (!ok || !live(s)) return;
-    if (uploading(s)) { wait(); return; }                               // a photo was added while the question was open
+    if (s.fatal) { note(s.fatal === 'auth' ? 'Нужно войти заново' : 'Пробник недоступен', s.fatal === 'auth' ? 'Войди через ссылку из Telegram и открой пробник снова.' : 'Сервер не нашёл этот пробник. Напиши преподавателю.'); return; }
+    if (P && P.known.length) {
+      const failed = P.pending.length > 0;
+      const ok = await ask({ title: 'Всё прикреплено?',
+        text: 'После этого фото добавить уже нельзя.' + (failed ? ' Фото, которые не загрузились, пропадут.' : ''), ok: 'Готово', cancel: 'Ещё добавлю' });
+      if (!ok || !live(s)) return;
+      if (uploading(s)) { wait(); return; }                             // a photo was added while the question was open
+    }
     s.finishing = true;
     document.querySelectorAll('[data-ex-done]').forEach((b) => { b.disabled = true; });
     try {
@@ -970,6 +1063,18 @@
     }
   }
 
+  // The way out of the screen that can be asked about: the back button, the title and any "К заданиям" button, while photos
+  // are still on their way or failed. (A hash change or the browser's own back cannot be held; those leave a note, see takeLost.)
+  function leaveGuard(s, e) {
+    const t = e.target, P = s.ph;
+    if (!t || !t.closest || !phLive(P) || !P.pending.length) return;
+    const hit = t.closest('#back, [data-home]') || (t.closest('#home') && !t.closest('a'));
+    if (!hit) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    ask({ title: 'Уйти со страницы?', text: uploadingP(P) ? 'Фото ещё загружаются. Уйти и потерять их?' : 'Часть фото не загрузилась. Уйти и потерять их?',
+      ok: 'Уйти', cancel: 'Остаться', danger: true }).then((yes) => { if (yes && live(s)) go('#/'); });
+  }
+
   // ---- clicks on this module's elements ----
   appEl.addEventListener('click', (e) => {
     const t = e.target, s = st.save;
@@ -978,7 +1083,8 @@
     if (t.closest('[data-ex-retry]') && st.id) { renderExam(st.id); return; }
     if (t.closest('[data-ex-finish]') && s) { finishNow(s); return; }
     if (t.closest('[data-ex-done]') && s) { doneNow(s); return; }
-    if (!phLive(s)) return;
+    const P = s && s.ph;
+    if (!phLive(P)) return;
     const pick = t.closest('[data-ex-pick]');
     if (pick) {
       const box = pick.closest('.ex-photos'), f = box && box.querySelector('input[type="file"]');
@@ -986,11 +1092,11 @@
       return;
     }
     const del = t.closest('[data-ex-del]');
-    if (del) { removePhoto(s, del.dataset.exDel); return; }
+    if (del) { removePhoto(P, del.dataset.exDel); return; }
     const rm = t.closest('[data-ex-rm]');
-    if (rm) { removePending(s, rm.dataset.exRm); return; }
+    if (rm) { removePending(P, rm.dataset.exRm); return; }
     const rt = t.closest('[data-ex-rt]');
-    if (rt) { retryPhoto(s, rt.dataset.exRt); return; }
+    if (rt) { retryPhoto(P, rt.dataset.exRt); return; }
   });
   appEl.addEventListener('change', (e) => {
     const f = e.target.closest && e.target.closest('[data-ex-file]');
@@ -998,8 +1104,8 @@
     const files = Array.from(f.files || []);
     f.value = '';                                                       // the same file can be chosen again
     st.picker = 0;
-    const s = st.save;
-    if (phLive(s) && files.length) addFiles(s, f.dataset.exFile, files);
+    const P = st.save && st.save.ph;
+    if (phLive(P) && files.length) addFiles(P, f.dataset.exFile, files);
   });
 
   window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, leave: leave, safeHtml: safeHtml, reset: reset };

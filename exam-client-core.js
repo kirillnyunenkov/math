@@ -160,7 +160,7 @@
 
   /* ---- photos of part 2 ---- */
   // Limits of the server (backend/pb_hooks/exams.js, migration exam_photos); the page keeps to them before sending.
-  const PHOTO = { PER_TASK: 5, BOT_MAX: 15, SIDE: 2000, SERVER_MAX: 10485760, SRC_MAX: 83886080, PIXELS_MAX: 150000000, LIST_MAX: 200 };
+  const PHOTO = { PER_TASK: 5, BOT_MAX: 15, SIDE: 2000, SERVER_MAX: 10485760, SRC_MAX: 83886080, PIXELS_MAX: 150000000, LIST_MAX: 200, MANUAL_MAX: 3, PICKER_MS: 90000 };
 
   // A decoded size the canvas can take: positive integers and not an absurd pixel count (a decompression bomb).
   function dimsOk(w, h) {
@@ -217,7 +217,21 @@
     return 'badFile';
   }
 
-  const api = { dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
+  // A photo the server refused (400) may be tried again by hand this many times, then it stays as it is.
+  function canRetry(manual) { return typeof manual === 'number' && manual === manual && manual < PHOTO.MANUAL_MAX; }
+
+  // What the server's own words about a refused file are about: 'typeSize' only when they clearly name the type or the size.
+  function fileRefusal(message) {
+    return typeof message === 'string' && /\b(size|large|big|type|mime|format)\b/i.test(message) ? 'typeSize' : 'other';
+  }
+
+  /* The mark "the file dialog is open" (set when the student presses "attach", a timestamp): it keeps the dialog's blur
+     from being written to the away journal, but only for 90 s, so that a real absence cannot go unrecorded. */
+  function pickerActive(setAt, nowMs) {
+    return typeof setAt === 'number' && setAt > 0 && nowMs >= setAt && nowMs - setAt < PHOTO.PICKER_MS;
+  }
+
+  const api = { canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
     classifyStatus: classifyStatus, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;

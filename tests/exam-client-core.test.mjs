@@ -291,3 +291,29 @@ test('uploadVerdict reads the refusal codes of the photo route', () => {
   assert.equal(C.uploadVerdict(null), 'retry');
   assert.equal(C.uploadVerdict(undefined), 'retry');
 });
+
+test('canRetry allows three manual tries of a refused photo', () => {
+  assert.deepEqual([0, 1, 2, 3, 4].map(C.canRetry), [true, true, true, false, false]);
+  assert.equal(C.canRetry(undefined), false);
+  assert.equal(C.canRetry(NaN), false);
+});
+
+test('fileRefusal calls a refusal about type or size only when the server says so', () => {
+  assert.equal(C.fileRefusal('bad file'), 'other');
+  assert.equal(C.fileRefusal('one file expected'), 'other');
+  assert.equal(C.fileRefusal(undefined), 'other');
+  assert.equal(C.fileRefusal('file too large'), 'typeSize');
+  assert.equal(C.fileRefusal('wrong mime type'), 'typeSize');
+  assert.equal(C.fileRefusal('Size limit'), 'typeSize');
+  assert.equal(C.fileRefusal('resize failed'), 'other');                 // a word part is not a word
+});
+
+test('pickerActive: the dialog mark holds 90 s and never before it was set', () => {
+  assert.equal(C.pickerActive(1000, 1000), true);
+  assert.equal(C.pickerActive(1000, 90999), true);
+  assert.equal(C.pickerActive(1000, 91000), false);
+  assert.equal(C.pickerActive(0, 1000), false);
+  assert.equal(C.pickerActive(5000, 1000), false);                       // a clock that went back
+  assert.equal(C.pickerActive(undefined, 1000), false);
+  assert.equal(C.pickerActive(NaN, 1000), false);
+});
