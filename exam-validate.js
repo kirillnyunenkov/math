@@ -292,7 +292,9 @@
       if (!nonEmpty(k.a)) { errors.push(where + 'пустой ответ a.'); return; }
       if (t.kind === 'short') {
         if (/[<>]/.test(k.a)) errors.push(where + 'ответ первой части нужно записать простым текстом, без тегов.');
-        else if (!/^-?\d+([.,]\d+)?$/.test(k.a.trim().replace(/−/g, '-')) && k.a.trim().length > 20) warnings.push(where + 'необычный ответ «' + k.a.slice(0, 30) + '» — проверь, что ученик сможет так ввести.');
+        // The answer field of the trainer takes digits, a comma and a minus only (a dot is turned into a comma): any other
+        // character in the key could never be typed, so the task could never be marked right.
+        else if (/[^0-9.,\-\u2212\s]/.test(k.a)) errors.push(where + 'ответ «' + k.a.slice(0, 30) + '» нельзя ввести в поле ответа: допустимы только цифры, запятая и минус. Запиши ответ числом, например -1,5.');
         if (!nonEmpty(k.sol)) errors.push(where + 'нет решения sol (к первой части решения обязательны).');
         else checkField(where, 'в решении', k.sol, true, errors, warnings);
       } else {

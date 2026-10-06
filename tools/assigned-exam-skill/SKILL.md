@@ -23,7 +23,7 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
   `--api http://127.0.0.1:8090/api --link-file <throwaway file>`.
 - Assigning sends a Telegram message to the student. Run `--yes` (or give him the `--yes` command) only after
   his explicit yes that names the student, the exam (№ and title) and the time.
-- Do not assign an exam to a student until the trainer exam screens (Plan 2) are released: the student cannot open it yet.
+- Assign only after the trainer screens release has been deployed together with the updated server hooks (backend/README.md, "Rollout of the trainer screens"), and only if the photo routes are on the server (`curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/x/photos` prints 403; 404 = not deployed). Until then the student cannot open the exam.
 - Times are Moscow time. Default duration is 235 minutes.
 
 ## Workflow
@@ -38,8 +38,9 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
                 {"n": 13, "kind": "long", "max": 2, "cond": "<p>Решите уравнение …</p>"} ],
      "key": { "1": {"a": "5", "sol": "<p>…</p>"}, "13": {"a": "<p>$x=\\pm1$</p>"} } }
    ```
-   - `short` = part 1, 1 point. `a` is **plain text** as a student types it (decimal comma allowed, minus as
-     `-`), no tags. `sol` is required, in the approved format: «Идея» → numbered one-action steps → «Где
+   - `short` = part 1, 1 point. `a` is **plain text** as a student types it: only digits, a comma and a minus
+     (`-1,5`; the answer field accepts nothing else, `exam_check` refuses any other character, so no fractions
+     like `3/2`, no letters, no units), no tags. `sol` is required, in the approved format: «Идея» → numbered one-action steps → «Где
      ошибаются» (only if a typical mistake really exists) → the answer.
    - `long` = part 2, `max` from the criteria, `a` is HTML, no solution (it is not shown; do not add one).
    - Formulas: `$…$` inline, `$$…$$` display, LaTeX. A "less than" sign is `\lt`, never a bare `<` (a `<`

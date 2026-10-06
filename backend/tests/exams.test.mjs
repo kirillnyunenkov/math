@@ -198,7 +198,7 @@ test('before the start the student sees the time and nothing else', async () => 
   const id = (await assign(s.id, exam, start)).json.id;
   const mine = await req('GET', '/ege/exams/mine', s.token);
   assert.equal(mine.status, 200);
-  assert.deepEqual(mine.json.items, [{ id, title: 'Пробник А', full: false, start, duration: 600, phase: 'scheduled', via_tg: false }]);
+  assert.deepEqual(mine.json.items, [{ id, title: 'Пробник А', full: false, start, duration: 600, phase: 'scheduled', via_tg: false, until: start }]);
   assert.ok(Math.abs(mine.json.now - nowS()) <= 2);
   assert.deepEqual((await req('GET', '/ege/exams/mine', other.token)).json.items, []);
   assert.equal((await req('GET', '/ege/exams/mine', null)).status, 403);
@@ -832,4 +832,21 @@ test('a disabled student gets the normal "access off" text and nothing is stored
   assert.equal(said(s.chat, 'Принял фото'), 0);
   const ph = await req('GET', `/collections/exam_photos/records?filter=${encodeURIComponent(`assignment = "${id}"`)}`, tok.su);
   assert.equal(ph.json.totalItems, 0);
+});
+
+test('meta.until is the end of the current phase', async () => {
+  const exam = await mkExam(), s = await student(7000000200);
+  const t = nowS();
+  const id = (await assign(s.id, exam, t - 10, 600)).json.id;
+  let v = (await view(id, s.token)).json;
+  assert.equal(v.phase, 'open');
+  assert.equal(v.until, t - 10 + 600);                                   // the end of the window
+  await post(id, 'finish', s.token);
+  v = (await view(id, s.token)).json;
+  assert.equal(v.phase, 'photos');
+  assert.ok(Math.abs(v.until - (nowS() + 600)) <= 2);                    // finish time + 10 minutes
+  await shift(id, { start: nowS() - 5000, duration: 600, finished: 0, photos_done: 0 });
+  v = (await view(id, s.token)).json;
+  assert.equal(v.phase, 'submitted');
+  assert.equal(v.until, 0);
 });

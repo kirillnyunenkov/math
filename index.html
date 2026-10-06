@@ -235,6 +235,62 @@
     color:var(--ink-3);cursor:pointer;line-height:0;}
   .hub-note .hn-x:hover{background:var(--surface-2);color:var(--ink);}
 
+  /* Назначенный пробник: баннер на хабе. Синий, а не тёплый: это сообщение интерфейса,
+     тёплые цвета остаются за статусом решённых задач. */
+  .ex-banner{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;margin:var(--s4) 0;padding:var(--s4) var(--s5);
+    background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--r-lg);}
+  .ex-banner .ex-b-body{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .ex-banner .ex-b-t{font-family:'Literata',Georgia,serif;font-weight:600;color:var(--ink);}
+  .ex-banner .ex-b-s{font-size:var(--fs-sm);color:var(--ink-2);}
+  .vintro .vactions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s5);}
+  a.btn{text-decoration:none;}
+  /* the banner changed state (e.g. the exam just opened): the new text and button ease in instead of snapping */
+  @keyframes exIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  @keyframes exGlow{0%{box-shadow:0 0 0 0 var(--accent-line);}100%{box-shadow:0 0 0 12px transparent;}}
+  .ex-banner.ex-fresh{animation:exGlow .9s ease-out 1;}
+  .ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn{animation:exIn .45s ease-out both;}
+  .ex-banner.ex-fresh .btn{animation-delay:.12s;}
+  .ex-screen-in{animation:exIn .5s ease-out both;}
+  /* teacher HTML that did not pass the check is shown as plain text */
+  .ex-plain{white-space:pre-wrap;overflow-wrap:anywhere;}
+  .ex-note{margin:var(--s2) 0 0;font-size:var(--fs-sm);color:var(--ink-3);}
+  .vtimer.low{color:var(--err-text);}
+  /* фото решений второй части: плитки 96 px, статус загрузки внизу плитки, крестик справа сверху */
+  .ex-photos{display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s4);}
+  .ex-thumbs{display:flex;flex-wrap:wrap;gap:var(--s3);}
+  .ex-thumbs:empty{display:none;}
+  .ex-thumb{position:relative;margin:0;width:96px;height:96px;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);}
+  .ex-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .ex-thumb img.ex-broken{visibility:hidden;}
+  .ex-thumb.ex-busy img{opacity:.55;}
+  .ex-thumb.ex-err{border-color:var(--err);}
+  .ex-del{position:absolute;top:4px;right:4px;width:32px;height:32px;padding:0;border-radius:var(--r-full);border:1px solid var(--line-strong);
+    background:var(--surface);color:var(--ink);font:inherit;font-size:20px;line-height:1;cursor:pointer;}
+  .ex-del:disabled{opacity:.5;cursor:default;}
+  .ex-st{position:absolute;left:0;right:0;bottom:0;padding:3px var(--s2);font:inherit;font-size:var(--fs-2xs);line-height:1.3;text-align:center;
+    background:var(--surface);color:var(--ink-2);border:0;border-top:1px solid var(--line);}
+  button.ex-st{cursor:pointer;color:var(--err-text);font-weight:600;min-height:28px;}
+  .ex-row{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;}
+  .ex-add:disabled{opacity:.5;cursor:default;}
+  .ex-cnt{font-size:var(--fs-sm);color:var(--ink-3);font-variant-numeric:tabular-nums;}
+  .ex-msg{margin:0;font-size:var(--fs-sm);color:var(--ink-2);}
+  .ex-msg:empty{display:none;}
+  .ex-tgph[hidden]{display:none;}
+  .vintro.ex-pintro .lead{margin-bottom:0;}
+  .vbar .vprog.bad{color:var(--err-text);}
+  /* result of an assigned exam: same blocks as the generator's, plus the teacher's comment, the solution and "waiting for the check" */
+  .vtag.wait{background:var(--surface-2);color:var(--ink-2);}
+  .vresult .lead,.vresult .ex-note{margin:var(--s4) 0 0;color:var(--invert-ink);opacity:.8;font-size:var(--fs-sm);line-height:1.5;}
+  .ex-sol{margin-top:var(--s3);}
+  .ex-sol summary{cursor:pointer;color:var(--accent);font-weight:500;}
+  .ex-sol[open] summary{margin-bottom:var(--s2);}
+  .ex-comment{margin-top:var(--s4);padding:var(--s3) var(--s4);background:var(--surface-2);border-radius:var(--r-md);white-space:pre-wrap;overflow-wrap:anywhere;}
+  .ex-comment-h{font-size:var(--fs-xs);font-weight:600;color:var(--ink-3);margin-bottom:var(--s2);}
+  /* the save note may be two lines on a phone; it shrinks and wraps instead of pushing the button to a second row */
+  .vbar #ex-save{flex:1 1 0;min-width:0;}
+  .vbar #ex-save.bad{line-height:1.25;}
+  @media (prefers-reduced-motion:reduce){.ex-banner.ex-fresh,.ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn,.ex-screen-in{animation:none;}}
+
   /* сводка прогресса — плоская, без тени: это фон, а не объект */
   .hub-prog{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
     padding:var(--s6);margin-bottom:var(--s4);}
@@ -1774,9 +1830,11 @@ const Sync={
     const a=document.activeElement;
     if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'))return;
     if(parseRoute().view==='variant'&&variant&&!variant.finished)return;
+    if(parseRoute().view==='exam')return;
     render();},
   expired(disabled){
     auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
+    exUI('reset');
     render();
     if(disabled)note('Аккаунт отключён','Преподаватель отключил этот аккаунт. Тренажёр работает как раньше, но прогресс больше не синхронизируется.');
     /* 401 бывает и после новой ссылки, и после смены настроек входа на
@@ -1802,6 +1860,7 @@ const Sync={
     auth={token:r.json.token,userId:rec.id,name:rec.name||rec.login,role:rec.role,link:link,
       device:deviceId()};
     saveJ(AUTH_KEY,auth);
+    exUI('reset');
     if(!same){
       /* Другой ученик на этом устройстве: его журнал к нам не относится. */
       if(known!==null){state={};save();saveHistory([]);}
@@ -1823,7 +1882,7 @@ const Sync={
       if(r.status===401||r.status===403){this.expired(r.status===403);return;}
       if(r.status===200){auth.token=r.json.token;auth.name=r.json.record.name||auth.name;saveJ(AUTH_KEY,auth);}
     }catch(e){}},
-  logout(){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
+  logout(){exUI('reset');auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
 };
 window.addEventListener('online',()=>Sync.soon(0));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')Sync.soon(0);});
@@ -2574,9 +2633,18 @@ function doInstall(){
 function parseRoute(){
   if(/#\/help\b/.test(location.hash))return{view:'help'};
   if(/#\/v\b/.test(location.hash))return{view:'variant'};
+  const ex=location.hash.match(/#\/exam\/([A-Za-z0-9]+)/);if(ex)return{view:'exam',id:ex[1]};
   const m=location.hash.match(/#\/t\/(\d+)/);return m?{view:'task',n:+m[1]}:{view:'hub'};
 }
 function go(h){location.hash=h;}
+/* Everything the trainer asks of the exam module goes through here: a missing or older exam.js (a cached copy next to a
+   new index.html) must never break the rest of the trainer. */
+function exUI(name,...args){
+  try{
+    if(window.ExamUI&&typeof window.ExamUI[name]==='function')return window.ExamUI[name](...args);
+  }catch(e){if(window.console)console.error('ExamUI.'+name,e);}
+  return undefined;
+}
 /* Кнопка возврата и заголовок ведут в одно и то же место — на хаб.
    На телефоне вдвоём они в строку не помещаются, и шапка разъезжалась
    на два ряда высотой 116px вместо 56. Показываем что-то одно.
@@ -2677,6 +2745,7 @@ function renderHub(){
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
     ${noteHTML}
+    ${exUI('bannerHTML')||''}
     ${progHTML}
     <button class="variant-cta" data-variant>
       <span class="vc-ico"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>
@@ -2996,6 +3065,7 @@ function renderWall(){
 }
 let variant=null, variantTimerId=null;
 function render(){
+  exUI('leave');
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
   if(gated()){if(lastRouteKey!=='wall'){lastRouteKey='wall';scrollTop();}renderWall();return;}
   burgerEl.style.display='';
@@ -3019,6 +3089,7 @@ function render(){
   else if(guest){accountEl.querySelector('.acc-label').textContent='Войти';accountEl.title='Войти через Telegram';}
   if(r.view==='help'||isStandalone()){installEl.style.setProperty('display','none','important');}else{installEl.style.removeProperty('display');}
   if(r.view==='help')renderHelp();
+  else if(r.view==='exam'&&window.ExamUI)exUI('render',r.id);
   else if(r.view==='variant')renderVariant();
   else if(r.view==='task')renderTask(r.n);
   else renderHub();
@@ -3581,5 +3652,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   render();
 });
 </script>
+<script src="exam-validate.js"></script>
+<script src="exam-client-core.js"></script>
+<script src="exam.js"></script>
 </body>
 </html>

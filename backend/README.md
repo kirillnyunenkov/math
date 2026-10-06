@@ -130,6 +130,29 @@ Then the files:
 
 Verify: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/x/photos` prints `403`.
 
+### Rollout of the trainer screens
+
+Precondition: the "Photos through the bot" rollout (migration `1790800008_exam_tg_photos.js`, `exams.pb.js`,
+`exams.js`, `tg.js`) is already on the server. It is: the check below prints `403` on production (`404` means
+the photo routes are not deployed, stop and roll that part out first). Keep running it before every release:
+
+    curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/x/photos
+
+Then the hooks go **before** the site. `exams.js` now returns `until` (the end of the current phase) in the exam
+meta. A new site against old hooks has no `until`: the running exam shows no countdown and does not move to
+the photo phase at the end of the window until a save is refused with 409, and the "scheduled" screen does not
+open at the start but only polls every 30-60 s. Only `exams.js` changed; take the backup and copy the hook the
+same way as in "Photos through the bot":
+
+    ssh root@185.249.154.78 'systemctl start ege-api-backup.service'
+    scp backend/pb_hooks/exams.js root@185.249.154.78:/opt/ege-api/pb_hooks/
+    ssh root@185.249.154.78 'chown egeapi: /opt/ege-api/pb_hooks/exams.js && systemctl restart ege-api && sleep 2 && systemctl is-active ege-api'
+
+Then deploy the site (the new files `exam.js`, `exam-client-core.js`, `exam-validate.js` are in the service
+worker's list and `sw.js` has a new version). Photos from the site need the Caddy 12 MB rule for
+`/api/ege/exams/<id>/photos`: it is step 6 of the exams "Rollout" (`deploy/Caddyfile.snippet`) and is already in
+place on the server, so there is nothing to do here.
+
 ### Preparing and assigning exams (Claude Code)
 
 Exams are not uploaded through the panel. Work happens in a Claude Code chat with the project
@@ -144,7 +167,7 @@ every formula rendered with the repo's KaTeX), a local `node tools/exam_preview.
 message, `node tools/exam_api.mjs assign ... --yes`. `exams`, `students`, `status` and `delete` are
 there too. The tool logs in with `~/ege-teacher-link.txt` and prints no secrets.
 
-- Do not assign an exam to a student until the trainer exam screens (Plan 2) are released: the student cannot open it yet.
+- Assign an exam only after the trainer screens release has been deployed together with the updated server hooks ("Rollout of the trainer screens", including its precondition: the photo routes answer `403`); until then the student cannot open the exam.
 - The catalog is numbered: `exams` prints "No. N · title", and `--exam` takes that number (or a title).
 - Statements and solutions are HTML checked against an allowlist (`exam-validate.js`, run by
   `exam_check.mjs` and again before `upload`). Short answers are plain text as a student types them;
