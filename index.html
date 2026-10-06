@@ -1834,7 +1834,7 @@ const Sync={
     render();},
   expired(disabled){
     auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
-    if(window.ExamUI)ExamUI.reset();
+    exUI('reset');
     render();
     if(disabled)note('Аккаунт отключён','Преподаватель отключил этот аккаунт. Тренажёр работает как раньше, но прогресс больше не синхронизируется.');
     /* 401 бывает и после новой ссылки, и после смены настроек входа на
@@ -1860,7 +1860,7 @@ const Sync={
     auth={token:r.json.token,userId:rec.id,name:rec.name||rec.login,role:rec.role,link:link,
       device:deviceId()};
     saveJ(AUTH_KEY,auth);
-    if(window.ExamUI)ExamUI.reset();
+    exUI('reset');
     if(!same){
       /* Другой ученик на этом устройстве: его журнал к нам не относится. */
       if(known!==null){state={};save();saveHistory([]);}
@@ -1882,7 +1882,7 @@ const Sync={
       if(r.status===401||r.status===403){this.expired(r.status===403);return;}
       if(r.status===200){auth.token=r.json.token;auth.name=r.json.record.name||auth.name;saveJ(AUTH_KEY,auth);}
     }catch(e){}},
-  logout(){if(window.ExamUI)ExamUI.reset();auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
+  logout(){exUI('reset');auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
 };
 window.addEventListener('online',()=>Sync.soon(0));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')Sync.soon(0);});
@@ -2637,6 +2637,14 @@ function parseRoute(){
   const m=location.hash.match(/#\/t\/(\d+)/);return m?{view:'task',n:+m[1]}:{view:'hub'};
 }
 function go(h){location.hash=h;}
+/* Everything the trainer asks of the exam module goes through here: a missing or older exam.js (a cached copy next to a
+   new index.html) must never break the rest of the trainer. */
+function exUI(name,...args){
+  try{
+    if(window.ExamUI&&typeof window.ExamUI[name]==='function')return window.ExamUI[name](...args);
+  }catch(e){if(window.console)console.error('ExamUI.'+name,e);}
+  return undefined;
+}
 /* Кнопка возврата и заголовок ведут в одно и то же место — на хаб.
    На телефоне вдвоём они в строку не помещаются, и шапка разъезжалась
    на два ряда высотой 116px вместо 56. Показываем что-то одно.
@@ -2737,7 +2745,7 @@ function renderHub(){
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
     ${noteHTML}
-    ${window.ExamUI?ExamUI.bannerHTML():''}
+    ${exUI('bannerHTML')||''}
     ${progHTML}
     <button class="variant-cta" data-variant>
       <span class="vc-ico"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>
@@ -3057,7 +3065,7 @@ function renderWall(){
 }
 let variant=null, variantTimerId=null;
 function render(){
-  if(window.ExamUI)ExamUI.leave();
+  exUI('leave');
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
   if(gated()){if(lastRouteKey!=='wall'){lastRouteKey='wall';scrollTop();}renderWall();return;}
   burgerEl.style.display='';
@@ -3081,7 +3089,7 @@ function render(){
   else if(guest){accountEl.querySelector('.acc-label').textContent='Войти';accountEl.title='Войти через Telegram';}
   if(r.view==='help'||isStandalone()){installEl.style.setProperty('display','none','important');}else{installEl.style.removeProperty('display');}
   if(r.view==='help')renderHelp();
-  else if(r.view==='exam'&&window.ExamUI)ExamUI.render(r.id);
+  else if(r.view==='exam'&&window.ExamUI)exUI('render',r.id);
   else if(r.view==='variant')renderVariant();
   else if(r.view==='task')renderTask(r.n);
   else renderHub();

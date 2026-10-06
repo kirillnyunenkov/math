@@ -222,11 +222,25 @@ test('the size caps are counted in UTF-8 bytes like the server fields', () => {
   assert.ok(!errs(ok).some((e) => /размер/i.test(e)));
 });
 
-test('a part 2 solution is a warning, an odd short answer is a warning', () => {
-  const x = sample(); x.key['13'].sol = '<p>x</p>'; x.key['1'].a = 'очень длинный текст ответа';
+test('a part 2 solution is only a warning', () => {
+  const x = sample(); x.key['13'].sol = '<p>x</p>';
   const r = V.validateExam(x);
   assert.deepEqual(r.errors, []);
-  assert.equal(r.warnings.length, 2);
+  assert.equal(r.warnings.length, 1);
+});
+
+test('a part 1 key may only hold digits, comma, dot, minus and spaces (what the answer field can type)', () => {
+  const run = (a) => { const x = sample(); x.key['1'].a = a; return V.validateExam(x); };
+  ['5', '-1,5', '0.5', '−3', '12 345', ' 7 ', '-0,25', '1000'].forEach((a) => assert.deepEqual(run(a).errors, [], a));
+  ['очень длинный текст ответа', '1/2', 'x=1', '2;3', '1e5', '5%', '+5', '∞', '1,5 м', '\\frac12', '(1)', '2\u00a0см'].forEach((a) => {
+    const e = run(a).errors;
+    assert.ok(e.some((m) => /задание 1:/i.test(m) && /цифры, запятая и минус/.test(m)), a + ' -> ' + e.join('|'));
+  });
+  // tags keep their own, more specific message
+  assert.ok(run('<b>5</b>').errors.some((m) => /простым текстом/.test(m)));
+  // part 2 answers are HTML and are not subject to the alphabet
+  const x = sample(); x.key['13'].a = '<p>$x=\\pm1$, ответ: 2 корня</p>';
+  assert.deepEqual(V.validateExam(x).errors, []);
 });
 
 test('extractFormulas finds inline and display formulas', () => {

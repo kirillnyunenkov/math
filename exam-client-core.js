@@ -31,6 +31,14 @@
     return misses > 1 ? 60000 : 30000;
   }
 
+  /* Russian plural of "минута": 1 минута, 2 минуты, 5 минут, 11 минут, 21 минута. A non-number gives "0 минут". */
+  function minutesText(n) {
+    const k = typeof n === 'number' && Number.isFinite(n) ? Math.max(0, Math.round(n)) : 0;
+    const m10 = k % 10, m100 = k % 100;
+    const w = m100 >= 11 && m100 <= 14 ? 'минут' : m10 === 1 ? 'минута' : m10 >= 2 && m10 <= 4 ? 'минуты' : 'минут';
+    return k + ' ' + w;
+  }
+
   /* The soonest moment (server seconds) at which the hub banners can change by themselves: the start of a scheduled
      exam, the end of a running window, the end of the photo time. Items without a finite `until` are ignored. */
   function nextChangeAt(items) {
@@ -333,7 +341,7 @@
   }
 
   const api = { mergePhotoLists: mergePhotoLists, ownGet: ownGet, pointsOf: pointsOf, secondaryOf: secondaryOf, resultOf: resultOf, canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
-    classifyStatus: classifyStatus, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, nextChangeAt: nextChangeAt, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
+    classifyStatus: classifyStatus, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, nextChangeAt: nextChangeAt, minutesText: minutesText, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamClientCore = api;

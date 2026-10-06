@@ -17,7 +17,7 @@
     save: null, leaving: null, det: {}, listeners: [], saveTimer: 0, retryTimer: 0,
     picker: 0, carry: null,            // picker: when the file dialog was opened; carry: photos handed from the open to the photo screen
     noLong: {}, lostBy: Object.create(null),   // exams seen without a part 2; photos lost on leaving, per exam, until the note is shown
-    shownPhase: '', shownId: '', sheets: 0 };   // sheets: confirmation sheets of this module that are open
+    shownPhase: '', shownId: '', fade: false, sheets: 0 };   // sheets: confirmation sheets of this module that are open
 
   const seen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || []; } catch (e) { return []; } };
   const markSeen = (id) => { try { const s = seen(); if (s.indexOf(id) < 0) { s.push(id); localStorage.setItem(SEEN_KEY, JSON.stringify(s.slice(-50))); } } catch (e) {} };
@@ -187,6 +187,7 @@
     appEl.innerHTML = shell('<div class="vintro"><h2>Пробник</h2><p class="lead">' + esc(msg) + '</p>' +
       '<div class="vactions">' + (retry ? '<button class="btn primary" data-ex-retry>Попробовать снова</button> ' : '') +
       '<button class="btn" data-home>К заданиям</button></div></div>');
+    appear();
   }
 
   // Stops this module's timers and listeners and forgets the open exam. Called by render() before every screen.
@@ -199,6 +200,7 @@
     // A question of this screen (leave? finish? delete?) does not outlive it: its answer would be about a screen that is gone.
     if (st.sheets > 0) { st.sheets = 0; if (typeof closeSheet === 'function') closeSheet(false); }
     const s = st.save; st.save = null;
+    syncAnswerGuard();
     if (s) {
       s.dead = true;
       // Uploads in flight are cancelled, previews and the file token dropped, and the exam remembers that photos were lost.
@@ -208,7 +210,7 @@
     }
     if (st.id) st.mineAt = 0;                            // coming back to the hub: the list is read again
     st.req++;                                            // an answer still on its way must not paint
-    st.id = null; st.view = null; st.shownPhase = ''; st.shownId = '';
+    st.id = null; st.view = null; st.shownPhase = ''; st.shownId = ''; st.fade = false;
   }
 
   async function renderExam(id) {
@@ -221,7 +223,10 @@
     setBack(true); statsEl.innerHTML = '';
     if (!C) { fail('Не получилось загрузить пробник.'); return; }
     if (!auth) { fail('Чтобы открыть пробник, войди в тренажёр через Telegram.'); return; }
-    appEl.innerHTML = '<div class="vbox"><div class="vwait" role="status"><div class="vwait-ring" aria-hidden="true"></div><p>Загружаю пробник…</p></div></div>';
+    // The scheduled page re-fetched by its own timer stays on screen until the next screen is ready: no spinner in between.
+    if (!(keepId === id && keepPhase === 'scheduled')) {
+      appEl.innerHTML = '<div class="vbox"><div class="vwait" role="status"><div class="vwait-ring" aria-hidden="true"></div><p>Загружаю пробник…</p></div></div>';
+    }
     // Answers typed on this exam just before (navigating away and straight back) must reach the server before it is read.
     if (lv) { await Promise.race([lv, new Promise((res) => setTimeout(res, 2500))]); if (st.id !== id || my !== st.req) return; }
     let r;
@@ -239,7 +244,7 @@
   function paint(v) {
     scrollTop();
     const again = st.shownPhase === v.phase && st.shownId === v.id;   // the same screen fetched again by its own timer
-    if (st.shownPhase && st.shownPhase !== v.phase && st.shownId === v.id) fadeIn();
+    st.fade = !!(st.shownPhase && st.shownPhase !== v.phase && st.shownId === v.id);   // eased in by appear() once the new screen is on the page
     st.shownPhase = v.phase; st.shownId = v.id;
     if (v.phase === 'scheduled') return paintScheduled(v, again);
     if (v.phase === 'missed') return paintMissed(v);
@@ -255,11 +260,12 @@
   function paintScheduled(v, again) {
     // Malformed start or duration: the line is left out, never "undefined" or "NaN".
     const when = numOk(v.start) ? 'Начало ' + C.whenText(v.start) + ' (по Москве). ' : '';
-    const mins = numOk(v.duration) && v.duration > 0 ? ' На работу даётся ' + Math.round(v.duration / 60) + ' минут, время идёт с назначенного начала.' : '';
+    const mins = numOk(v.duration) && v.duration > 0 ? ' На работу даётся ' + C.minutesText(v.duration / 60) + ', время идёт с назначенного начала.' : '';
     appEl.innerHTML = shell('<div class="vintro"><h2>' + titleOf(v) + '</h2>' +
       '<p class="lead">' + when + 'Когда время придёт, пробник откроется на этой странице.</p>' +
       '<p class="mode-hint">Подготовь чистые листы и ручку.' + mins + '</p>' +
       '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>');
+    appear();
     const id = v.id;
     // Ask again just after the start. A start already past (the server still says "scheduled", or `until` is
     // missing) is never reused as a deadline: back off 30 s, then 60 s. Without a known server clock: no timer.
@@ -269,6 +275,8 @@
   }
 
   // A phase change on screen (the scheduled page becoming the exam) eases in instead of a hard cut.
+  // Plays the ease-in once, on the screen that has just been put on the page (not on the one that is being replaced).
+  function appear() { if (st.fade) { st.fade = false; fadeIn(); } }
   function fadeIn() {
     appEl.classList.remove('ex-screen-in'); void appEl.offsetWidth; appEl.classList.add('ex-screen-in');
     setTimeout(() => appEl.classList.remove('ex-screen-in'), 700);
@@ -330,7 +338,7 @@
         (hasLong ? tgBlockHTML() : '') +
         '<div style="text-align:center;margin-top:8px"><button class="btn primary" data-ex-finish>Завершить пробник</button></div>'),
       () => st.save === s && !s.dead && parseRoute().view === 'exam',
-      () => { startTimer(s); mountPhotos(s); if (s.q.has()) flush(s, { force: true }); });
+      () => { appear(); startTimer(s); mountPhotos(s); if (s.q.has()) flush(s, { force: true }); });
   }
 
   // One session per painted exam screen (open or photo phase): what is typed, what is in flight, the photos, and whether
@@ -430,12 +438,12 @@
     try { status = await post(s, snap, opt); } finally { s.inflight = null; }
     const kind = C.classifyStatus(status);
     if (kind === 'ok') {
-      s.q.ack(snap);
+      s.q.ack(snap); syncAnswerGuard();
       if (live(s)) { s.fails = 0; s.nextAt = 0; s.lastKind = ''; setSaveText(s.q.has() ? 'Сохраняю…' : 'Сохранено'); }
       return true;
     }
     if (!live(s)) return false;
-    if (kind === 'closed') { s.closed = true; setSaveText(''); syncPhase(s); return false; }   // the window is over: the server decides what comes next
+    if (kind === 'closed') { s.closed = true; syncAnswerGuard(); setSaveText(''); syncPhase(s); return false; }   // the window is over: the server decides what comes next
     if (kind === 'auth' || kind === 'gone') { s.fatal = ''; fatalStop(s, kind); return false; }
     s.fails++; s.lastKind = kind;
     const d = C.retryDelay(s.fails);
@@ -506,8 +514,8 @@
     if (uploading(s)) { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Завершить» ещё раз.'); return; }
     const failedPh = !!s.ph && s.ph.pending.length > 0;
     const ok = await askHere({ title: 'Завершить пробник?',
-      text: 'Ответы первой части после этого изменить нельзя.' + (s.hasLong ? ' Фото второй части можно будет прикрепить ещё 10 минут.' : '') +
-        (failedPh ? ' Фото, которые не загрузились, пропадут: прикрепишь их заново.' : ''),
+      text: 'Ответы первой части после этого изменить нельзя.' + (s.hasLong ? ' Фото второй части можно будет прикрепить ещё ' + C.minutesText(10) + '.' : '') +
+        (failedPh ? ' Фото, которые не загрузились, останутся в списке с кнопкой «Ещё раз».' : ''),
       ok: 'Завершить', cancel: 'Вернуться' });
     if (!ok || s.dead) return;
     s.finishing = true;
@@ -527,12 +535,22 @@
       const r = await xapi('/' + s.id + '/finish', { method: 'POST', token: s.token }).catch(() => null);
       if (s.dead) return;
       if (!r || (r.status !== 200 && r.status !== 409)) { note('Не получилось завершить', 'Проверь интернет и нажми «Завершить» ещё раз. Ответы сохранены.'); return; }
-      s.closed = true;                                     // finished: whatever was refused is dropped, nothing is sent after this
-      renderExam(s.id);                                    // the server says which screen is next
+      s.closed = true; syncAnswerGuard();                  // finished: whatever was refused is dropped, nothing is sent after this
+      afterFinish(s);                                      // the server says which screen is next; photos on their way go with it
     } finally {
       s.finishing = false;
-      if (!s.dead) document.querySelectorAll('[data-ex-finish]').forEach((b) => { b.disabled = false; });
+      if (!s.dead && !s.closed) document.querySelectorAll('[data-ex-finish]').forEach((b) => { b.disabled = false; });   // finished: they stay off until the next screen
     }
+  }
+
+  // After /finish: reads the exam and shows the next screen through adopt(), so that photos still uploading (or failed) at this
+  // moment go on into the photo phase instead of being cancelled; a failed read falls back to a plain reload of the screen.
+  async function afterFinish(s) {
+    let r = null;
+    try { r = await xapi('/' + encodeURIComponent(s.id)); } catch (e) { r = null; }
+    if (s.dead) return;
+    if (r && r.status === 200 && r.json && typeof r.json.phase === 'string' && r.json.phase !== s.phase) { adopt(s.id, r.json); return; }
+    renderExam(s.id);
   }
 
   // ---- the away journal: when the page is hidden or loses focus ----
@@ -572,7 +590,7 @@
     listen(appEl, 'input', (e) => {
       const inp = e.target.closest && e.target.closest('[data-ex-in]');
       if (!inp || s.dead) return;
-      s.q.set(inp.dataset.exIn, inp.value);
+      s.q.set(inp.dataset.exIn, inp.value); syncAnswerGuard();
       if (!s.fails && !s.fatal) setSaveText('Сохраняю…');         // a fatal status (sign in again) is not overwritten
       clearTimeout(st.saveTimer); st.saveTimer = setTimeout(() => flush(s), C.clampDelay(700));
     });
@@ -610,6 +628,7 @@
     retry: 'Не загрузилось — проверь интернет и нажми «Ещё раз» на фото.',
     auth: 'Войди в тренажёр заново — пока ты не вошёл, фото не загрузятся.',
     gone: 'Пробник недоступен. Напиши преподавателю.',
+    listGone: 'Список фото больше не обновляется: сервер его не нашёл. Показано то, что было загружено; если что-то не так, напиши преподавателю.',
     closed: 'Время для фото вышло. Смотрю, что дальше…',
     delFail: 'Не получилось удалить фото — попробуй ещё раз.',
   };
@@ -632,7 +651,7 @@
     const known = tasks.filter((t) => t.kind === 'long').map((t) => String(t.n));
     return { id: id, s: null, known: known, server: C.wellFormedPhotos(list, known), pending: [], local: new Map(), urls: new Set(), msgs: new Map(),
       deleting: new Set(), ro: false, ctls: new Set(), timers: new Set(), ftoken: '', ftokenAt: 0, tokP: null, rev: 0, seq: 0, busy: null,
-      polling: false, pollT: 0, pollFails: 0, polledAt: 0, gen: 0, guard: null, dead: false };
+      polling: false, pollT: 0, pollFails: 0, polledAt: 0, gen: 0, guard: null, listGone: false, dead: false };
   }
   const phLive = (P) => !!P && !P.dead && !!P.s && live(P.s);
   const uploadingP = (P) => !!P && P.pending.some((x) => x.state !== 'err');
@@ -645,6 +664,17 @@
       P.guard = (e) => { e.preventDefault(); e.returnValue = ''; return ''; };
       window.addEventListener('beforeunload', P.guard);
     } else if (!need && P.guard) { window.removeEventListener('beforeunload', P.guard); P.guard = null; }
+  }
+
+  // The same for typed answers that the server has not confirmed yet (memory only, nothing is stored): the guard is
+  // there while the current screen holds unsent text, and goes when it is sent, closed, or the screen is left.
+  function syncAnswerGuard() {
+    const s = st.save;
+    const need = !!s && !s.dead && !s.closed && s.q.has();
+    if (need && !st.ansGuard) {
+      st.ansGuard = (e) => { e.preventDefault(); e.returnValue = ''; return ''; };
+      window.addEventListener('beforeunload', st.ansGuard);
+    } else if (!need && st.ansGuard) { window.removeEventListener('beforeunload', st.ansGuard); st.ansGuard = null; }
   }
 
   // Cancels everything a screen holds for its photos; returns how many photos were still on their way or failed (lost).
@@ -669,6 +699,7 @@
   // `raw` is the photo list of the response that brought the new screen: photos the bot received meanwhile show at once.
   function attachPhotos(P, s, tasks, raw) {
     P.s = s; s.ph = P;
+    if (P.listGone) { P.listGone = false; P.msgs.forEach((m, k) => { if (m.t === TEXT_PH.listGone) P.msgs.delete(k); }); }   // the new screen asks the list again
     P.known = tasks.filter((t) => t.kind === 'long').map((t) => String(t.n));
     P.server = Array.isArray(raw) ? C.mergePhotoLists(raw, P.server, P.local, P.known) : C.wellFormedPhotos(P.server, P.known);
     P.local.forEach((u, id) => { if (!P.server.some((q) => q.id === id)) { revokeUrl(P, u); P.local.delete(id); } });
@@ -815,7 +846,7 @@
     const tick = async () => {
       if (gen !== P.gen) return;
       P.pollT = 0;
-      if (!phLive(P) || P.s.fatal) return;                              // a permanent refusal stops the poll for good
+      if (!phLive(P) || P.s.fatal || P.listGone) return;                // a permanent refusal stops the poll for good
       if (P.polling) { schedule(1000); return; }
       if (document.visibilityState === 'hidden') return;                // paused: coming back to the page asks at once
       P.polling = true; P.polledAt = Date.now();
@@ -833,13 +864,16 @@
         schedule(P.rev === rev ? C.pollDelay(0) : 2000);
         return;
       }
-      if (kind === 'auth' || kind === 'gone') { fatalStop(P.s, kind); return; }   // nothing to wait for: say so and stop
+      if (kind === 'auth') { fatalStop(P.s, kind); return; }             // nothing to wait for: say so and stop
+      // 404 from the photo list only ends the list: the photo blocks say so, answers still go through their own requests
+      // (a 404 from /answers or /finish does mean that the exam is gone).
+      if (kind === 'gone') { P.listGone = true; P.known.forEach((n) => putMsg(P, n, TEXT_PH.listGone)); putMsg(P, '', TEXT_PH.listGone); drawAll(P); return; }
       if (kind === 'closed') syncPhase(P.s);                            // the server decides which screen is next
       P.pollFails++;
       schedule(C.pollDelay(P.pollFails));
     };
     const resume = () => {
-      if (!phLive(P) || P.s.fatal || P.polling || gen !== P.gen) return;
+      if (!phLive(P) || P.s.fatal || P.listGone || P.polling || gen !== P.gen) return;
       schedule(Math.max(0, 3000 - (Date.now() - P.polledAt)));          // never faster than every 3 s
     };
     listen(document, 'visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
@@ -1032,6 +1066,7 @@
       bindOpen(s0);
       appEl.innerHTML = shell(bar + '<div class="vintro ex-pintro"><h2>Фото не нужны</h2><p class="lead">В этом пробнике нет заданий второй части, поэтому ничего прикреплять не надо. ' +
         'Нажми «Готово», чтобы сдать работу.</p></div>');
+      appear();
       startTimer(s0);
       return;
     }
@@ -1048,6 +1083,7 @@
         (t.max ? '<span class="vlabel-art"> · максимум ' + t.max + ' ' + ballWordOf(t.max) + '</span>' : '') + '</div>' +
         photoBlockHTML(t.n) + '</div>').join('') + tgBlockHTML() +
       '<div style="text-align:center;margin-top:8px">' + done + '</div>');
+    appear();
     startTimer(s); mountPhotos(s);
   }
 
@@ -1133,6 +1169,7 @@
       () => live(s) && parseRoute().view === 'exam',
       () => {
         if (!live(s)) return;
+        appear();
         drawAll(P); refreshPics(P);
         if (R.checked) markSeen(id);                     // the banner on the hub stops showing the checked exam once its result was seen
       });

@@ -69,6 +69,16 @@ test('nextChangeAt picks the soonest start, window end or photo end, and ignores
   assert.equal(C.nextChangeAt([]), undefined);
 });
 
+test('minutesText has the Russian plural forms', () => {
+  const t = (n) => C.minutesText(n);
+  assert.deepEqual([1, 2, 3, 4, 5, 10, 11, 12, 14, 20, 21, 22, 25, 101, 111, 121].map(t),
+    ['1 минута', '2 минуты', '3 минуты', '4 минуты', '5 минут', '10 минут', '11 минут', '12 минут', '14 минут', '20 минут', '21 минута', '22 минуты', '25 минут', '101 минута', '111 минут', '121 минута']);
+  assert.equal(t(235 / 1), '235 минут');
+  assert.equal(t(1.6), '2 минуты');                    // rounded
+  assert.equal(t(NaN), '0 минут');
+  assert.equal(t('5'), '0 минут');
+});
+
 test('clampDelay keeps every timer inside the 32-bit setTimeout range', () => {
   assert.equal(C.clampDelay(1500.4), 1500);
   assert.equal(C.clampDelay(-5), 0);
