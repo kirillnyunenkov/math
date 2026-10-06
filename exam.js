@@ -13,7 +13,7 @@
   const TG = 'https://t.me/kirill_math_tutor';   // the teacher, used on the "missed" screen
   const TG_BOT = 'kirill_repet_bot';             // the sign-in bot that also takes photos of part 2
 
-  const st = { mine: null, mineAt: 0, loading: false, hubTimer: 0, id: null, view: null, offset: 0, synced: false, timers: [],
+  const st = { mine: null, mineAt: 0, loading: false, hubTimer: 0, hubMiss: 0, user: '', gen: 0, req: 0, schedMiss: 0, id: null, view: null, offset: 0, synced: false, timers: [],
     queue: null, away: null, photos: [], ftoken: '', ftokenAt: 0, picker: false, saveTimer: 0, saveFail: false,
     shownPhase: '', shownId: '' };
 
@@ -33,8 +33,9 @@
 
   // ---- timers owned by the open exam screen ----
   function clearTimers() { st.timers.forEach((t) => { clearTimeout(t); clearInterval(t); }); st.timers = []; }
-  function later(fn, ms) { const t = setTimeout(fn, Math.max(0, Math.min(ms, 2147483000))); st.timers.push(t); return t; }
-  function every(fn, ms) { const t = setInterval(fn, ms); st.timers.push(t); return t; }
+  // Every delay goes through ExamClientCore.clampDelay: a NaN or a start weeks away must not fire at once.
+  function later(fn, ms) { const t = setTimeout(fn, C.clampDelay(ms)); st.timers.push(t); return t; }
+  function every(fn, ms) { const t = setInterval(fn, C.clampDelay(ms)); st.timers.push(t); return t; }
 
   // ---- server clock ----
   // The offset is only trusted after the server told us its time; until then nothing is shown or scheduled from it.
@@ -69,43 +70,70 @@
   // ---- hub banner ----
   const shown = (it) => it.phase === 'scheduled' || it.phase === 'open' || it.phase === 'photos' || it.phase === 'submitted' ||
     (it.phase === 'checked' && seen().indexOf(it.id) < 0);
+  // What needs the student first: a running exam, then one that is coming, then results.
+  const PRIO = { open: 0, photos: 0, scheduled: 1, submitted: 2, checked: 3 };
+  // Only well-formed items are kept: the page never trusts the shape of the server answer.
+  const wellFormed = (it) => !!it && typeof it === 'object' && typeof it.id === 'string' && typeof it.phase === 'string' &&
+    typeof it.start === 'number' && Number.isFinite(it.start);
 
   // The phase each banner was last drawn with: a changed phase animates in (scheduled -> open is the one that matters).
   const drawnPhase = {};
+  const nameOf = (it) => { const n = String(it.title == null ? '' : it.title).trim(); return n ? 'Пробник «' + esc(n) + '»' : 'Пробник'; };
   function bannerOf(it) {
-    const t = esc(it.title);
+    const t = nameOf(it);
     const fresh = drawnPhase[it.id] && drawnPhase[it.id] !== it.phase;
     drawnPhase[it.id] = it.phase;
     const row = (title, sub, act) => '<div class="ex-banner' + (fresh ? ' ex-fresh' : '') + '"><div class="ex-b-body"><span class="ex-b-t">' + title + '</span>' +
       (sub ? '<span class="ex-b-s">' + sub + '</span>' : '') + '</div>' +
       (act ? '<button class="btn primary" data-exam="' + esc(it.id) + '">' + act + '</button>' : '') + '</div>';
-    if (it.phase === 'scheduled') return row('Пробник «' + t + '»', C.whenText(Number(it.start)) + ' · время московское', '');
-    if (it.phase === 'open') return row('Пробник «' + t + '» идёт', 'Время на работу уже идёт', 'Открыть');
-    if (it.phase === 'photos') return row('Пробник «' + t + '»', 'Осталось прикрепить фото второй части', 'Открыть');
-    if (it.phase === 'submitted') return row('Пробник «' + t + '» сдан', 'Вторую часть проверяет преподаватель', 'Результат');
-    return row('Пробник «' + t + '» проверен', 'Баллы и комментарии готовы', 'Результат');
+    if (it.phase === 'scheduled') return row(t, C.whenText(it.start) + ' · время московское', '');
+    if (it.phase === 'open') return row(t + ' идёт', 'Время на работу уже идёт', 'Открыть');
+    if (it.phase === 'photos') return row(t, 'Осталось прикрепить фото второй части', 'Открыть');
+    if (it.phase === 'submitted') return row(t + ' сдан', 'Вторую часть проверяет преподаватель', 'Результат');
+    return row(t + ' проверен', 'Баллы и комментарии готовы', 'Результат');
   }
 
-  // Called from renderHub on every render; asks the server at most every 30 s.
+  // Forgets everything cached for the previous signed-in user. Anything still in flight for him is dropped (gen).
+  function resetCache() {
+    st.gen++; st.mine = null; st.mineAt = 0; st.loading = false; st.hubMiss = 0; st.offset = 0; st.synced = false;
+    clearTimeout(st.hubTimer); st.hubTimer = 0;
+    Object.keys(drawnPhase).forEach((k) => { delete drawnPhase[k]; });
+  }
+  // Sign-out, expiry or a login: the exam screen and the cached list both go.
+  function reset() { leave(); resetCache(); st.user = auth ? String(auth.userId || '') : ''; }
+
+  // Called from renderHub on every render; asks the server at most every 30 s. It must never throw:
+  // a broken banner may not take the hub (and every later render) down with it.
   function bannerHTML() {
-    if (!auth) return '';
-    loadMine();
-    return (st.mine || []).filter(shown).slice(0, 3).map(bannerOf).join('');
+    try {
+      if (!auth || !C) return '';
+      if (st.user !== String(auth.userId || '')) { resetCache(); st.user = String(auth.userId || ''); }
+      loadMine();
+      return (st.mine || []).filter(shown).sort((a, b) => PRIO[a.phase] - PRIO[b.phase]).slice(0, 3).map(bannerOf).join('');
+    } catch (e) { return ''; }
   }
 
   async function loadMine(force) {
-    if (!auth || st.loading) return;
+    if (!auth || !C || st.loading) return;
     if (!force && Date.now() - st.mineAt < 30000) return;
+    const gen = st.gen, uid = st.user;
     st.loading = true; st.mineAt = Date.now();          // set even on failure: no retry storm
     const before = JSON.stringify(st.mine);
+    let ok = false;
     try {
       const r = await xapi('/mine');
-      if (r.status === 200 && r.json && Array.isArray(r.json.items)) { st.mine = r.json.items; setOffset(r.json.now); }
-    } catch (e) { /* offline: keep what we had */ }
+      if (gen !== st.gen) return;                        // signed out or another user meanwhile: not ours any more
+      if (r.status === 200 && r.json && Array.isArray(r.json.items)) { st.mine = r.json.items.filter(wellFormed); setOffset(r.json.now); ok = true; }
+    } catch (e) { if (gen !== st.gen) return; /* offline: keep what we had */ }
     st.loading = false;
     clearTimeout(st.hubTimer);
-    const next = (st.mine || []).filter((it) => it.phase === 'scheduled' && Number.isFinite(it.until)).map((it) => it.until).sort((a, b) => a - b)[0];
-    if (next && st.synced) st.hubTimer = setTimeout(() => loadMine(true), Math.max(1000, next * 1000 - serverNowMs() + 1500));
+    const next = (st.mine || []).filter((it) => it.phase === 'scheduled' && typeof it.until === 'number' && Number.isFinite(it.until))
+      .map((it) => it.until).sort((a, b) => a - b)[0];
+    // A failed refresh, or a start that has passed while the server still says "scheduled", counts as a miss: back off.
+    if (ok && next !== undefined && next * 1000 > serverNowMs()) st.hubMiss = 0; else if (!ok || next !== undefined) st.hubMiss++; else st.hubMiss = 0;
+    if (next !== undefined && st.synced && uid === st.user) {
+      st.hubTimer = setTimeout(() => loadMine(true), C.refreshDelay(next, serverNowMs(), st.hubMiss, 1500));
+    }
     if (JSON.stringify(st.mine) !== before && parseRoute().view === 'hub') render();
   }
   document.addEventListener('visibilitychange', () => {
@@ -115,26 +143,33 @@
   // ---- screens ----
   const shell = (inner) => '<div class="vbox">' + inner + '</div>';
   function fail(msg, retry) {
-    appEl.innerHTML = shell('<div class="vintro"><h2>Пробник</h2><p class="lead">' + msg + '</p>' +
+    appEl.innerHTML = shell('<div class="vintro"><h2>Пробник</h2><p class="lead">' + esc(msg) + '</p>' +
       '<div class="vactions">' + (retry ? '<button class="btn primary" data-ex-retry>Попробовать снова</button> ' : '') +
       '<button class="btn" data-home>К заданиям</button></div></div>');
   }
 
   // Stops this module's timers and forgets the open exam. Called by render() before every screen.
-  function leave() { clearTimers(); st.id = null; st.view = null; st.queue = null; st.away = null; st.shownPhase = ''; st.shownId = ''; }
+  function leave() {
+    clearTimers();
+    if (st.id) st.mineAt = 0;                            // coming back to the hub: the list is read again
+    st.req++;                                            // an answer still on its way must not paint
+    st.id = null; st.view = null; st.queue = null; st.away = null; st.shownPhase = ''; st.shownId = '';
+  }
 
   async function renderExam(id) {
     // The same exam re-fetched by its own timer keeps shownPhase, so that a phase change can ease in.
     const keepPhase = st.shownPhase, keepId = st.shownId;
     leave(); st.shownPhase = keepPhase; st.shownId = keepId;
     st.id = id;
+    const my = ++st.req;                               // only the latest request may paint (A -> hub -> A)
     setBack(true); statsEl.innerHTML = '';
+    if (!C) { fail('Не получилось загрузить пробник.'); return; }
     if (!auth) { fail('Чтобы открыть пробник, войди в тренажёр через Telegram.'); return; }
     appEl.innerHTML = '<div class="vbox"><div class="vwait" role="status"><div class="vwait-ring" aria-hidden="true"></div><p>Загружаю пробник…</p></div></div>';
     let r;
     try { r = await xapi('/' + encodeURIComponent(id)); }
-    catch (e) { if (st.id === id) fail('Нет связи с сервером. Проверь интернет.', true); return; }
-    if (st.id !== id) return;                          // the student already went elsewhere
+    catch (e) { if (st.id === id && my === st.req) fail('Нет связи с сервером. Проверь интернет.', true); return; }
+    if (st.id !== id || my !== st.req) return;         // the student already went elsewhere
     if (r.status === 401 || r.status === 403) { fail('Чтобы открыть пробник, войди в тренажёр через Telegram.'); return; }
     if (r.status === 404) { fail('Такого пробника нет, или он назначен не тебе.'); return; }
     if (r.status !== 200 || !r.json || typeof r.json.phase !== 'string') { fail('Не получилось загрузить пробник.', true); return; }
@@ -145,21 +180,31 @@
 
   function paint(v) {
     scrollTop();
+    const again = st.shownPhase === v.phase && st.shownId === v.id;   // the same screen fetched again by its own timer
     if (st.shownPhase && st.shownPhase !== v.phase && st.shownId === v.id) fadeIn();
     st.shownPhase = v.phase; st.shownId = v.id;
-    if (v.phase === 'scheduled') return paintScheduled(v);
+    if (v.phase === 'scheduled') return paintScheduled(v, again);
     if (v.phase === 'missed') return paintMissed(v);
     appEl.innerHTML = shell('<p class="lead">' + esc(v.phase) + '</p>');   // replaced by later tasks
   }
 
-  function paintScheduled(v) {
-    appEl.innerHTML = shell('<div class="vintro"><h2>' + esc(v.title) + '</h2>' +
-      '<p class="lead">Начало ' + C.whenText(Number(v.start)) + ' (по Москве). Когда время придёт, пробник откроется на этой странице.</p>' +
-      '<p class="mode-hint">Подготовь чистые листы и ручку. На работу даётся ' + Math.round(Number(v.duration) / 60) + ' минут, время идёт с назначенного начала.</p>' +
+  const titleOf = (v) => esc(String(v.title == null ? '' : v.title).trim() || 'Пробник');
+  const numOk = (x) => typeof x === 'number' && Number.isFinite(x);
+
+  function paintScheduled(v, again) {
+    // Malformed start or duration: the line is left out, never "undefined" or "NaN".
+    const when = numOk(v.start) ? 'Начало ' + C.whenText(v.start) + ' (по Москве). ' : '';
+    const mins = numOk(v.duration) && v.duration > 0 ? ' На работу даётся ' + Math.round(v.duration / 60) + ' минут, время идёт с назначенного начала.' : '';
+    appEl.innerHTML = shell('<div class="vintro"><h2>' + titleOf(v) + '</h2>' +
+      '<p class="lead">' + when + 'Когда время придёт, пробник откроется на этой странице.</p>' +
+      '<p class="mode-hint">Подготовь чистые листы и ручку.' + mins + '</p>' +
       '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>');
     const id = v.id;
-    // No known server clock or no `until`: do not schedule (a NaN delay would fire at once and loop).
-    if (st.synced && Number.isFinite(v.until)) later(() => { if (st.id === id) renderExam(id); }, Math.max(1000, v.until * 1000 - serverNowMs() + 1200));
+    // Ask again just after the start. A start already past (the server still says "scheduled", or `until` is
+    // missing) is never reused as a deadline: back off 30 s, then 60 s. Without a known server clock: no timer.
+    const stale = !(numOk(v.until) && v.until * 1000 > serverNowMs());
+    st.schedMiss = stale ? (again ? st.schedMiss + 1 : 1) : 0;
+    if (st.synced) later(() => { if (st.id === id) renderExam(id); }, C.refreshDelay(v.until, serverNowMs(), st.schedMiss, 1200));
   }
 
   // A phase change on screen (the scheduled page becoming the exam) eases in instead of a hard cut.
@@ -169,7 +214,7 @@
   }
 
   function paintMissed(v) {
-    appEl.innerHTML = shell('<div class="vintro"><h2>' + esc(v.title) + '</h2>' +
+    appEl.innerHTML = shell('<div class="vintro"><h2>' + titleOf(v) + '</h2>' +
       '<p class="lead">Время пробника прошло, а ты его не открывал. Напиши преподавателю — договоритесь о новом времени.</p>' +
       '<div class="vactions"><a class="btn primary" href="' + TG + '" target="_blank" rel="noopener">Написать в Telegram</a> ' +
       '<button class="btn" data-home>К заданиям</button></div></div>');
@@ -182,5 +227,5 @@
     if (e.target.closest('[data-ex-retry]') && st.id) { renderExam(st.id); return; }
   });
 
-  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, leave: leave, safeHtml: safeHtml };
+  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, leave: leave, safeHtml: safeHtml, reset: reset };
 })();

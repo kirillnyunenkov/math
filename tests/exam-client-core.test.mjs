@@ -58,3 +58,25 @@ test('SaveQueue keeps values that changed while a save was in flight', () => {
   q.ack(q.snapshot());
   assert.equal(q.has(), false);
 });
+
+test('clampDelay keeps every timer inside the 32-bit setTimeout range', () => {
+  assert.equal(C.clampDelay(1500.4), 1500);
+  assert.equal(C.clampDelay(-5), 0);
+  assert.equal(C.clampDelay(3_000_000 * 1000), 2147483000);   // a start 34 days ahead
+  assert.equal(C.clampDelay(Infinity), 2147483000);
+  assert.equal(C.clampDelay(NaN), 2147483000);                // never 0: that would be a tight loop
+  assert.equal(C.clampDelay(undefined), 2147483000);
+});
+
+test('refreshDelay waits for a start ahead and backs off 30 s, 60 s for a past or missing until', () => {
+  const now = 1_000_000_000_000;
+  assert.equal(C.refreshDelay(now / 1000 + 100, now, 0), 101200);              // just after the start
+  assert.equal(C.refreshDelay(now / 1000 + 100, now, 0, 1500), 101500);
+  assert.equal(C.refreshDelay(now / 1000 + 3_000_000, now, 0), 2147483000);    // far start: clamped
+  assert.equal(C.refreshDelay(now / 1000 - 1, now, 1), 30000);                 // still "scheduled" past its start
+  assert.equal(C.refreshDelay(now / 1000 - 1, now, 2), 60000);
+  assert.equal(C.refreshDelay(now / 1000 - 1, now, 9), 60000);                 // capped
+  assert.equal(C.refreshDelay(undefined, now, 1), 30000);
+  assert.equal(C.refreshDelay(NaN, now, 2), 60000);
+  assert.equal(C.refreshDelay(now / 1000, now, 1), 30000);                     // exactly now counts as past
+});

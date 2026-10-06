@@ -13,6 +13,24 @@
     return DAYS[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ', в ' + d.getUTCHours() + ':' + (m < 10 ? '0' : '') + m;
   }
 
+  // setTimeout stores its delay in a signed 32-bit int: anything above ~24.8 days fires at once, and a
+  // NaN delay too. Every timer of the exam pages goes through this clamp (NaN and Infinity wait the maximum).
+  const MAX_DELAY = 2147483000;
+  function clampDelay(ms) {
+    if (typeof ms !== 'number' || ms !== ms) return MAX_DELAY;
+    return Math.min(MAX_DELAY, Math.max(0, Math.round(ms)));
+  }
+
+  /* When to ask the server again about a "scheduled" exam. A start still ahead: just after it passes
+     (slackMs later). An `until` that is already past (the server still says "scheduled", a request
+     failed, or the value is missing): never reuse it, back off 30 s, then 60 s; `misses` is the number
+     of such refreshes in a row including the current one. */
+  function refreshDelay(untilSec, nowMs, misses, slackMs) {
+    const left = typeof untilSec === 'number' ? untilSec * 1000 - nowMs : NaN;
+    if (Number.isFinite(left) && left > 0) return clampDelay(left + (slackMs == null ? 1200 : slackMs));
+    return misses > 1 ? 60000 : 30000;
+  }
+
   const offsetOf = (serverNowSec, clientNowMs) => serverNowSec * 1000 - clientNowMs;
 
   function leftSec(untilSec, offsetMs, clientNowMs) {
@@ -54,7 +72,7 @@
     };
   }
 
-  const api = { whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
+  const api = { clampDelay: clampDelay, refreshDelay: refreshDelay, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamClientCore = api;

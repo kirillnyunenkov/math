@@ -1799,6 +1799,7 @@ const Sync={
     render();},
   expired(disabled){
     auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
+    if(window.ExamUI)ExamUI.reset();
     render();
     if(disabled)note('Аккаунт отключён','Преподаватель отключил этот аккаунт. Тренажёр работает как раньше, но прогресс больше не синхронизируется.');
     /* 401 бывает и после новой ссылки, и после смены настроек входа на
@@ -1824,6 +1825,7 @@ const Sync={
     auth={token:r.json.token,userId:rec.id,name:rec.name||rec.login,role:rec.role,link:link,
       device:deviceId()};
     saveJ(AUTH_KEY,auth);
+    if(window.ExamUI)ExamUI.reset();
     if(!same){
       /* Другой ученик на этом устройстве: его журнал к нам не относится. */
       if(known!==null){state={};save();saveHistory([]);}
@@ -1845,7 +1847,7 @@ const Sync={
       if(r.status===401||r.status===403){this.expired(r.status===403);return;}
       if(r.status===200){auth.token=r.json.token;auth.name=r.json.record.name||auth.name;saveJ(AUTH_KEY,auth);}
     }catch(e){}},
-  logout(){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
+  logout(){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}if(window.ExamUI)ExamUI.reset();render();}
 };
 window.addEventListener('online',()=>Sync.soon(0));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')Sync.soon(0);});
