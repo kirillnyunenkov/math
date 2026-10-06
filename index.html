@@ -254,6 +254,7 @@
   /* teacher HTML that did not pass the check is shown as plain text */
   .ex-plain{white-space:pre-wrap;overflow-wrap:anywhere;}
   .ex-note{margin:var(--s2) 0 0;font-size:var(--fs-sm);color:var(--ink-3);}
+  .ex-note.ex-savehint{margin:0 0 var(--s3);color:var(--err-text);}
   .vtimer.low{color:var(--err-text);}
   /* фото решений второй части: плитки 96 px, статус загрузки внизу плитки, крестик справа сверху */
   .ex-photos{display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s4);}
@@ -267,6 +268,7 @@
   .ex-del{position:absolute;top:4px;right:4px;width:32px;height:32px;padding:0;border-radius:var(--r-full);border:1px solid var(--line-strong);
     background:var(--surface);color:var(--ink);font:inherit;font-size:20px;line-height:1;cursor:pointer;}
   .ex-del:disabled{opacity:.5;cursor:default;}
+  .ex-del::after{content:"";position:absolute;inset:-6px;}   /* the tap area is 44 px, the button looks 32 */
   .ex-st{position:absolute;left:0;right:0;bottom:0;padding:3px var(--s2);font:inherit;font-size:var(--fs-2xs);line-height:1.3;text-align:center;
     background:var(--surface);color:var(--ink-2);border:0;border-top:1px solid var(--line);}
   button.ex-st{cursor:pointer;color:var(--err-text);font-weight:600;min-height:28px;}
@@ -1838,7 +1840,7 @@ const Sync={
     auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
     exUI('reset');
     render();
-    if(disabled)note('Аккаунт отключён','Преподаватель отключил этот аккаунт. Тренажёр работает как раньше, но прогресс больше не синхронизируется.');
+    if(disabled)note('Аккаунт отключён','Этот аккаунт отключён. Тренажёр работает как раньше, но прогресс больше не синхронизируется.');
     /* 401 бывает и после новой ссылки, и после смены настроек входа на
        сервере — во втором случае старая ссылка по-прежнему работает. */
     else note('Нужно войти заново',
@@ -1848,7 +1850,7 @@ const Sync={
     try{r=await this.api('/collections/users/auth-with-password',
       {method:'POST',anon:true,body:{identity:loginId,password:secret}});}
     catch(e){note('Нет связи','Не получилось войти: нет интернета. Открой ссылку ещё раз, когда связь появится.');return;}
-    if(r.status===403){note('Аккаунт отключён','Преподаватель отключил этот аккаунт.');return;}
+    if(r.status===403){note('Аккаунт отключён','Этот аккаунт отключён. Если это ошибка, напиши мне.');return;}
     if(r.status!==200){note('Ссылка не подошла','Напиши боту в Telegram — он пришлёт актуальную ссылку для входа.');return;}
     const rec=r.json.record,prev=auth;
     if(prev&&prev.userId!==rec.id){

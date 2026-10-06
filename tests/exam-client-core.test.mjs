@@ -534,3 +534,51 @@ test('mergePhotoLists accepts the Map of local previews', () => {
   assert.deepEqual(out.map((p) => p.id), ['bot', 'mine']);                    // `old` has no preview
   assert.deepEqual(C.mergePhotoLists([], [mk('mine', '13')], new Map(), known), []);
 });
+
+test('durationText: hours and minutes for a long work, plain minutes for a short one', () => {
+  assert.equal(C.durationText(235), '3 ч 55 мин');
+  assert.equal(C.durationText(120), '2 ч');
+  assert.equal(C.durationText(60), '1 ч');
+  assert.equal(C.durationText(45), '45 минут');
+  assert.equal(C.durationText(1), '1 минута');
+  assert.equal(C.durationText(NaN), '0 минут');
+  assert.equal(C.durationText('x'), '0 минут');
+});
+
+test('SaveQueue tells about every change, and a throwing listener never breaks typing', () => {
+  const q = new C.SaveQueue(); let n = 0;
+  q.onChange = () => { n++; };
+  q.set('1', '5'); q.set('2', '7');
+  assert.equal(n, 2);
+  q.ack({ 1: '5' });
+  assert.equal(n, 3);
+  q.onChange = () => { throw new Error('storage broke'); };
+  q.set('3', '9');
+  assert.deepEqual(q.snapshot(), { 2: '7', 3: '9' });
+});
+
+// A storage like localStorage, in memory.
+const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => { m.set(k, String(v)); }, removeItem: (k) => { m.delete(k); }, size: () => m.size }; };
+
+test('unsent answers are kept in storage per user and exam, and removed when nothing is left', () => {
+  const st = mem(), key = C.pendKey('u1', 'e7');
+  assert.notEqual(key, C.pendKey('u2', 'e7'));
+  assert.notEqual(key, C.pendKey('u1', 'e8'));
+  C.writePending(st, key, { 7: '-44', 9: '12' });
+  assert.deepEqual(C.readPending(st, key), { 7: '-44', 9: '12' });
+  assert.equal(C.readPending(st, C.pendKey('u2', 'e7')), null);
+  C.writePending(st, key, {});
+  assert.equal(C.readPending(st, key), null);
+  assert.equal(st.size(), 0);
+});
+
+test('a stored copy is read back only as short answers under task numbers', () => {
+  const st = mem(), key = C.pendKey('u', 'e');
+  st.setItem(key, JSON.stringify({ 1: '5', abc: 'x', 100: 'y', 2: 7, 3: 'z'.repeat(41), __proto__: 'p', 4: '0,5' }));
+  assert.deepEqual(C.readPending(st, key), { 1: '5', 4: '0,5' });
+  st.setItem(key, '[1,2]'); assert.equal(C.readPending(st, key), null);
+  st.setItem(key, 'not json'); assert.equal(C.readPending(st, key), null);
+  const broken = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('full'); }, removeItem() { throw new Error('blocked'); } };
+  assert.equal(C.readPending(broken, key), null);
+  C.writePending(broken, key, { 1: '5' });                      // must not throw
+});

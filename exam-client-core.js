@@ -39,6 +39,14 @@
     return k + ' ' + w;
   }
 
+  /* A length of work for the student: 235 -> "3 ч 55 мин", 120 -> "2 ч", 45 -> "45 минут". */
+  function durationText(min) {
+    const k = typeof min === 'number' && Number.isFinite(min) ? Math.max(0, Math.round(min)) : 0;
+    if (k < 60) return minutesText(k);
+    const h = Math.floor(k / 60), m = k % 60;
+    return h + ' ч' + (m ? ' ' + m + ' мин' : '');
+  }
+
   /* The soonest moment (server seconds) at which the hub banners can change by themselves: the start of a scheduled
      exam, the end of a running window, the end of the photo time. Items without a finite `until` are ignored. */
   function nextChangeAt(items) {
@@ -86,14 +94,37 @@
 
   // Typed answers waiting to be sent; a value typed again during a request stays queued.
   function SaveQueue() {
-    const dirty = {};
-    this.set = function (n, v) { dirty[n] = v; };
+    const dirty = {}, self = this;
+    this.onChange = null;   // called after every change, so the page can keep a copy of what is not yet on the server
+    const changed = function () { if (typeof self.onChange === 'function') { try { self.onChange(); } catch (e) { /* a broken copy never stops typing */ } } };
+    this.set = function (n, v) { dirty[n] = v; changed(); };
     this.has = function () { return Object.keys(dirty).length > 0; };
     this.snapshot = function () { return Object.assign({}, dirty); };
     this.ack = function (snap) {
       Object.keys(snap).forEach(function (k) { if (dirty[k] === snap[k]) delete dirty[k]; });
+      changed();
     };
   }
+
+  /* A copy of the unsent answers in the phone's own storage (a tab that iOS unloads while the student photographs the
+     solution loses its memory, and with it the answers typed without a connection). One key per user and exam; only
+     short strings under numeric keys are read back, so whatever is in there can never be more than answers. */
+  const PEND_PREFIX = 'ex-pend:';
+  const pendKey = function (uid, id) { return PEND_PREFIX + String(uid) + ':' + String(id); };
+  function readPending(storage, key) {
+    try {
+      const raw = JSON.parse(storage.getItem(key)), out = {};
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+      Object.keys(raw).forEach(function (k) { if (/^\d{1,2}$/.test(k) && typeof raw[k] === 'string' && raw[k].length <= 40) out[k] = raw[k]; });
+      return Object.keys(out).length ? out : null;
+    } catch (e) { return null; }
+  }
+  function writePending(storage, key, snap) {
+    try {
+      if (snap && Object.keys(snap).length) storage.setItem(key, JSON.stringify(snap)); else storage.removeItem(key);
+    } catch (e) { /* storage full or blocked: the in-memory queue still works */ }
+  }
+
 
   /* The task list of an open exam comes from the server and is not trusted: a bad item is dropped, never thrown on.
      Kept: n an integer 1..40 (a number, not "__proto__" or "3"), unique; kind 'short' | 'long'; cond a string of
@@ -341,7 +372,7 @@
   }
 
   const api = { mergePhotoLists: mergePhotoLists, ownGet: ownGet, pointsOf: pointsOf, secondaryOf: secondaryOf, resultOf: resultOf, canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
-    classifyStatus: classifyStatus, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, nextChangeAt: nextChangeAt, minutesText: minutesText, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
+    classifyStatus: classifyStatus, durationText: durationText, pendKey: pendKey, readPending: readPending, writePending: writePending, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, nextChangeAt: nextChangeAt, minutesText: minutesText, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamClientCore = api;

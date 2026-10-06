@@ -16,7 +16,7 @@
   const st = { mine: null, mineAt: 0, loading: false, hubTimer: 0, hubMiss: 0, user: '', gen: 0, req: 0, schedMiss: 0, id: null, view: null, offset: 0, synced: false, timers: [],
     save: null, leaving: null, det: {}, listeners: [], saveTimer: 0, retryTimer: 0,
     picker: 0, carry: null,            // picker: when the file dialog was opened; carry: photos handed from the open to the photo screen
-    noLong: {}, lostBy: Object.create(null),   // exams seen without a part 2; photos lost on leaving, per exam, until the note is shown
+    lostBy: Object.create(null),   // photos lost on leaving, per exam, until the note is shown
     shownPhase: '', shownId: '', fade: false, sheets: 0 };   // sheets: confirmation sheets of this module that are open
 
   const seen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || []; } catch (e) { return []; } };
@@ -111,9 +111,11 @@
     const row = (title, sub, act) => '<div class="ex-banner' + (fresh ? ' ex-fresh' : '') + '"><div class="ex-b-body"><span class="ex-b-t">' + title + '</span>' +
       (sub ? '<span class="ex-b-s">' + sub + '</span>' : '') + '</div>' +
       (act ? '<button class="btn primary" data-exam="' + esc(it.id) + '">' + act + '</button>' : '') + '</div>';
-    if (it.phase === 'scheduled') return row(t, C.whenText(it.start) + ' · время московское', '');
-    if (it.phase === 'open') return row(t + ' идёт', 'Время на работу уже идёт', 'Открыть');
-    if (it.phase === 'photos') return row(t, st.noLong[it.id] ? 'Время работы вышло, осталось сдать' : 'Осталось прикрепить фото второй части', 'Открыть');
+    if (it.phase === 'scheduled') return row(t, C.whenText(it.start) + ' · время московское', 'Подробнее');
+    if (it.phase === 'open') return row(t + ' открыт', 'Время на работу уже идёт', 'Открыть');
+    // `early` / `nolong` come with the photo phase only; an older server sends neither and the plain wording stays.
+    if (it.phase === 'photos') return row(t, it.nolong === true ? 'Время работы вышло, открой, чтобы сдать'
+      : (it.early === false ? 'Время вышло, осталось прикрепить фото второй части' : 'Осталось прикрепить фото второй части'), 'Открыть');
     if (it.phase === 'submitted') return row(t + ' сдан', 'Идёт проверка', 'Результат');   // /mine has no task data: no word about a part 2
     return row(t + ' проверен', 'Баллы и комментарии готовы', 'Результат');
   }
@@ -125,7 +127,7 @@
     Object.keys(drawnPhase).forEach((k) => { delete drawnPhase[k]; });
   }
   // What the page remembers about one user's exams (not shown to the next user).
-  function forgetUser() { st.noLong = {}; st.lostBy = Object.create(null); }
+  function forgetUser() { st.lostBy = Object.create(null); }
   // Photos that were on their way when the student left an exam: the next time that exam is opened a note says so, once.
   const addLost = (id, n) => { if (n > 0 && typeof id === 'string') st.lostBy[id] = (st.lostBy[id] || 0) + n; };
   function takeLost(id) { const n = st.lostBy[id] || 0; delete st.lostBy[id]; return n; }
@@ -236,7 +238,7 @@
     catch (e) { if (st.id === id && my === st.req) fail('Нет связи с сервером. Проверь интернет.', true); return; }
     if (st.id !== id || my !== st.req) return;         // the student already went elsewhere
     if (r.status === 401 || r.status === 403) { fail('Чтобы открыть пробник, войди в тренажёр через Telegram.'); return; }
-    if (r.status === 404) { fail('Такого пробника нет, или он назначен не тебе.'); return; }
+    if (r.status === 404) { fail('Такого пробника нет: возможно, назначение отменили. Если это ошибка, напиши мне.'); return; }
     if (r.status !== 200 || !r.json || typeof r.json.phase !== 'string') { fail('Не получилось загрузить пробник.', true); return; }
     st.view = r.json;
     setOffset(r.json.now);
@@ -262,10 +264,10 @@
   function paintScheduled(v, again) {
     // Malformed start or duration: the line is left out, never "undefined" or "NaN".
     const when = numOk(v.start) ? 'Начало ' + C.whenText(v.start) + ' (по Москве). ' : '';
-    const mins = numOk(v.duration) && v.duration > 0 ? ' На работу даётся ' + C.minutesText(v.duration / 60) + ', время идёт с назначенного начала.' : '';
+    const mins = numOk(v.duration) && v.duration > 0 ? ' На работу даётся ' + C.durationText(v.duration / 60) + ', время идёт с назначенного начала.' : '';
     appEl.innerHTML = shell('<div class="vintro"><h2>' + titleOf(v) + '</h2>' +
       '<p class="lead">' + when + 'Когда время придёт, пробник откроется на этой странице.</p>' +
-      '<p class="mode-hint">Подготовь чистые листы и ручку.' + mins + '</p>' +
+      '<p class="mode-hint">Приготовь черновики и ручку.' + mins + '</p>' +
       '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>');
     appear();
     const id = v.id;
@@ -286,7 +288,7 @@
 
   function paintMissed(v) {
     appEl.innerHTML = shell('<div class="vintro"><h2>' + titleOf(v) + '</h2>' +
-      '<p class="lead">Время пробника прошло, а ты его не открывал. Напиши мне — договоримся о новом времени.</p>' +
+      '<p class="lead">Время пробника прошло, а работа так и не была открыта. Напиши мне — договоримся о новом времени.</p>' +
       '<div class="vactions"><a class="btn primary" href="' + TG + '" target="_blank" rel="noopener">Написать в Telegram</a> ' +
       '<button class="btn" data-home>К заданиям</button></div></div>');
   }
@@ -321,12 +323,16 @@
     let typed = C.answersOf(v.answers, tasks);
     const hasLong = tasks.some((t) => t.kind === 'long');
     // Text typed on this exam earlier and never delivered (the screen was left offline) is newer than the server's: it wins.
-    const pend = st.det[id], pendSnap = pend ? pend.q.snapshot() : null;
+    const pend = st.det[id];
+    let pendSnap = pend ? pend.q.snapshot() : null;
     if (pend) { typed = C.mergePending(typed, pendSnap, tasks); stopSender(pend); delete st.det[id]; }
+    else {                                                              // a page that was reloaded or unloaded: the copy in storage
+      const kept = C.readPending(localStorage, C.pendKey(auth ? String(auth.userId || '') : '', id));
+      if (kept) { pendSnap = kept; typed = C.mergePending(typed, kept, tasks); }
+    }
     const dropped = !Array.isArray(v.tasks) || v.tasks.length !== tasks.length;
     const s = st.save = makeSession(id, v, tasks);
     s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s;
-    if (hasLong) delete st.noLong[id]; else st.noLong[id] = true;
     const lost = takeLost(id);
     if (pendSnap) tasks.forEach((t) => {
       const k = String(t.n);
@@ -334,6 +340,7 @@
     });
     bindOpen(s);
     stageAndMount(shell(barHTML() +
+        '<p class="ex-note ex-savehint" id="ex-savehint" role="alert" hidden>Ответы пока не сохранились. Проверь интернет и не закрывай страницу, пока не появится «Сохранено».</p>' +
         (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши мне.</p>' : '') +
         (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') +
         tasks.map((t) => cardHTML(t, typed)).join('') +
@@ -346,11 +353,15 @@
   // One session per painted exam screen (open or photo phase): what is typed, what is in flight, the photos, and whether
   // the screen is still ours. `uid` tells whose exam it is; `token` is the one the screen keeps for its requests.
   function makeSession(id, v, tasks) {
-    return { id: id, phase: v.phase, q: new C.SaveQueue(), busy: null, fails: 0, nextAt: 0, dead: false, closed: false,
+    const s = { id: id, phase: v.phase, q: new C.SaveQueue(), busy: null, fails: 0, nextAt: 0, dead: false, closed: false,
       syncing: false, finishing: false, away: new C.AwayTracker(2), until: v.until, tick: null,
       token: (auth && auth.token) || '', uid: auth ? String(auth.userId || '') : '', hasLong: tasks.some((t) => t.kind === 'long'),
       fatal: '', lastKind: '', inflight: null, noRetry: false, stop: false, ph: null };
+    s.q.onChange = () => C.writePending(localStorage, C.pendKey(s.uid, id), s.q.snapshot());   // survives a tab that the phone unloads
+    return s;
   }
+  // The stored copy is useless once the server refuses answers for good (the window is over, the exam is gone).
+  const forgetPending = (s) => C.writePending(localStorage, C.pendKey(s.uid, s.id), null);
   // The token a request of this screen goes with: the signed-in one while the screen is alive (it rotates), else the kept one.
   function tokOf(s) { if (live(s) && auth && auth.token) s.token = auth.token; return s.token; }
 
@@ -411,6 +422,8 @@
   const setSaveText = (t, bad) => {
     const e = document.getElementById('ex-save');
     if (e) { e.textContent = t; e.classList.toggle('bad', !!bad); }
+    const h = document.getElementById('ex-savehint');
+    if (h) h.hidden = !bad;
   };
   const live = (s) => !!s && !s.dead && st.save === s;
   // ask() of index.html that leave() can close: a confirmation of one screen must not stay on top of the next one.
@@ -427,7 +440,7 @@
     catch (e) { return null; }
   }
   // What the student sees for a failed save: only a network problem, a timeout or a 5xx is "check the connection".
-  const FAIL_TEXT = { retry: 'Не сохранено — проверь связь', client: 'Не сохранено — сервер не принял ответ' };
+  const FAIL_TEXT = { retry: 'Не сохранено', client: 'Не принято' };   // short: the bar is one line on a phone
 
   // One request. Typed answers stay queued until the server says 200; a failure backs off 5 s, 15 s, 30 s and keeps them,
   // a permanent answer (401/403, 404) stops the retries. A stale screen (left, replaced) paints nothing.
@@ -445,7 +458,8 @@
       return true;
     }
     if (!live(s)) return false;
-    if (kind === 'closed') { s.closed = true; syncAnswerGuard(); setSaveText(''); syncPhase(s); return false; }   // the window is over: the server decides what comes next
+    if (kind === 'closed') { s.closed = true; forgetPending(s); syncAnswerGuard(); setSaveText(''); syncPhase(s); return false; }   // the window is over: the server decides what comes next
+    if (kind === 'gone') forgetPending(s);
     if (kind === 'auth' || kind === 'gone') { s.fatal = ''; fatalStop(s, kind); return false; }
     s.fails++; s.lastKind = kind;
     const d = C.retryDelay(s.fails);
@@ -515,8 +529,10 @@
     }
     if (uploading(s)) { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Завершить» ещё раз.'); return; }
     const failedPh = !!s.ph && s.ph.pending.length > 0;
+    const blank = [].slice.call(document.querySelectorAll('[data-ex-in]')).filter((i) => !i.value.trim()).map((i) => i.dataset.exIn);
     const ok = await askHere({ title: 'Завершить пробник?',
-      text: 'Ответы первой части после этого изменить нельзя.' + (s.hasLong ? ' Фото второй части можно будет прикрепить ещё ' + C.minutesText(10) + '.' : '') +
+      text: (blank.length ? 'Без ответа: ' + (blank.length === 1 ? 'задание ' : 'задания ') + blank.join(', ') + '. ' : '') +
+        (s.hasLong ? 'Ответы первой части' : 'Ответы') + ' после этого изменить нельзя.' + (s.hasLong ? ' Фото второй части можно будет прикрепить ещё ' + C.minutesText(10) + '.' : '') +
         (failedPh ? ' Фото, которые не загрузились, останутся в списке с кнопкой «Ещё раз».' : ''),
       ok: 'Завершить', cancel: 'Вернуться' });
     if (!ok || s.dead) return;
@@ -537,7 +553,7 @@
       const r = await xapi('/' + s.id + '/finish', { method: 'POST', token: s.token }).catch(() => null);
       if (s.dead) return;
       if (!r || (r.status !== 200 && r.status !== 409)) { note('Не получилось завершить', 'Проверь интернет и нажми «Завершить» ещё раз. Ответы сохранены.'); return; }
-      s.closed = true; syncAnswerGuard();                  // finished: whatever was refused is dropped, nothing is sent after this
+      s.closed = true; forgetPending(s); syncAnswerGuard();  // finished: whatever was refused is dropped, nothing is sent after this
       afterFinish(s);                                      // the server says which screen is next; photos on their way go with it
     } finally {
       s.finishing = false;
@@ -620,7 +636,7 @@
      reaches the page other than through esc() / encodeURIComponent, and no selector is built from a task number (blocks
      are found through dataset). */
   const PH = C.PHOTO;
-  const BAD_FILE = 'Этот файл не получается обработать. Прикрепи его с телефона или отправь фото боту в Telegram.';
+  const BAD_FILE = 'Этот файл не получается обработать. Попробуй другое фото или отправь его боту в Telegram.';
   const TEXT_PH = {
     tooMany: 'К заданию уже прикреплено ' + PH.PER_TASK + ' фото — больше нельзя. Лишнее можно убрать крестиком.',
     badFile: 'Сервер не принял это фото. Нужна картинка JPEG, PNG или WebP до 10 МБ.',
@@ -643,7 +659,7 @@
     '<p class="ex-msg" data-ex-msg role="status" aria-live="polite"></p></div>';
 
   // Photos can also be sent to the sign-in bot; the page picks them up by polling the list.
-  const tgBlockHTML = () => '<div class="vcard ex-tg"><div class="vlabel">Неудобно прикреплять с компьютера?</div>' +
+  const tgBlockHTML = () => '<div class="vcard ex-tg"><div class="vlabel">Можно отправить фото боту</div>' +
     '<p class="ex-note">Отправь фото решений боту <a href="https://t.me/' + TG_BOT + '" target="_blank" rel="noopener">@' + TG_BOT + '</a> — ' +
     'подпись и номер задания не нужны. Фото появятся ниже, в блоке «Фото, присланные боту» (до ' + PH.BOT_MAX + ' штук).</p></div>' +
     '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div>' +
@@ -1062,24 +1078,23 @@
       if (carry) { addLost(id, dropPhotos(carry)); st.carry = null; }
       if (raw.length) { fail('Не получилось загрузить задания пробника.', true); return; }
       // An exam without a part 2: nothing to attach, the student just hands the work in.
-      st.noLong[id] = true;
       const s0 = st.save = makeSession(id, v, []);
       s0.ph = newPhotos(id, [], []); s0.ph.s = s0;
       bindOpen(s0);
-      appEl.innerHTML = shell(bar + '<div class="vintro ex-pintro"><h2>Фото не нужны</h2><p class="lead">В этом пробнике нет заданий второй части, поэтому ничего прикреплять не надо. ' +
-        'Нажми «Готово», чтобы сдать работу.</p></div>');
+      appEl.innerHTML = shell(bar + '<div class="vintro ex-pintro"><h2>Сдаю работу</h2><p class="lead">' + (v.early === false ? 'Время вышло. ' : '') +
+        'В этом пробнике нет заданий второй части, поэтому фото не нужны. Если работа не сдалась сама, нажми «Готово».</p></div>');
       appear();
       startTimer(s0);
+      doneNow(s0);                                                       // nothing to wait for: hand it in without another tap
       return;
     }
-    delete st.noLong[id];
     const lost = takeLost(id);
     const s = st.save = makeSession(id, v, tasks);
     if (carry && !carry.dead) { attachPhotos(carry, s, tasks, v.photos); st.carry = null; } else { s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s; st.carry = null; }
     bindOpen(s);
     appEl.innerHTML = shell(bar +
-      '<div class="vintro ex-pintro"><p class="lead">Ответы первой части сохранены. Сфотографируй решения второй части и прикрепи к заданиям — ' +
-      'или отправь фото боту. Время на это идёт на таймере вверху.</p>' +
+      '<div class="vintro ex-pintro"><p class="lead">' + (v.early === false ? '<b>Время вышло.</b> ' : '') + 'Ответы первой части сохранены. Сфотографируй решения второй части и прикрепи к заданиям — ' +
+      'или отправь фото боту. Сколько времени осталось на фото, показывает таймер вверху.</p>' +
       (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') + '</div>' +
       tasks.map((t) => '<div class="vcard" data-n="' + t.n + '" data-exn="' + t.n + '"><div class="vlabel">Задание ' + t.n +
         (t.max ? '<span class="vlabel-art"> · максимум ' + t.max + ' ' + ballWordOf(t.max) + '</span>' : '') + '</div>' +
@@ -1096,8 +1111,12 @@
     if (s.fatal) { note(s.fatal === 'auth' ? 'Нужно войти заново' : 'Пробник недоступен', s.fatal === 'auth' ? 'Войди через ссылку из Telegram и открой пробник снова.' : 'Сервер не нашёл этот пробник. Напиши мне.'); return; }
     if (P && P.known.length) {
       const failed = P.pending.length > 0;
+      const have = new Set(P.server.map((p) => p.n).concat(P.pending.filter((x) => x.state !== 'err').map((x) => x.n)));
+      const bare = P.known.filter((n) => !have.has(n));
+      const warn = bare.length === P.known.length ? 'Ни к одному заданию не прикреплено фото. '
+        : bare.length ? 'Без фото: ' + (bare.length === 1 ? 'задание ' : 'задания ') + bare.join(', ') + '. ' : '';
       const ok = await askHere({ title: 'Всё прикреплено?',
-        text: 'После этого фото добавить уже нельзя.' + (failed ? ' Фото, которые не загрузились, пропадут.' : ''), ok: 'Готово', cancel: 'Ещё добавлю' });
+        text: warn + 'После этого фото добавить уже нельзя.' + (failed ? ' Фото, которые не загрузились, пропадут.' : ''), ok: 'Готово', cancel: 'Ещё добавлю' });
       if (!ok || !live(s)) return;
       if (uploading(s)) { wait(); return; }                             // a photo was added while the question was open
     }
@@ -1159,7 +1178,7 @@
       (R.second !== null ? tile('Тестовый балл', Number(R.second)) : '');
     // Nothing updates by itself: the student is told to come back when the Telegram message arrives.
     const waits = R.checked ? '' : R.hasLong
-      ? '<p class="lead">Первая часть проверена. Вторую часть посмотрю я. Когда я её проверю, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будут баллы и комментарии.</p>'
+      ? '<p class="lead">Первая часть проверена. Вторую часть посмотрю я. Когда проверю, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будут баллы и комментарии.</p>'
       : '<p class="lead">Работа сдана. Когда я её проверю, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будет итог.</p>';
     const bot = P.server.some((p) => p.n === '')
       ? '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div></div>' : '';
