@@ -26,6 +26,48 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
 - Assign only after the trainer screens release has been deployed together with the updated server hooks (backend/README.md, "Rollout of the trainer screens"), and only if the photo routes are on the server (`curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/x/photos` prints 403; 404 = not deployed). Until then the student cannot open the exam.
 - Times are Moscow time. Default duration is 235 minutes.
 
+## The usual request: a saved Школково variant (the owner sends this almost every time)
+
+Кирилл builds a variant in the Школково constructor, saves the page (`Поставьте баллы своим ответам.html` + the
+`…_files` folder in ~/Downloads) and writes something like «название "пробник №N", разборы пиши сам, у тренажёра
+разборы идеальные — делай по такому же принципу, найди ту же задачу и замени числа». That sentence is the whole brief:
+do not ask what he wants, do the steps below and show the preview. Ask only if the title is missing (default: «Пробник №N»
+with the next free number from `exams`) — the variant is always full (`full: true`, 13 + 7 tasks).
+
+1. **Dump the page** (no repository files are written):
+   `python3 tools/assigned-exam-skill/shkolkovo_extract.py "<page>.html" ~/math-source/exams/<slug>/` → `tasks.txt`
+   (statement, the site's answer and solution, criteria of every task) and `src/` (statement drawings and graphs).
+   Formulas in `tasks.txt` are ASCII-art alt text and can be wrong (fractions, roots, systems): render a picture to look
+   at it (`/usr/bin/python3 tools/assigned-exam-skill/render_svg.py <svg> <png>`, then Read the PNG) before typesetting anything unclear.
+   The site's answer and solution are claims, not truth: recompute (step 3 of the workflow). Its solutions have typos
+   (one said "интервале (−3;5)" for (−3;6)); never copy a solution of the site, only use it to see the intended method.
+   The pages are the site's copyright and Кирилл's private material: keep them in `~/math-source/`, never in the repo.
+2. **Part 1 solutions come from the trainer, not from the site.** For each task 1–13 find the same prototype in the bank
+   (`node tools/sol_show.mjs <n>` lists prototypes, `… <n> p<k>` shows statement, bank answer and solution) and adapt its
+   solution with this variant's numbers. Typical matches: 1 → 1.2 (sin A), 2 → 2.1, 3 → 3.1 (prism = half), 4 → 4.15,
+   5 → 5.8 (batteries, tree), 6 → 6.1, 7 → 7.9/7.10 (log), 8 → 8.15/8.16 (double angle), 9 → 9.9 (extremum from the graph of f′),
+   10 → 10.21/10.x (formula), 11 → 11.7/11.8 (table + equation of times), 12 → 12.x by the function type, 13 → 13.x by the credit type
+   (the same task can be in the bank verbatim: 4.15, 6.1, 13.23 were — then copy). The bank answer must equal the variant's answer when the
+   statement is identical. No prototype for the task (task 11 of Пробник №1 was a «две половины пути» problem) → write the solution
+   yourself in the same format and the same style (idea, one action per step, a table for motion/work/mixtures, a real typical mistake),
+   say so in the report. Keep the order: Идея → picture → steps → «Где ошибаются» (only if a mistake really exists; compute the wrong
+   answer it leads to and check that it differs from the right one). Exam HTML has no classes: write plain `<p><b>Идея.</b>`, `<ol>`,
+   `<table>` (no `table-wrapper`), `<p>$$…$$</p>` (no `math-display`). Part 2 (14–20): only the answer, no solution.
+3. **Pictures.** Statement drawings come from `src/` (render to PNG). Solution figures follow the `solution-visuals` skill: overlay
+   on the statement drawing (graphs, triangles), the bank's own tree/box helpers (`tools/figs/t5.py` `_tree`, `t3.py` BOX) for the rest.
+   Work outside the repo: copy `~/math-source/exams/proba-1/mkfigs.py` / `build_exam.py` as the starting point of a new exam (they
+   show how to overlay on a dvisvgm drawing: the page group is scaled ×2, grid origin and cell are read from the SVG's axis paths).
+   Render with `render_svg.py` (headless Chrome, no extra installs), shrink with Pillow via `/usr/bin/python3` (the `python3` on PATH has no Pillow).
+   `exam_build_lib.py` has `Exam.img / sol / short / long / write` so `build_exam.py` stays about content only. Look at every PNG you made.
+   Do not draw over a statement figure when the picture contradicts the numbers; if it is merely not to scale (Школково triangles often
+   are), overlay anyway and tell Кирилл.
+4. **Checks before showing him anything:** `exam_check` clean; `exam_preview`, then open `preview.html` in headless Chrome
+   (`--allow-file-access-from-files --virtual-time-budget=5000 --dump-dom`) and count `katex-error` (must be 0); look at screenshots of
+   the tables and figures. Dark theme: exam text lives in `.tex`, so the trainer's `--img-filter: invert(.92) hue-rotate(180deg)` is applied
+   to every `<img>`; drawings on a white background with black ink and ACCENT blue work (checked 07.10.2026), do not use other colours.
+5. **Report to Кирилл** (short, Russian): the answer table (task · answer · matched the site), which solutions are copies / adapted /
+   written anew, where a picture is not to scale, what was verified by computation. Then `open …/preview.html` and wait for «ок».
+
 ## Workflow
 
 1. **Collect the source** into `~/math-source/exams/<slug>/` (`source.pdf|docx|md|jpg…`). Ask only for what
@@ -70,9 +112,12 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
 6. **Upload** (only after «ок»): give him this in a bash block, he runs it against production:
    `node tools/exam_api.mjs upload ~/math-source/exams/<slug>/exam.json`. It prints the catalog number
    («№N») and that students do not see the exam until it is assigned. `node tools/exam_api.mjs exams`
-   lists the numbered catalog (same numbers as the panel).
-   To fix an uploaded exam that was **never assigned**: `delete --exam <№ or title>` (add `--yes` after he
-   confirms), then upload again. Deleting shifts the numbers of later exams: tell him.
+   lists the numbered catalog (same numbers as the panel). `exams` prints «(полный вариант)» after a full exam's title:
+   that is only the tool's label (the panel shows a chip), the title students see is exactly the `title` of the file.
+   There is no edit in place. To fix an uploaded exam that was **never assigned** (or whose assignment he cancelled in the panel
+   before the start): `delete --exam <№ or title>` (add `--yes` after he confirms), then upload again. Deleting shifts the numbers of
+   later exams: tell him. What deleting does to a result of a student who already wrote it is not documented: do not promise anything,
+   check `backend/` first. So catch mistakes before assigning.
 7. **Assign.** He can do it in the panel (tab «Пробники» → «Назначить пробник»), or ask you ("назначь Ивану
    пробник 3 на пятницу 18:00"). Resolve names with `students` and `exams` (read-only). You never run `assign`
    against production, not even without `--yes`: describe the plan yourself from that output (student, exam
