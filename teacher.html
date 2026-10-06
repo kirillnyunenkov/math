@@ -456,8 +456,8 @@ function renderStudent(id){
   if(!u){location.hash='#/';return;}
   if(!data.byUser[id]){
     app.innerHTML='<p class="center muted">Загружаю данные…</p>';
-    loadOne(id).then(()=>{if(location.hash==='#/s/'+id)renderStudent(id);})
-      .catch(e=>{if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
+    loadOne(id).then(()=>{if(location.hash==='#/s/'+id){renderStudent(id);if(keepY!==null){window.scrollTo(0,keepY);keepY=null;}}})
+      .catch(e=>{keepY=null;if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
     return;
   }
   const prof=data.profOf[id],lead=!!prof&&!prof.mine;
@@ -535,7 +535,10 @@ const rnd=(len,alpha)=>{const a=new Uint8Array(len*2);crypto.getRandomValues(a);
 const ALNUM='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const linkFor=(u,secret)=>TRAINER+'#/login/'+u.login+'.'+secret;
 function sheet(html){document.getElementById('sheet').innerHTML=html;document.getElementById('sheet-ov').classList.add('open');}
-function closeSheet(){document.getElementById('sheet-ov').classList.remove('open');}
+/* Set only by the assign and move sheets: the element to give focus back to on close. */
+let sheetOpener=null;
+function closeSheet(){document.getElementById('sheet-ov').classList.remove('open');
+  const o=sheetOpener;sheetOpener=null;if(o&&o!==document.body&&document.contains(o))o.focus();}
 function showLink(u,secret,title){
   const url=linkFor(u,secret);
   sheet(`<h3>${esc(title)}</h3><p>Отправь эту ссылку ученику <b>${esc(u.name||u.login)}</b>. По ней он входит на любом устройстве — пусть никому её не пересылает.</p>
@@ -645,40 +648,48 @@ function personOptions(sel){
   return `<option value=""${sel?'':' selected'} disabled>Выбери ученика</option>
     <optgroup label="Ученики">${students.map(opt).join('')}</optgroup>${leads.length?`<optgroup label="Из канала">${leads.map(opt).join('')}</optgroup>`:''}`;
 }
-const whenFields=(when,min,label)=>`<label class="fld">${label} (по Москве)<input type="datetime-local" id="as-start" value="${esc(when)}"></label>
-    <label class="fld">Время на работу, минут (от 1 до 360)<input type="number" id="as-dur" min="1" max="360" step="1" inputmode="numeric" value="${esc(min)}"></label>
+const rememberOpener=()=>{if(!document.getElementById('sheet-ov').classList.contains('open'))sheetOpener=document.activeElement;};
+const whenFields=(when,min,label)=>`<label class="fld">${label} (по Москве)<input type="datetime-local" id="as-start" required value="${esc(when)}"></label>
+    <label class="fld">Время на работу, минут (от 1 до 360)<input type="number" id="as-dur" required min="1" max="360" step="1" inputmode="numeric" value="${esc(min)}"></label>
     <p class="errline" id="as-err" role="alert"></p>`;
 function assignSheet(o){
   o=o||{};
   if(!(data.exams||[]).length){sheet(`<h3>Нет пробников</h3><p>Сначала загрузи пробник в каталог.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
   // tomorrow 18:00 Moscow: the date is taken from a Moscow wall-clock string, so the browser zone does not matter
   const when=o.when||ExamPanelCore.tsToMoscowInput(nowS()+86400).slice(0,11)+'18:00';
-  sheet(`<h3>Назначить пробник</h3>
-    <label class="fld">Ученик<select id="as-user">${personOptions(o.user)}</select></label>
-    <label class="fld">Пробник из каталога<select id="as-exam"><option value=""${o.exam?'':' selected'} disabled>Выбери пробник</option>${data.exams.map(e=>`<option value="${esc(e.id)}"${e.id===o.exam?' selected':''}>${esc(examLabel(e))}</option>`).join('')}</select></label>
+  rememberOpener();
+  sheet(`<form id="as-form" data-kind="assign"><h3>Назначить пробник</h3>
+    <label class="fld">Ученик<select id="as-user" required>${personOptions(o.user)}</select></label>
+    <label class="fld">Пробник из каталога<select id="as-exam" required><option value=""${o.exam?'':' selected'} disabled>Выбери пробник</option>${data.exams.map(e=>`<option value="${esc(e.id)}"${e.id===o.exam?' selected':''}>${esc(examLabel(e))}</option>`).join('')}</select></label>
     ${whenFields(when,o.min||235,'Начало')}
-    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="assign-go">Назначить</button></div>`);
+    <div class="acts"><button type="button" class="btn quiet" data-act="close">Отмена</button><button type="submit" class="btn">Назначить</button></div></form>`);
+  document.getElementById('as-user').focus();
 }
-/* The form's time as {start,duration} in seconds, or null. A start more than two
-   years ahead is taken for a typo in the year. */
+/* The form's time as {start,duration} in seconds, or null. A start more than two years
+   ahead or more than a year back is taken for a typo in the year. */
 function readWhen(){
   const start=ExamPanelCore.moscowInputToTs(document.getElementById('as-start').value),min=+document.getElementById('as-dur').value;
-  return(start&&start<nowS()+2*365*86400&&Number.isInteger(min)&&min>=1&&min<=360)?{start,duration:min*60}:null;
+  return(start&&start<nowS()+2*365*86400&&start>=nowS()-365*86400&&Number.isInteger(min)&&min>=1&&min<=360)?{start,duration:min*60}:null;
 }
 /* Sends one request from the open sheet: the button is off while it runs (no double
    assignment), the error goes to #as-err, success closes the sheet and reloads the data. */
+let sending=false;
 async function sendExam(kind,path,body,btn){
+  if(sending)return;
   const err=document.getElementById('as-err');
-  btn.disabled=true;err.textContent='';
+  sending=true;btn.disabled=true;err.textContent='';
   let r;try{r=await api(path,{method:'POST',body});}
-  catch(e){if(e.message==='401')closeSheet();else{err.textContent='Нет связи с сервером.';btn.disabled=false;}return;}
+  catch(e){sending=false;if(e.message==='401')closeSheet();else{err.textContent='Нет связи с сервером.';btn.disabled=false;}return;}
+  sending=false;
   if(r.status!==200){
     err.textContent=fmtErr(kind,r.status);btn.disabled=false;
-    // the lists are stale: refresh them behind the sheet
-    if(r.status===409||r.status===404)refresh().catch(()=>{});
+    if(r.status===409||r.status===404){
+      // nothing can be done with this assignment any more: only "Закрыть" is left, and the lists are refreshed behind the sheet
+      const acts=btn.closest('.acts');if(acts)acts.innerHTML='<button type="button" class="btn" data-act="close">Закрыть</button>';
+      refreshKeep().catch(()=>{});}
     return;}
   closeSheet();
-  try{await refresh();}catch(e){if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось обновить данные: ${esc(e.message)}</p>`;}
+  try{await refreshKeep();}catch(e){if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось обновить данные: ${esc(e.message)}</p>`;}
 }
 /* A start in the past is asked about on a second sheet step; `pending` holds the request meanwhile. */
 let pending=null;
@@ -707,9 +718,11 @@ function assignGo(b){
 function moveSheet(id,o){
   const a=(data.asg||[]).find(x=>x.id===id);if(!a)return;
   o=o||{};
-  sheet(`<h3>Перенести пробник</h3><p><b>${esc(nameOf(a.user))}</b> · ${esc(examOf(a.exam)?examLabel(examOf(a.exam)):'—')}. Сейчас: ${esc(fmtTs(a.start))}. Если ученик подключён к боту, он получит сообщение в Telegram.</p>
+  rememberOpener();
+  sheet(`<form id="as-form" data-kind="move" data-id="${esc(id)}"><h3>Перенести пробник</h3><p><b>${esc(nameOf(a.user))}</b> · ${esc(examOf(a.exam)?examLabel(examOf(a.exam)):'—')}. Сейчас: ${esc(fmtTs(a.start))}. Если ученик подключён к боту, он получит сообщение в Telegram.</p>
     ${whenFields(o.when||ExamPanelCore.tsToMoscowInput(a.start),o.min||Math.round(a.duration/60),'Новое начало')}
-    <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="move-go" data-id="${esc(id)}">Перенести</button></div>`);
+    <div class="acts"><button type="button" class="btn quiet" data-act="close">Отмена</button><button type="submit" class="btn">Перенести</button></div></form>`);
+  document.getElementById('as-start').focus();
 }
 function moveGo(id,b){
   const w=readWhen(),err=document.getElementById('as-err');
@@ -738,10 +751,21 @@ function examBlock(uid){
 
 // ---- маршруты ----
 async function refresh(){await load();for(const k in summaries)delete summaries[k];route();}
+/* Refresh that keeps the scroll position (route() otherwise scrolls to the top): after an
+   exam action the changed row is usually mid-page. A lead's card is drawn after its journal
+   arrives (renderStudent), so the position is kept until that second draw. */
+let keepY=null;
+async function refreshKeep(){
+  keepY=window.scrollY;
+  try{await refresh();}catch(e){keepY=null;throw e;}
+  if(keepY!==null){window.scrollTo(0,keepY);
+    const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
+    if(!(m&&!data.byUser[m[1]]))keepY=null;}
+}
 function route(){
   const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
   if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else if(location.hash==='#/exams')renderExams();else renderList();
-  window.scrollTo(0,0);
+  if(keepY===null)window.scrollTo(0,0);
 }
 function render(msg){
   document.getElementById('logout').style.display=auth?'':'none';
@@ -773,11 +797,9 @@ document.addEventListener('click',e=>{
   else if(a==='vdel-go')delVariantGo(b.dataset.user,id);
   else if(a==='open-check')location.hash='#/check/'+id;
   else if(a==='assign')assignSheet({exam:b.dataset.exam,user:b.dataset.user});
-  else if(a==='assign-go')assignGo(b);
   else if(a==='past-go')pastGo(b);
   else if(a==='past-back')pastBack();
   else if(a==='move')moveSheet(id);
-  else if(a==='move-go')moveGo(id,b);
   else if(a==='cancel')cancelSheet(id);
   else if(a==='cancel-go')cancelGo(id,b);
 });
@@ -790,7 +812,13 @@ document.getElementById('theme').addEventListener('click',()=>{
   if(dark)document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','dark');
   try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
   document.querySelector('meta[name="theme-color"]').setAttribute('content',dark?'#f2efe7':'#161713');});
-window.addEventListener('hashchange',async()=>{
+/* Enter in a field and the submit button both land here (assign and move sheets). */
+document.addEventListener('submit',e=>{
+  const f=e.target;if(!f.matches||!f.matches('#as-form'))return;
+  e.preventDefault();const b=f.querySelector('button[type="submit"]');
+  if(f.dataset.kind==='assign')assignGo(b);else moveGo(f.dataset.id,b);
+});
+window.addEventListener('hashchange',async()=>{keepY=null;
   if(/^#\/login\//.test(location.hash)){await loginFromHash();render();return;}
   if(data)route();});
 (async()=>{await loginFromHash();render();})();
