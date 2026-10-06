@@ -360,3 +360,10 @@ test('validateExam never throws on garbage and reports errors', () => {
   assert.doesNotThrow(() => V.extractFormulas(null));
   assert.doesNotThrow(() => V.extractFormulas({ not: 'a string' }));
 });
+
+test('htmlProblem is exported for the teacher panel (the same gate as the upload check)', () => {
+  assert.equal(typeof V.htmlProblem, 'function');
+  assert.equal(V.htmlProblem('<p>ok</p>'), '');
+  assert.notEqual(V.htmlProblem('<img src=x onerror=1>'), '');
+  assert.notEqual(V.htmlProblem('<!-- <a title="--><img src=x onerror=1> "> -->'), '');
+});

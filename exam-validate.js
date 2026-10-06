@@ -315,7 +315,7 @@
     catch (e) { return { errors: ['Файл не удалось проверить: ' + String(e && e.message).slice(0, 100)], warnings: [], stats: { short: 0, long: 0 } }; }
   }
 
-  const api = { validateExam: validateExam, extractFormulas: extractFormulas, scanFormulas: scanFormulas };
+  const api = { validateExam: validateExam, extractFormulas: extractFormulas, scanFormulas: scanFormulas, htmlProblem: htmlProblem };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamValidate = api;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -234,6 +234,9 @@
   .ck-note{margin:var(--s3) 0 0;}
   .ck-msg{margin:0;font-size:var(--fs-sm);font-weight:500;}
   .ck-msg.bad{color:var(--err-text);} .ck-msg.good{color:var(--ok-text);}
+  .ck-warn{color:var(--err-text);font-weight:600;font-size:var(--fs-sm);margin:var(--s2) 0;}
+  .ck-raw{white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--fs-xs);background:var(--surface-2);
+    border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s3);margin:0 0 var(--s3);}
   .ck-tl h4{margin:var(--s3) 0 var(--s1);font-size:var(--fs-sm);}
   .ck-tl .it.tl{justify-content:flex-start;}
   .ck-tl .it.tl .muted{flex:0 0 52px;font-variant-numeric:tabular-nums;}
@@ -262,6 +265,17 @@
     .asg .acts-cell:empty{display:none;}
     .list.cat .it .btn{min-height:40px;}
     .ck-row .fld{flex:1 1 100%;}
+    /* part 1 table turns into cards: task and verdict on top, then both answers */
+    .ck-p1 thead{display:none;}
+    .ck-p1 table,.ck-p1 tbody{display:block;}
+    .ck-p1 tr{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--s3);
+      grid-template-areas:"n v" "g g" "k k";padding:var(--s3) 0;border-bottom:1px solid var(--line);}
+    .ck-p1 tr:last-child{border-bottom:0;}
+    .ck-p1 td{border:0;padding:2px 0;}
+    .ck-p1 td.c-n{grid-area:n;font-weight:600;} .ck-p1 td.c-n::before{content:"Задание ";}
+    .ck-p1 td.c-v{grid-area:v;text-align:right;} .ck-p1 td.c-v:empty{display:none;}
+    .ck-p1 td.c-g{grid-area:g;} .ck-p1 td.c-g::before{content:"Ответ ученика: ";color:var(--ink-3);}
+    .ck-p1 td.c-k{grid-area:k;} .ck-p1 td.c-k::before{content:"Верный ответ: ";color:var(--ink-3);}
     .ex-ph img{height:150px;}
   }
 </style>
@@ -291,6 +305,7 @@
 <script src="stats-core.js"></script>
 <script src="exam-core.js"></script>
 <script src="exam-panel-core.js"></script>
+<script src="exam-validate.js"></script>
 <script src="config.js"></script>
 <script>
 /* Панель преподавателя. Данные учеников сюда приходят только с сервера и
@@ -309,7 +324,7 @@ async function api(path,opt){opt=opt||{};
   const r=await fetch(API+path,{method:opt.method||'GET',body:opt.body&&JSON.stringify(opt.body),
     headers:Object.assign({'content-type':'application/json'},auth&&!opt.anon?{Authorization:auth.token}:{})});
   let json=null;try{json=await r.json();}catch(e){}
-  if(r.status===401&&!opt.anon){logout('Вход больше не действует. Открой актуальную ссылку преподавателя.');throw new Error('401');}
+  if(r.status===401&&!opt.anon){expire();throw new Error('401');}
   return{status:r.status,json:json};}
 async function all(c,filter,fields){
   const out=[];
@@ -321,6 +336,14 @@ async function all(c,filter,fields){
 
 // ---- вход ----
 function logout(msg){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render(msg);}
+/* A link such as teacher.html#/check/<id> (from the bot) opened without a valid session: the
+   route is kept for this tab and restored once after the next successful login. */
+const PEND_KEY='ege_teacher_pending_hash';
+const PEND_OK=/^#\/(?:(?:s|check)\/[a-z0-9]+|leads|exams)$/;
+function pendSave(){if(!PEND_OK.test(location.hash))return;try{sessionStorage.setItem(PEND_KEY,location.hash);}catch(e){}}
+function pendTake(){let h=null;try{h=sessionStorage.getItem(PEND_KEY);sessionStorage.removeItem(PEND_KEY);}catch(e){}return h&&PEND_OK.test(h)?h:null;}
+const EXPIRED='Вход больше не действует. Открой свою ссылку преподавателя.';
+function expire(){pendSave();logout(EXPIRED);}
 async function loginFromHash(){
   const m=location.hash.match(/^#\/login\/([a-z0-9_-]+)\.([A-Za-z0-9]+)$/);
   if(!m)return;
@@ -333,6 +356,7 @@ async function loginFromHash(){
   if(r.json.record.role!=='teacher'){render('Эта страница только для преподавателя.');return;}
   auth={token:r.json.token,id:r.json.record.id,name:r.json.record.name};
   try{localStorage.setItem(AUTH_KEY,JSON.stringify(auth));}catch(e){}
+  const h=pendTake();if(h)history.replaceState(null,'',location.pathname+h);   // back to the page the link was for
 }
 
 // ---- данные ----
@@ -819,6 +843,16 @@ function openPhoto(e,a){
   const w=window.open('','_blank');if(w)w.opener=null;
   freshToken(0).then(tok=>{const u=phUrl(a.dataset.ph,tok);setPhotoLinks(tok);if(w)w.location.href=u;else window.open(u,'_blank','noopener');});
 }
+/* Exam HTML is the teacher's own, but it is checked with the same allowlist as the upload
+   (exam-validate.js) before it is put into this signed-in page; anything else is shown as text. */
+function examHtml(html,what,cls){
+  const h=html==null?'':String(html);
+  let bad='';
+  try{bad=window.ExamValidate?ExamValidate.htmlProblem(h):'проверка недоступна';}catch(e){bad='проверка не сработала';}
+  return bad?`<p class="ck-warn">Небезопасная разметка в ${what} — показан исходный текст.</p><pre class="ck-raw">${esc(h)}</pre>`
+    :`<div class="tex${cls?' '+cls:''}">${h}</div>`;
+}
+const uhodWord=n=>n+(n%10===1&&n%100!==11?' уход':n%10>=2&&n%10<=4&&!(n%100>=12&&n%100<=14)?' ухода':' уходов');
 const mskTime=ms=>new Date(ms).toLocaleTimeString('ru-RU',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit'});
 function ckNoteHtml(id){return ckNote&&ckNote.id===id?esc(ckNote.text):'';}
 
@@ -839,7 +873,7 @@ async function renderCheck(id){
   if(!alive())return;
   if(re.status!==200){gone(`Не удалось открыть пробник (сервер ответил ${esc(re.status)}).`);return;}
   const e=re.json,tasks=Array.isArray(e.tasks)?e.tasks:[],key=e.key||{},ph=phaseOf(a);
-  const photos=phs||photosOfAsg(id);
+  const photos=phs||photosOfAsg(id);   // a failed request falls back to the list loaded earlier, with a notice
   const tok=photos.length?await freshToken(60000):'';
   if(!alive())return;
   const P=ExamPanelCore,act=P.activitySummary(a.log,a.start),part2=a.part2||{},answers=a.answers||{},ok=a.ok||{};
@@ -847,7 +881,10 @@ async function renderCheck(id){
   const botPh=photos.filter(p=>!p.n);   // sent to the bot: no task, the teacher sorts them out
   const ready=!!a.settled,T=ts=>esc(fmtTs(ts));
   const title=examOf(e.id)?examLabel(examOf(e.id)):e.title;
-  const away=act.away.count?`уходил со страницы ${timesWord(act.away.count)}, всего ${P.fmtSec(act.away.totalSec)}; дольше всего ${P.fmtSec(act.away.longest.sec)} (на задании ${esc(act.away.longest.n)||'—'})`:'со страницы не уходил';
+  // the server caps each entry, not the sum: a total above the work's length is cut and flagged
+  const rawAway=act.away.totalSec,tooMuch=rawAway>a.duration;
+  const away=act.away.count?`записано ${uhodWord(act.away.count)} со страницы, всего ${P.fmtSec(Math.min(rawAway,a.duration))}${tooMuch?' (данные страницы ученика, возможна ошибка)':''}; дольше всего ${P.fmtSec(act.away.longest.sec)} (на задании ${esc(act.away.longest.n)||'—'})`
+    :a.opened?'со страницы не уходил':'работа не открывалась';
   // journal -> per-task answer entries, and the away episodes, in the order they were written
   const byTask={},aways=[];
   (Array.isArray(a.log)?a.log:[]).forEach(x=>{
@@ -862,6 +899,7 @@ async function renderCheck(id){
   app.innerHTML=`<p><a href="#/exams">← Пробники</a> · <a href="#/s/${esc(a.user)}">${esc(nameOf(a.user))}</a></p>
     <div class="toolbar"><h2 class="grow">${esc(title)} · ${esc(nameOf(a.user))} ${chipFor(ph)}</h2></div>
     <p class="lead">Начало: ${T(a.start)} (по Москве) · на работу ${Math.round(a.duration/60)} мин · ${a.opened?'открыл: '+T(a.opened):'не открывал'}${a.finished?' · завершил досрочно: '+T(a.finished):''}${a.photos_done?' · закончил с фото: '+T(a.photos_done):''}</p>
+    ${phs?'':'<p class="muted">Не удалось обновить список фото.</p>'}
     ${ready?'':`<div class="panel"><p class="muted" role="status">${notReady}</p></div>`}
     <div class="panel"><h3>Активность</h3>
       <p>${away}.</p>
@@ -871,12 +909,12 @@ async function renderCheck(id){
       ${aways.length?`<details class="ck-tl"><summary>Уходы со страницы</summary><div class="list">${aways.map(x=>
         `<div class="it"><span>Задание ${esc(x[2])||'—'}</span><span class="muted">не было на странице ${P.fmtSec(x[3])} · записано на ${P.fmtSec(x[0]-a.start)} от начала</span></div>`).join('')}</div></details>`:''}</div>
     <div class="panel"><h3>Первая часть: ${ready?esc(a.p1||0):'—'} из ${short.reduce((s,t)=>s+(t.max||1),0)}</h3>
-      ${short.length?`<div class="table-wrap"><table><thead><tr><th>Задание</th><th>Ответ ученика</th><th>Верный ответ</th><th></th></tr></thead><tbody>
-      ${short.map(t=>{const g=answers[t.n];return `<tr><td>${esc(t.n)}</td><td class="ck-pre">${g?esc(g):'<span class="muted">—</span>'}</td><td class="ck-pre">${esc(keyOf(t.n).a)}</td>
-        <td>${ready?(ok[t.n]?'<span class="chip ex-checked">верно</span>':'<span class="chip ex-missed">неверно</span>'):''}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">В этом пробнике нет заданий с кратким ответом.</p>'}</div>
+      ${short.length?`<div class="table-wrap ck-p1"><table><thead><tr><th>Задание</th><th>Ответ ученика</th><th>Верный ответ</th><th></th></tr></thead><tbody>
+      ${short.map(t=>{const g=answers[t.n];return `<tr><td class="c-n">${esc(t.n)}</td><td class="c-g ck-pre">${g?esc(g):'<span class="muted">—</span>'}</td><td class="c-k ck-pre">${esc(keyOf(t.n).a)}</td>
+        <td class="c-v">${ready?(ok[t.n]?'<span class="chip ex-checked">верно</span>':'<span class="chip ex-missed">неверно</span>'):''}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">В этом пробнике нет заданий с кратким ответом.</p>'}</div>
     ${long.map(t=>{const g=part2[t.n]||{},ps=photos.filter(p=>String(p.n)===String(t.n)),max=t.max||1,cur=Math.min(max,Math.max(0,Math.trunc(+g.pts)||0));
       return `<div class="panel" data-ck="${esc(t.n)}"><h3>Задание ${esc(t.n)} <span class="muted">· максимум ${esc(max)}</span></h3>
-        <details><summary>Условие и верный ответ</summary><div class="tex ck-cond">${t.cond||''}</div><p><b>Ответ:</b></p><div class="tex">${keyOf(t.n).a||''}</div></details>
+        <details><summary>Условие и верный ответ</summary>${examHtml(t.cond,'условии','ck-cond')}<p><b>Ответ:</b></p>${examHtml(keyOf(t.n).a,'ответе')}</details>
         <div class="ex-ph">${ps.length?ps.map(p=>phThumb(p,tok,`Фото решения, задание ${t.n}`)).join(''):`<p class="muted">${botPh.length?'К этому заданию фото на сайте нет. Смотри блок «Фото, присланные боту» ниже.':'Фото нет.'}</p>`}</div>
         <div class="ck-row"><label class="fld">Баллы<select data-ck-pts="${esc(t.n)}" ${ready?'':'disabled'}>${pointsOptions(max,cur)}</select></label>
           <label class="fld grow">Комментарий ученику<textarea class="field" data-ck-note="${esc(t.n)}" rows="3" maxlength="2000" ${ready?'':'disabled'}>${esc(g.comment||'')}</textarea></label></div></div>`;}).join('')}
@@ -948,7 +986,9 @@ function render(msg){
   document.getElementById('logout').style.display=auth?'':'none';
   if(!auth){app.innerHTML=`<div class="center"><h2>Панель преподавателя</h2><p class="lead">${esc(msg||'Открой свою личную ссылку для входа.')}</p></div>`;return;}
   app.innerHTML='<p class="center muted">Загружаю данные…</p>';
-  refresh().catch(e=>{if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
+  refresh().catch(e=>{
+    if(/ (401|403)$/.test(e.message))return expire();   // a token the server no longer accepts
+    if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
 }
 
 document.addEventListener('click',e=>{
@@ -1002,7 +1042,7 @@ document.addEventListener('submit',e=>{
 window.addEventListener('hashchange',async()=>{keepY=null;ckNote=null;
   if(/^#\/login\//.test(location.hash)){await loginFromHash();render();return;}
   if(data)route();});
-(async()=>{await loginFromHash();render();})();
+(async()=>{if(!auth)pendSave();await loginFromHash();render();})();
 </script>
 </body>
 </html>
