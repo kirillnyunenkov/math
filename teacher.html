@@ -182,6 +182,14 @@
   .list .it:last-child{border-bottom:none;}
   .list .it .vres{flex:1;text-align:right;}
   .list .it .btn{min-height:32px;padding:0 var(--s3);}
+  .list.cat .it{align-items:center;flex-wrap:wrap;}
+  .chip.ex-open,.chip.ex-photos{background:var(--accent-soft);color:var(--accent);}
+  .chip.ex-submitted{background:var(--warn-soft);color:var(--warn-text);}
+  .chip.ex-checked{background:var(--ok-soft);color:var(--ok-text);}
+  .chip.ex-missed{background:var(--err-soft);color:var(--err-text);}
+  .chip.ex-scheduled{background:var(--todo-soft);color:var(--todo-text);}
+  .acts-cell{white-space:nowrap;text-align:right;}
+  .toolbar h3{margin-bottom:0;}
   .wrong .it{display:block;}
   .wrong .meta{display:flex;justify-content:space-between;gap:var(--s3);color:var(--ink-3);font-size:var(--fs-xs);}
   .wrong .cond{margin:6px 0;font-size:var(--fs-sm);color:var(--ink-2);}
@@ -195,14 +203,46 @@
     justify-content:center;z-index:100;padding:var(--s4);}
   .sheet-ov.open{display:flex;}
   .sheet{background:var(--surface);border-radius:var(--r-lg);box-shadow:var(--e3);padding:var(--s6);
-    width:100%;max-width:480px;}
+    width:100%;max-width:480px;max-height:100%;overflow-y:auto;}
   .sheet h3{font-size:var(--fs-xl);margin-bottom:var(--s3);}
   .sheet p{color:var(--ink-2);font-size:var(--fs-sm);margin:0 0 var(--s4);}
   .sheet .acts{display:flex;gap:var(--s3);justify-content:flex-end;flex-wrap:wrap;margin-top:var(--s4);}
+  .fld{display:flex;flex-direction:column;gap:var(--s2);margin:var(--s3) 0;font-size:var(--fs-sm);font-weight:500;}
+  .fld select,.fld input{font:inherit;min-height:44px;padding:0 var(--s3);border:1px solid var(--line-strong);
+    border-radius:var(--r-md);background:var(--input-bg);color:var(--ink);}
+  .sheet .errline{margin:0;color:var(--err-text);font-size:var(--fs-sm);font-weight:500;}
+  .sheet .errline:not(:empty){margin-top:var(--s3);}
+  .sheet .btn{min-height:44px;}
+  .btn:disabled{opacity:.55;cursor:default;}
   .field{width:100%;font:inherit;padding:10px 12px;border-radius:var(--r-sm);border:1px solid var(--line-strong);
     background:var(--input-bg);color:var(--ink);}
   .linkbox{word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:var(--fs-xs);
     background:var(--surface-2);border-radius:var(--r-sm);padding:var(--s3);color:var(--ink-2);}
+  /* check page */
+  .ex-ph{display:flex;flex-wrap:wrap;gap:var(--s3);margin:var(--s4) 0;}
+  .ex-ph a{display:block;max-width:100%;}
+  .ex-ph img{height:180px;min-width:80px;width:auto;max-width:100%;object-fit:contain;border:1px solid var(--line);
+    border-radius:var(--r-md);display:block;background:var(--surface-2);}
+  .ck-row{display:flex;gap:var(--s4);flex-wrap:wrap;align-items:flex-start;}
+  .ck-row .fld{margin:0;flex:0 0 140px;min-width:0;}
+  .ck-row .fld.grow{flex:1 1 280px;}
+  .ck-row textarea{resize:vertical;min-height:88px;}
+  .ck-row textarea:disabled,.ck-row select:disabled{opacity:.6;}
+  .ck-pre{white-space:pre-wrap;overflow-wrap:anywhere;}
+  .ck-cond img{max-width:100%;height:auto;filter:var(--img-filter);}
+  .tex{overflow-x:auto;overflow-y:hidden;}
+  .ck-note{margin:var(--s3) 0 0;}
+  .ck-msg{margin:0;font-size:var(--fs-sm);font-weight:500;}
+  .ck-msg.bad{color:var(--err-text);} .ck-msg.good{color:var(--ok-text);}
+  .ck-warn{color:var(--err-text);font-weight:600;font-size:var(--fs-sm);margin:var(--s2) 0;}
+  .ck-raw{white-space:pre-wrap;overflow-wrap:anywhere;font-size:var(--fs-xs);background:var(--surface-2);
+    border:1px solid var(--line);border-radius:var(--r-sm);padding:var(--s3);margin:0 0 var(--s3);}
+  .ck-tl h4{margin:var(--s3) 0 var(--s1);font-size:var(--fs-sm);}
+  .ck-tl .it.tl{justify-content:flex-start;}
+  .ck-tl .it.tl .muted{flex:0 0 52px;font-variant-numeric:tabular-nums;}
+  .ck-tl .it.tl .ck-pre{flex:1;min-width:0;}
+  details summary{cursor:pointer;color:var(--accent);font-size:var(--fs-sm);}
+  details[open] summary{margin-bottom:var(--s2);}
   .ic-sun{display:none;} html[data-theme="dark"] .ic-moon{display:none;} html[data-theme="dark"] .ic-sun{display:block;}
   @media (max-width:760px){
     .head-inner{padding:var(--s2) var(--s4);}
@@ -210,6 +250,33 @@
     .panel{padding:var(--s4);}
     .hide-m{display:none;}
     .tasks .t{grid-template-columns:28px minmax(0,1fr) 110px;}
+    /* assignment tables turn into cards: name + status, exam, time + score, actions underneath */
+    .asg thead{display:none;}
+    .asg table,.asg tbody{display:block;}
+    .asg tr.row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--s3);
+      grid-template-areas:"name st" "exam exam" "time score" "acts acts";padding:var(--s3) 0;border-bottom:1px solid var(--line);}
+    .asg tr.row:last-child{border-bottom:0;}
+    .asg td{border:0;padding:2px 0;}
+    .asg td.c-name{grid-area:name;} .asg td.c-st{grid-area:st;text-align:right;} .asg td.c-exam{grid-area:exam;}
+    .asg td.c-time{grid-area:time;color:var(--ink-3);font-size:var(--fs-sm);}
+    .asg td.num{grid-area:score;}
+    .asg td.num::before{content:"1 часть: ";color:var(--ink-3);font-weight:400;}
+    .asg .acts-cell{grid-area:acts;text-align:left;white-space:normal;padding-top:var(--s2);}
+    .asg .acts-cell:empty{display:none;}
+    .list.cat .it .btn{min-height:40px;}
+    .ck-row .fld{flex:1 1 100%;}
+    /* part 1 table turns into cards: task and verdict on top, then both answers */
+    .ck-p1 thead{display:none;}
+    .ck-p1 table,.ck-p1 tbody{display:block;}
+    .ck-p1 tr{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:var(--s3);
+      grid-template-areas:"n v" "g g" "k k";padding:var(--s3) 0;border-bottom:1px solid var(--line);}
+    .ck-p1 tr:last-child{border-bottom:0;}
+    .ck-p1 td{border:0;padding:2px 0;}
+    .ck-p1 td.c-n{grid-area:n;font-weight:600;} .ck-p1 td.c-n::before{content:"Задание ";}
+    .ck-p1 td.c-v{grid-area:v;text-align:right;} .ck-p1 td.c-v:empty{display:none;}
+    .ck-p1 td.c-g{grid-area:g;} .ck-p1 td.c-g::before{content:"Ответ ученика: ";color:var(--ink-3);}
+    .ck-p1 td.c-k{grid-area:k;} .ck-p1 td.c-k::before{content:"Верный ответ: ";color:var(--ink-3);}
+    .ex-ph img{height:150px;}
   }
 </style>
 <script>
@@ -236,6 +303,9 @@
 
 <script src="sync-core.js"></script>
 <script src="stats-core.js"></script>
+<script src="exam-core.js"></script>
+<script src="exam-panel-core.js"></script>
+<script src="exam-validate.js"></script>
 <script src="config.js"></script>
 <script>
 /* Панель преподавателя. Данные учеников сюда приходят только с сервера и
@@ -254,18 +324,32 @@ async function api(path,opt){opt=opt||{};
   const r=await fetch(API+path,{method:opt.method||'GET',body:opt.body&&JSON.stringify(opt.body),
     headers:Object.assign({'content-type':'application/json'},auth&&!opt.anon?{Authorization:auth.token}:{})});
   let json=null;try{json=await r.json();}catch(e){}
-  if(r.status===401&&!opt.anon){logout('Вход больше не действует. Открой актуальную ссылку преподавателя.');throw new Error('401');}
+  if(r.status===401&&!opt.anon){expire();throw new Error('401');}
   return{status:r.status,json:json};}
-async function all(c,filter){
+async function all(c,filter,fields,sort){
   const out=[];
   for(let page=1;;page++){
-    const r=await api(`/collections/${c}/records?perPage=500&page=${page}&skipTotal=1&sort=created`+(filter?'&filter='+encodeURIComponent(filter):''));
+    const r=await api(`/collections/${c}/records?perPage=500&page=${page}&skipTotal=1&sort=${sort||'created'}`+(filter?'&filter='+encodeURIComponent(filter):'')+(fields?'&fields='+encodeURIComponent(fields):''));
     if(r.status!==200)throw new Error(c+' '+r.status);
     out.push(...r.json.items);if(r.json.items.length<500)return out;
   }}
 
 // ---- вход ----
-function logout(msg){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render(msg);}
+/* Signing out (or an expired session) drops everything loaded for the teacher, so that Back
+   cannot redraw cached student data without a session. */
+function logout(msg){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
+  data=null;for(const k in summaries)delete summaries[k];
+  ckGen++;ckShown=null;ck=null;ckNote=null;ckTok={v:'',t:0};ckTokP=null;
+  try{closeSheet();}catch(e){}
+  render(msg);}
+/* A link such as teacher.html#/check/<id> (from the bot) opened without a valid session: the
+   route is kept for this tab and restored once after the next successful login. */
+const PEND_KEY='ege_teacher_pending_hash';
+const PEND_OK=/^#\/(?:(?:s|check)\/[a-z0-9]+|leads|exams)$/;
+function pendSave(){if(!PEND_OK.test(location.hash))return;try{sessionStorage.setItem(PEND_KEY,location.hash);}catch(e){}}
+function pendTake(){let h=null;try{h=sessionStorage.getItem(PEND_KEY);sessionStorage.removeItem(PEND_KEY);}catch(e){}return h&&PEND_OK.test(h)?h:null;}
+const EXPIRED='Вход больше не действует. Открой свою ссылку преподавателя.';
+function expire(){pendSave();logout(EXPIRED);}
 async function loginFromHash(){
   const m=location.hash.match(/^#\/login\/([a-z0-9_-]+)\.([A-Za-z0-9]+)$/);
   if(!m)return;
@@ -278,6 +362,7 @@ async function loginFromHash(){
   if(r.json.record.role!=='teacher'){render('Эта страница только для преподавателя.');return;}
   auth={token:r.json.token,id:r.json.record.id,name:r.json.record.name};
   try{localStorage.setItem(AUTH_KEY,JSON.stringify(auth));}catch(e){}
+  const h=pendTake();if(h)history.replaceState(null,'',location.pathname+h);   // back to the page the link was for
 }
 
 // ---- данные ----
@@ -302,6 +387,17 @@ async function load(){
   const linkOf={};links.forEach(l=>linkOf[l.user]=l);
   const userOf={};users.forEach(u=>userOf[u.id]=u);
   data={students,leads:pr.json.items.filter(p=>!p.mine),profOf,userOf,linkOf,byUser,loaded:Date.now()};
+  /* Exams: a server without the exam collections must not break the panel
+     (any error except a 401 gives an empty list). `tasks`/`key` of exams and
+     `log` of assignments are never requested here — hence the field lists. */
+  const bad=[];   // statuses of failures other than "collection not found"
+  const soft=p=>p.catch(e=>{if(e.message==='401')throw e;
+    const m=/ (\d+)$/.exec(e.message);if(!m||m[1]!=='404')bad.push(m?m[1]:'net');return [];});
+  const [exams,asg,photos]=await Promise.all([
+    soft(all('exams',null,'id,title,full,created','created,id')),
+    soft(all('exam_assignments',null,'id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,created')),
+    soft(all('exam_photos',null,'id,assignment,user,n,file'))]);
+  data.exams=exams;data.asg=asg;data.photos=photos;data.examErr=bad[0]||null;
 }
 /* A lead's journal is fetched only when their card is opened. */
 async function loadOne(id){
@@ -330,12 +426,29 @@ function ago(ts){
 const fmtDate=ts=>new Date(ts).toLocaleString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 const fmtDay=ts=>new Date(ts).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short'});
 
-const tabs=cur=>`<div class="tabs">
+// the third tab's badge counts works waiting for a check (nothing when there are none)
+const tabs=cur=>{const wait=(data.asg||[]).filter(a=>phaseOf(a)==='submitted').length;
+  return `<div class="tabs">
   <a href="#/" class="${cur==='s'?'on':''}">Ученики <span>${data.students.length}</span></a>
-  <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a></div>`;
+  <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a>
+  <a href="#/exams" class="${cur==='x'?'on':''}">Пробники${wait?` <span>${wait}</span>`:''}</a></div>`;};
 /* Telegram usernames are [A-Za-z0-9_]; anything else is shown as plain text. */
 const tgLink=un=>/^[A-Za-z0-9_]{1,64}$/.test(un||'')?`<a href="https://t.me/${un}" target="_blank" rel="noopener">@${un}</a>`:'<span class="muted">—</span>';
 const pbTime=s=>s?Date.parse(String(s).replace(' ','T')):null;
+
+// ---- пробники от преподавателя ----
+const nowS=()=>Math.floor(Date.now()/1000);
+const examOf=id=>(data.exams||[]).find(e=>e.id===id);
+// the catalog is numbered by upload order: the owner says "пробник 3"
+const examNo=id=>(data.exams||[]).findIndex(e=>e.id===id)+1;
+const examLabel=e=>`№${examNo(e.id)} · ${e.title}`;
+const nameOf=uid=>{const u=(data.userOf||{})[uid];return u?(u.name||u.login):'—';};
+const phaseOf=a=>ExamCore.phase({start:a.start,duration:a.duration,opened:a.opened,finished:a.finished,photos_done:a.photos_done,checked:a.checked},nowS());
+const asgOfUser=uid=>(data.asg||[]).filter(a=>a.user===uid);
+const photosOfAsg=id=>(data.photos||[]).filter(p=>p.assignment===id);
+// timestamps in seconds; anything that is not a sane number is shown as a dash
+const fmtTs=ts=>{const v=Number(ts);return Number.isFinite(v)&&v>0&&Number.isFinite(new Date(v*1000).getTime())?fmtDate(v*1000):'—';};
+const chipFor=ph=>`<span class="chip ex-${ph}">${ExamPanelCore.PHASE_TEXT[ph]}</span>`;
 
 // ---- список учеников ----
 let sortKey='last',sortDir=-1;
@@ -398,8 +511,8 @@ function renderStudent(id){
   if(!u){location.hash='#/';return;}
   if(!data.byUser[id]){
     app.innerHTML='<p class="center muted">Загружаю данные…</p>';
-    loadOne(id).then(()=>{if(location.hash==='#/s/'+id)renderStudent(id);})
-      .catch(e=>{if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
+    loadOne(id).then(()=>{if(location.hash==='#/s/'+id){renderStudent(id);if(keepY!==null){window.scrollTo(0,keepY);keepY=null;}}})
+      .catch(e=>{keepY=null;if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
     return;
   }
   const prof=data.profOf[id],lead=!!prof&&!prof.mine;
@@ -439,6 +552,7 @@ function renderStudent(id){
           ${protos.length?`<div class="list">${protos.map(p=>`<div class="it"><span>Задание ${p.n} · ${p.proto==null?'задача '+p.pid:'прототип '+p.proto}</span><span class="muted">${p.wrong} из ${p.attempts} неверно</span></div>`).join('')}</div>`:'<p class="muted">Ошибок пока нет.</p>'}</div>
       </div>
     </div>
+    ${examBlock(id)}
     <div class="grid2">
       <div class="panel"><h3>Пробники</h3>
         ${vs.length?`<div class="list">${vs.map(v=>`<div class="it"><span>${fmtDate(v.t)}</span><span class="vres"><b>${v.s}</b> <span class="muted">тест. · ${v.p} из ${v.m||v.total} перв. · ${Math.round((v.ms||0)/60000)} мин</span></span>
@@ -476,7 +590,10 @@ const rnd=(len,alpha)=>{const a=new Uint8Array(len*2);crypto.getRandomValues(a);
 const ALNUM='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
 const linkFor=(u,secret)=>TRAINER+'#/login/'+u.login+'.'+secret;
 function sheet(html){document.getElementById('sheet').innerHTML=html;document.getElementById('sheet-ov').classList.add('open');}
-function closeSheet(){document.getElementById('sheet-ov').classList.remove('open');}
+/* Set only by the assign and move sheets: the element to give focus back to on close. */
+let sheetOpener=null;
+function closeSheet(){document.getElementById('sheet-ov').classList.remove('open');
+  const o=sheetOpener;sheetOpener=null;if(o&&o!==document.body&&document.contains(o))o.focus({preventScroll:true});}
 function showLink(u,secret,title){
   const url=linkFor(u,secret);
   sheet(`<h3>${esc(title)}</h3><p>Отправь эту ссылку ученику <b>${esc(u.name||u.login)}</b>. По ней он входит на любом устройстве — пусть никому её не пересылает.</p>
@@ -528,23 +645,376 @@ async function setActive(uid,on){
   await refresh();
 }
 
+// ---- пробники: списки и каталог ----
+/* kind: "check" and "done" show the score and the photos, "live" and "missed" do not */
+function asgRow(a,acts,kind){
+  const e=examOf(a.exam),ph=phaseOf(a),ps=photosOfAsg(a.id).length,sc=kind==='check'||kind==='done';
+  return `<tr class="row" data-act="open-check" data-id="${esc(a.id)}">
+    <td class="c-name"><span class="name">${esc(nameOf(a.user))}</span></td>
+    <td class="c-exam">${e?esc(examLabel(e)):'—'}</td><td class="c-time">${esc(fmtTs(a.start))}</td><td class="c-st">${chipFor(ph)}</td>
+    ${sc?`<td class="num">${a.settled?esc(a.p1):'—'}</td><td class="hide-m">${ps?ps+' фото':'—'}</td>`:''}
+    ${kind==='live'||kind==='missed'?`<td class="acts-cell">${acts||''}</td>`:''}</tr>`;
+}
+// the server moves/cancels only an untouched assignment: not yet started or already missed
+const asgActs=a=>{const ph=phaseOf(a);return ph==='scheduled'||ph==='missed'?`<button class="btn quiet" data-act="move" data-id="${esc(a.id)}">Перенести</button> <button class="btn danger" data-act="cancel" data-id="${esc(a.id)}">Отменить</button>`:'';};
+const timesWord=n=>{const m=n%10,c=n%100;return n+(m>=2&&m<=4&&!(c>=12&&c<=14)?' раза':' раз');};
+function renderExams(){
+  const A=data.asg||[],E=data.exams||[],by=ph=>A.filter(a=>phaseOf(a)===ph);
+  const newest=(x,y)=>y.start-x.start,oldest=(x,y)=>x.start-y.start;
+  const table=(rows,kind)=>rows.length?`<div class="table-wrap asg"><table>
+    <thead><tr><th>Ученик</th><th>Пробник</th><th>Начало</th><th>Статус</th>${kind==='check'||kind==='done'?'<th class="num">1 часть</th><th class="hide-m">Вторая часть</th>':'<th></th>'}</tr></thead>
+    <tbody>${rows.map(a=>asgRow(a,kind==='live'||kind==='missed'?asgActs(a):'',kind)).join('')}</tbody></table></div>`:'';
+  const toCheck=by('submitted').sort(newest),missed=by('missed').sort(newest),done=by('checked').sort(newest).slice(0,20);
+  // running and photo-collecting first, then scheduled with the nearest start on top
+  const live=[...by('open').sort(oldest),...by('photos').sort(oldest),...by('scheduled').sort(oldest)];
+  const sec=(title,html,empty)=>`<div class="panel"><h3>${title}</h3>${html||`<p class="muted">${empty}</p>`}</div>`;
+  const times=id=>A.filter(a=>a.exam===id).length;
+  const warn=data.examErr?`<p class="muted">Не удалось загрузить часть данных пробников${/^\d+$/.test(data.examErr)?` (код ${esc(data.examErr)})`:''}. Списки могут быть неполными.</p>`:'';
+  app.innerHTML=`${tabs('x')}
+    <div class="toolbar"><h2 class="grow">Пробники</h2><button class="btn quiet" data-act="reload">Обновить</button><button class="btn" data-act="assign">Назначить пробник</button></div>
+    <p class="lead">Свои пробники лежат в закрытом каталоге. Ученик видит пробник только после того, как ты назначил его на время: выбери ученика, пробник из каталога, дату и время.</p>
+    ${warn}
+    ${sec('Ждут проверки',table(toCheck,'check'),'Работ на проверку нет.')}
+    ${sec('Назначены и идут',table(live,'live'),'Ничего не назначено.')}
+    ${missed.length?sec('Пропущены',table(missed,'missed'),''):''}
+    <div class="panel"><h3>Каталог</h3>
+      ${E.length?`<div class="list cat">${E.map(e=>`<div class="it"><span><b>№${examNo(e.id)} · ${esc(e.title)}</b>${e.full?' <span class="chip">полный вариант</span>':''} <span class="muted">· загружен ${fmtDay(pbTime(e.created))}${times(e.id)?' · назначен '+timesWord(times(e.id)):''}</span></span>
+        <span><button class="btn" data-act="assign" data-exam="${esc(e.id)}">Назначить</button></span></div>`).join('')}</div>`
+        :'<p class="muted">Каталог пуст. Пробники готовятся и загружаются через Claude Code (навык assigned-exam).</p>'}
+      <p class="muted">Новый пробник: пришли исходник в чат Claude Code — он соберёт файл, сверит ответы, покажет предпросмотр и загрузит сюда.</p>
+    </div>
+    ${done.length?sec('Проверены (последние 20)',table(done,'done'),''):''}`;
+}
+
+// ---- пробники: назначить, перенести, отменить ----
+/* The server answers 400 both for "already assigned" and for bad input, so the
+   message names both. Move and cancel only work on an untouched assignment (409). */
+const fmtErr=(kind,status)=>status===400?(kind==='assign'?'Такой пробник этому ученику уже назначен, или данные не подошли.':'Сервер не принял время. Проверь дату и длительность.')
+  :status===409?'Пробник уже начался — перенести или отменить его нельзя.'
+  :status===403?'Нет доступа: вход мог истечь. Открой свою ссылку преподавателя заново.'
+  :status===404?'Такого назначения уже нет, возможно, его отменили. Список обновлён.'
+  :`Сервер ответил ${status}.`;
+const byName=(x,y)=>(x.name||x.login||'').localeCompare(y.name||y.login||'','ru');
+function personOptions(sel){
+  const opt=u=>`<option value="${esc(u.id)}"${u.id===sel?' selected':''}>${esc(u.name||u.login)}</option>`;
+  const students=data.students.filter(u=>u.active!==false||u.id===sel).sort(byName);
+  const leads=data.leads.filter(p=>p.active||p.user===sel).map(p=>data.userOf[p.user]).filter(Boolean).sort(byName);
+  // no default person: an assignment to the first name in the list by mistake is worse than one more tap
+  return `<option value=""${sel?'':' selected'} disabled>Выбери ученика</option>
+    <optgroup label="Ученики">${students.map(opt).join('')}</optgroup>${leads.length?`<optgroup label="Из канала">${leads.map(opt).join('')}</optgroup>`:''}`;
+}
+const rememberOpener=()=>{if(!document.getElementById('sheet-ov').classList.contains('open'))sheetOpener=document.activeElement;};
+const whenFields=(when,min,label)=>`<label class="fld">${label} (по Москве)<input type="datetime-local" id="as-start" required value="${esc(when)}"></label>
+    <label class="fld">Время на работу, минут (от 1 до 360)<input type="number" id="as-dur" required min="1" max="360" step="1" inputmode="numeric" value="${esc(min)}"></label>
+    <p class="errline" id="as-err" role="alert"></p>`;
+function assignSheet(o){
+  o=o||{};
+  if(!(data.exams||[]).length){sheet(`<h3>Нет пробников</h3><p>Сначала загрузи пробник в каталог.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
+  // tomorrow 18:00 Moscow: the date is taken from a Moscow wall-clock string, so the browser zone does not matter
+  const when=o.when||ExamPanelCore.tsToMoscowInput(nowS()+86400).slice(0,11)+'18:00';
+  rememberOpener();
+  sheet(`<form id="as-form" data-kind="assign"><h3>Назначить пробник</h3>
+    <label class="fld">Ученик<select id="as-user" required>${personOptions(o.user)}</select></label>
+    <label class="fld">Пробник из каталога<select id="as-exam" required><option value=""${o.exam?'':' selected'} disabled>Выбери пробник</option>${data.exams.map(e=>`<option value="${esc(e.id)}"${e.id===o.exam?' selected':''}>${esc(examLabel(e))}</option>`).join('')}</select></label>
+    ${whenFields(when,o.min||235,'Начало')}
+    <div class="acts"><button type="button" class="btn quiet" data-act="close">Отмена</button><button type="submit" class="btn">Назначить</button></div></form>`);
+  document.getElementById('as-user').focus();
+}
+/* The form's time as {start,duration} in seconds, or null. A start more than two years
+   ahead or more than a year back is taken for a typo in the year. */
+function readWhen(){
+  const start=ExamPanelCore.moscowInputToTs(document.getElementById('as-start').value),min=+document.getElementById('as-dur').value;
+  return(start&&start<nowS()+2*365*86400&&start>=nowS()-365*86400&&Number.isInteger(min)&&min>=1&&min<=360)?{start,duration:min*60}:null;
+}
+/* Sends one request from the open sheet: the button is off while it runs (no double
+   assignment), the error goes to #as-err, success closes the sheet and reloads the data. */
+let sending=false;
+async function sendExam(kind,path,body,btn){
+  const err=document.getElementById('as-err');
+  if(sending||!btn||btn.disabled||!err)return;
+  sending=true;
+  let r;
+  try{
+    btn.disabled=true;err.textContent='';
+    try{r=await api(path,{method:'POST',body});}
+    catch(e){if(e.message==='401')closeSheet();else{err.textContent='Нет связи с сервером.';btn.disabled=false;}return;}
+  }finally{sending=false;}   // never left set: a stuck flag would silence every later exam action
+  if(r.status!==200){
+    err.textContent=fmtErr(kind,r.status);btn.disabled=false;
+    if(r.status===409||r.status===404){
+      // nothing can be done with this assignment any more: only "Закрыть" is left, the fields are locked
+      // (Enter in a field must do nothing), and the lists are refreshed behind the sheet
+      const acts=btn.closest('.acts');if(acts)acts.innerHTML='<button type="button" class="btn" data-act="close">Закрыть</button>';
+      document.querySelectorAll('#as-form input,#as-form select').forEach(x=>{x.disabled=true;});
+      refreshKeep().catch(()=>{});}
+    return;}
+  const y=window.scrollY;   // read before closeSheet(): giving focus back must not move the page
+  closeSheet();
+  try{await refreshKeep(y);}catch(e){if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось обновить данные: ${esc(e.message)}</p>`;}
+}
+/* A start in the past is asked about on a second sheet step; `pending` holds the request meanwhile. */
+let pending=null;
+function askPast(p){
+  pending=p;
+  const left=Math.max(0,Math.ceil((p.body.start+p.body.duration-nowS())/60));
+  sheet(`<h3>Это время уже прошло</h3>
+    <p>${left?`Пробник станет доступен ученику сразу, но время на работу считается от назначенного начала: останется ${left} мин.`:'Время на работу тоже уже вышло: пробник сразу окажется пропущенным.'}</p>
+    <p class="errline" id="as-err" role="alert"></p>
+    <div class="acts"><button class="btn quiet" data-act="past-back">Изменить время</button><button class="btn" data-act="past-go">${p.kind==='assign'?'Назначить':'Перенести'}</button></div>`);
+}
+function pastBack(){
+  const p=pending;if(!p)return closeSheet();
+  if(p.kind==='assign')assignSheet({...p.form,when:p.when,min:p.body.duration/60});
+  else moveSheet(p.id,{when:p.when,min:p.body.duration/60});
+}
+function pastGo(b){if(pending)sendExam(pending.kind,pending.path,pending.body,b);}
+function assignGo(b){
+  const err=document.getElementById('as-err'),form={user:document.getElementById('as-user').value,exam:document.getElementById('as-exam').value};
+  if(!form.user||!form.exam){err.textContent='Выбери ученика и пробник.';return;}
+  const w=readWhen();
+  if(!w){err.textContent='Проверь дату, время и длительность: время на работу от 1 до 360 минут.';return;}
+  const p={kind:'assign',path:'/ege/exams/assign',body:{...form,...w},form,when:document.getElementById('as-start').value};
+  if(w.start<nowS())askPast(p);else sendExam('assign',p.path,p.body,b);
+}
+function moveSheet(id,o){
+  const a=(data.asg||[]).find(x=>x.id===id);if(!a)return;
+  o=o||{};
+  rememberOpener();
+  sheet(`<form id="as-form" data-kind="move" data-id="${esc(id)}"><h3>Перенести пробник</h3><p><b>${esc(nameOf(a.user))}</b> · ${esc(examOf(a.exam)?examLabel(examOf(a.exam)):'—')}. Сейчас: ${esc(fmtTs(a.start))}. Если ученик подключён к боту, он получит сообщение в Telegram.</p>
+    ${whenFields(o.when||ExamPanelCore.tsToMoscowInput(a.start),o.min||Math.round((Number(a.duration)||900)/60),'Новое начало')}
+    <div class="acts"><button type="button" class="btn quiet" data-act="close">Отмена</button><button type="submit" class="btn">Перенести</button></div></form>`);
+  document.getElementById('as-start').focus();
+}
+function moveGo(id,b){
+  const w=readWhen(),err=document.getElementById('as-err');
+  if(!w){err.textContent='Проверь дату, время и длительность: время на работу от 1 до 360 минут.';return;}
+  const p={kind:'move',id,path:`/ege/exams/${id}/move`,body:w,when:document.getElementById('as-start').value};
+  if(w.start<nowS())askPast(p);else sendExam('move',p.path,p.body,b);
+}
+function cancelSheet(id){
+  const a=(data.asg||[]).find(x=>x.id===id);if(!a)return;
+  sheet(`<h3>Отменить пробник?</h3><p><b>${esc(nameOf(a.user))}</b> · ${esc(examOf(a.exam)?examLabel(examOf(a.exam)):'—')} · ${esc(fmtTs(a.start))}. Назначение исчезнет. Если ученик подключён к боту, он получит сообщение в Telegram. Потом можно назначить заново.</p>
+    <p class="errline" id="as-err" role="alert"></p>
+    <div class="acts"><button class="btn quiet" data-act="close">Не отменять</button><button class="btn danger" data-act="cancel-go" data-id="${esc(id)}">Отменить</button></div>`);
+}
+const cancelGo=(id,b)=>sendExam('cancel',`/ege/exams/${id}/cancel`,undefined,b);
+// the student card: this student's assignments, newest first
+function examBlock(uid){
+  const rows=asgOfUser(uid).sort((x,y)=>y.start-x.start);
+  return `<div class="panel"><div class="toolbar"><h3 class="grow">Пробники от преподавателя</h3>
+      <button class="btn" data-act="assign" data-user="${esc(uid)}">Назначить пробник</button></div>
+    ${rows.length?`<div class="list cat">${rows.map(a=>{const ph=phaseOf(a),e=examOf(a.exam);
+      return `<div class="it"><span><b>${esc(e?examLabel(e):'—')}</b> <span class="muted">· ${esc(fmtTs(a.start))}</span> ${chipFor(ph)}${a.settled?` <span class="muted">· 1 часть: ${esc(a.p1)}</span>`:''}</span>
+        <span>${ph==='scheduled'||ph==='missed'?`<button class="btn quiet" data-act="move" data-id="${esc(a.id)}">Перенести</button> <button class="btn danger" data-act="cancel" data-id="${esc(a.id)}">Отменить</button>`
+          :ph==='submitted'||ph==='checked'?`<button class="btn quiet" data-act="open-check" data-id="${esc(a.id)}">Открыть</button>`:''}</span></div>`;}).join('')}</div>`
+      :'<p class="muted">Своих пробников этому ученику ещё не назначали.</p>'}</div>`;
+}
+
+// ---- проверка работы ----
+/* The check page for one submitted work (#/check/<assignment id>, the target of the bot's
+   "Проверить" button). The assignment and the exam are read fresh from the server: the lists
+   in `data` leave out the journal (`log`) and the exam text and key on purpose. */
+const pointsOptions=(max,cur)=>Array.from({length:max+1},(_,k)=>`<option value="${k}"${k===cur?' selected':''}>${k}</option>`).join('');
+let ckGen=0;        // a newer draw of the page makes an older, slower one stop
+let ckShown=null;   // id of the check page that is on screen now (a redraw then does not blank it)
+let ckNote=null;    // {id,text,bad}: the status line, kept over the redraw after a save
+let ck=null;        // {id,long:[{n,max}],checked} of the page on screen, for the save button
+/* File tokens are short-lived (PocketBase: about two minutes). A token younger than maxAgeMs is reused. */
+let ckTok={v:'',t:0},ckTokP=null;
+function freshToken(maxAgeMs){
+  if(ckTok.v&&Date.now()-ckTok.t<maxAgeMs)return Promise.resolve(ckTok.v);
+  return ckTokP||(ckTokP=(async()=>{
+    try{const r=await api('/files/token',{method:'POST'});
+      if(r.status===200&&r.json&&r.json.token)ckTok={v:r.json.token,t:Date.now()};}
+    catch(e){}finally{ckTokP=null;}
+    return ckTok.v;})());
+}
+const phUrl=(path,tok)=>`${API}/files/exam_photos/${path.split('/').map(encodeURIComponent).join('/')}?token=${encodeURIComponent(tok)}`;
+const phPath=p=>`${p.id}/${p.file}`;
+function phThumb(p,tok,alt){
+  return `<a href="${esc(phUrl(phPath(p),tok))}" data-ph="${esc(phPath(p))}" target="_blank" rel="noopener"><img data-phi loading="lazy" src="${esc(phUrl(phPath(p),tok))}" alt="${esc(alt)}"></a>`;
+}
+function setPhotoLinks(tok){app.querySelectorAll('a[data-ph]').forEach(a=>{a.href=phUrl(a.dataset.ph,tok);});}
+// an image that fails to load gets one more try with a new token (the page may have been open for a while)
+app.addEventListener('error',async e=>{
+  const img=e.target;if(!img||img.tagName!=='IMG'||!('phi' in img.dataset)||img.dataset.retried)return;
+  img.dataset.retried='1';
+  const tok=await freshToken(10000);if(!tok||!img.isConnected)return;
+  setPhotoLinks(tok);
+  const a=img.closest('a[data-ph]');if(a)img.src=phUrl(a.dataset.ph,tok);
+},true);
+// a link opened long after the page was drawn would carry a dead token: get a new one first
+function openPhoto(e,a){
+  if(Date.now()-ckTok.t<60000)return;
+  e.preventDefault();
+  const w=window.open('','_blank');if(w)w.opener=null;
+  freshToken(0).then(tok=>{const u=phUrl(a.dataset.ph,tok);setPhotoLinks(tok);if(w)w.location.href=u;else window.open(u,'_blank','noopener');});
+}
+/* Everything read from an exam or a submitted work is untrusted data: the server does not check
+   the content of `tasks`, `key`, `answers`, `part2` or `log`. Numbers are coerced, strings are
+   escaped on output, objects are looked up by own property only. */
+const isObj=x=>x!==null&&typeof x==='object'&&!Array.isArray(x);
+const own=(o,k)=>isObj(o)&&Object.prototype.hasOwnProperty.call(o,k)?o[k]:undefined;
+const numOr=(x,d)=>{const v=Number(x);return Number.isFinite(v)?v:d;};
+const txt=x=>typeof x==='string'?x:typeof x==='number'&&Number.isFinite(x)?String(x):'';
+/* Exam HTML is the teacher's own, but it is checked with the same allowlist as the upload
+   (exam-validate.js) before it is put into this signed-in page; anything else is shown as text. */
+function examHtml(html,what,cls){
+  const h=html==null?'':String(html);
+  let bad='';
+  try{bad=window.ExamValidate?ExamValidate.htmlProblem(h):'проверка недоступна';}catch(e){bad='проверка не сработала';}
+  return bad?`<p class="ck-warn">Небезопасная разметка в ${what} — показан исходный текст.</p><pre class="ck-raw">${esc(h)}</pre>`
+    :`<div class="tex${cls?' '+cls:''}">${h}</div>`;
+}
+const uhodWord=n=>n+(n%10===1&&n%100!==11?' уход':n%10>=2&&n%10<=4&&!(n%100>=12&&n%100<=14)?' ухода':' уходов');
+const mskTime=ms=>new Date(ms).toLocaleTimeString('ru-RU',{timeZone:'Europe/Moscow',hour:'2-digit',minute:'2-digit'});
+function ckNoteHtml(id){return ckNote&&ckNote.id===id?esc(ckNote.text):'';}
+
+async function renderCheck(id){
+  const gen=++ckGen,alive=()=>gen===ckGen&&location.hash==='#/check/'+id;
+  if(ckShown!==id)app.innerHTML='<p class="center muted">Загружаю работу…</p>';
+  const gone=html=>{ckShown=null;ck=null;keepY=null;app.innerHTML=`<div class="center"><p class="muted">${html}</p><p><a href="#/exams">К списку пробников</a></p></div>`;};
+  let ra;
+  try{ra=await api('/collections/exam_assignments/records/'+id);}
+  catch(e){if(e.message!=='401'&&alive())gone('Нет связи с сервером. Обнови страницу.');return;}
+  if(!alive())return;
+  if(ra.status!==200){gone(ra.status===404?'Такой работы нет. Возможно, пробник отменили, ссылка неверная или вход больше не действует.':`Не удалось открыть работу (сервер ответил ${esc(ra.status)}).`);return;}
+  const a=ra.json;
+  let re,phs;
+  try{[re,phs]=await Promise.all([api('/collections/exams/records/'+a.exam),
+    all('exam_photos',`assignment="${id}"`,'id,assignment,user,n,file').catch(()=>null)]);}
+  catch(e){if(e.message!=='401'&&alive())gone('Нет связи с сервером. Обнови страницу.');return;}
+  if(!alive())return;
+  if(re.status!==200){gone(`Не удалось открыть пробник (сервер ответил ${esc(re.status)}).`);return;}
+  const e=isObj(re.json)?re.json:{},ph=phaseOf(a);
+  // task number is kept as the server sees it (String(n)); max is a whole number 1..100, as on the server (max||1)
+  const tasks=(Array.isArray(e.tasks)?e.tasks:[]).filter(isObj).map(t=>({n:String(t.n),kind:t.kind,
+    max:Math.min(100,Math.max(1,Math.trunc(numOr(t.max,1))||1)),cond:txt(t.cond)}));
+  const key=isObj(e.key)?e.key:{},keyOf=n=>{const k=own(key,String(n));return isObj(k)?k:{};};
+  const dur=numOr(a.duration,0),start=numOr(a.start,0);
+  const photos=phs||photosOfAsg(id);   // a failed request falls back to the list loaded earlier, with a notice
+  const tok=photos.length?await freshToken(60000):'';
+  if(!alive())return;
+  const P=ExamPanelCore,act=P.activitySummary(a.log,start),part2=isObj(a.part2)?a.part2:{},answers=isObj(a.answers)?a.answers:{},ok=isObj(a.ok)?a.ok:{};
+  const short=tasks.filter(t=>t.kind==='short'),long=tasks.filter(t=>t.kind==='long');
+  const botPh=photos.filter(p=>!p.n);   // sent to the bot: no task, the teacher sorts them out
+  const ready=!!a.settled,T=ts=>esc(fmtTs(ts));
+  const title=examOf(e.id)?examLabel(examOf(e.id)):txt(e.title);
+  // the server caps each entry, not the sum: a total above the work's length is cut and flagged
+  const rawAway=act.away.totalSec,tooMuch=rawAway>dur;
+  const away=act.away.count?`записано ${uhodWord(act.away.count)} со страницы, всего ${P.fmtSec(Math.min(rawAway,dur))}${tooMuch?' (данные страницы ученика, возможна ошибка)':''}; дольше всего ${P.fmtSec(act.away.longest.sec)} (на задании ${esc(act.away.longest.n)||'—'})`
+    :numOr(a.opened,0)>0?'со страницы не уходил':'работа не открывалась';
+  // journal -> per-task answer entries, and the away episodes, in the order they were written
+  const byTask=Object.create(null),aways=[];   // no prototype: a task key like "__proto__" is just a key
+  (Array.isArray(a.log)?a.log:[]).forEach(x=>{
+    if(!Array.isArray(x)||x.length<4||typeof x[0]!=='number')return;
+    if(x[1]==='a'&&x[2]!=null)(byTask[String(x[2])]||(byTask[String(x[2])]=[])).push(x);
+    else if(x[1]==='w'&&typeof x[3]==='number'&&x[3]>0)aways.push(x);});
+  const tlTasks=Object.keys(byTask).sort((p,q)=>(Number(p)-Number(q))||(p<q?-1:1));
+  const notReady=ready?'':ph==='submitted'
+    ?'Работа сдана, но итоги ещё подводятся. Баллы можно будет поставить через минуту: обнови страницу.'
+    :`Работа ещё не сдана (${esc(P.PHASE_TEXT[ph]||ph)}). Баллы можно будет поставить после сдачи.`;
+  app.innerHTML=`<p><a href="#/exams">← Пробники</a> · <a href="#/s/${esc(a.user)}">${esc(nameOf(a.user))}</a></p>
+    <div class="toolbar"><h2 class="grow">${esc(title)} · ${esc(nameOf(a.user))} ${chipFor(ph)}</h2></div>
+    <p class="lead">Начало: ${T(start)} (по Москве) · на работу ${Math.round(dur/60)} мин · ${numOr(a.opened,0)>0?'открыл: '+T(a.opened):'не открывал'}${numOr(a.finished,0)>0?' · завершил досрочно: '+T(a.finished):''}${numOr(a.photos_done,0)>0?' · закончил с фото: '+T(a.photos_done):''}</p>
+    ${phs?'':'<p class="muted">Не удалось обновить список фото.</p>'}
+    ${ready?'':`<div class="panel"><p class="muted" role="status">${notReady}</p></div>`}
+    <div class="panel"><h3>Активность</h3>
+      <p>${away}.</p>
+      <p class="muted">Это только факты из журнала сайта, не доказательство: второй телефон или книгу сайт не видит.</p>
+      <details class="ck-tl"><summary>Когда вводились ответы</summary>${tlTasks.length?tlTasks.map(n=>`<h4>Задание ${esc(n)}</h4><div class="list">${byTask[n].map(x=>
+        `<div class="it tl"><span class="muted">${P.fmtSec(x[0]-start)}</span><span class="ck-pre">${String(x[3])===''?'<span class="muted">стёр ответ</span>':esc(x[3])}</span></div>`).join('')}</div>`).join(''):'<p class="muted">Ответов по журналу нет.</p>'}</details>
+      ${aways.length?`<details class="ck-tl"><summary>Уходы со страницы</summary><div class="list">${aways.map(x=>
+        `<div class="it"><span>Задание ${esc(x[2])||'—'}</span><span class="muted">не было на странице ${P.fmtSec(x[3])} · записано на ${P.fmtSec(x[0]-start)} от начала</span></div>`).join('')}</div></details>`:''}</div>
+    <div class="panel"><h3>Первая часть: ${ready?esc(numOr(a.p1,0)):'—'} из ${short.reduce((s,t)=>s+t.max,0)}</h3>
+      ${short.length?`<div class="table-wrap ck-p1"><table><thead><tr><th>Задание</th><th>Ответ ученика</th><th>Верный ответ</th><th></th></tr></thead><tbody>
+      ${short.map(t=>{const g=txt(own(answers,t.n));return `<tr><td class="c-n">${esc(t.n)}</td><td class="c-g ck-pre">${g?esc(g):'<span class="muted">—</span>'}</td><td class="c-k ck-pre">${esc(txt(keyOf(t.n).a))}</td>
+        <td class="c-v">${ready?(own(ok,t.n)?'<span class="chip ex-checked">верно</span>':'<span class="chip ex-missed">неверно</span>'):''}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">В этом пробнике нет заданий с кратким ответом.</p>'}</div>
+    ${long.map((t,i)=>{const g0=own(part2,t.n),g=isObj(g0)?g0:{},ps=photos.filter(p=>String(p.n)===t.n),max=t.max,cur=Math.min(max,Math.max(0,Math.trunc(numOr(g.pts,0))));
+      return `<div class="panel" data-ck="${i}"><h3>Задание ${esc(t.n)} <span class="muted">· максимум ${esc(max)}</span></h3>
+        <details><summary>Условие и верный ответ</summary>${examHtml(t.cond,'условии','ck-cond')}<p><b>Ответ:</b></p>${examHtml(txt(keyOf(t.n).a),'ответе')}</details>
+        <div class="ex-ph">${ps.length?ps.map(p=>phThumb(p,tok,`Фото решения, задание ${t.n}`)).join(''):`<p class="muted">${botPh.length?'К этому заданию фото на сайте нет. Смотри блок «Фото, присланные боту» ниже.':'Фото нет.'}</p>`}</div>
+        <div class="ck-row"><label class="fld">Баллы<select data-ck-pts="${i}" ${ready?'':'disabled'}>${pointsOptions(max,cur)}</select></label>
+          <label class="fld grow">Комментарий ученику<textarea class="field" data-ck-note="${i}" rows="3" maxlength="2000" ${ready?'':'disabled'}>${esc(txt(g.comment))}</textarea></label></div></div>`;}).join('')}
+    ${botPh.length?`<div class="panel"><h3>Фото, присланные боту <span class="muted">· ${botPh.length}</span></h3>
+      <p class="muted">Ученик отправил их боту без указания задания. Они в порядке получения.</p>
+      <div class="ex-ph">${botPh.map(p=>phThumb(p,tok,'Фото, присланное боту')).join('')}</div></div>`:''}
+    <div class="toolbar"><p class="ck-msg grow${ckNote&&ckNote.id===id&&ckNote.bad?' bad':ckNote&&ckNote.id===id?' good':''}" id="ck-msg" role="status">${ckNoteHtml(id)}</p>
+      <button class="btn" data-act="check-send" data-id="${esc(id)}" ${ready?'':'disabled'}>${a.checked?'Сохранить изменения':'Проверено, отправить ученику'}</button></div>
+    <p class="muted ck-note">Ученик получит сообщение в Telegram при первой проверке.${a.checked?' Повторное сохранение только обновляет баллы и комментарии.':''}</p>`;
+  ck={id,long:long.map(t=>({n:t.n})),checked:!!a.checked};ckShown=id;
+  // only the teacher's own HTML is typeset; student answers stay plain text
+  if(window.renderMathInElement)app.querySelectorAll('.tex').forEach(el=>{try{renderMathInElement(el,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});}catch(err){}});
+  if(keepY!==null){window.scrollTo(0,keepY);keepY=null;}
+}
+const ckErr=st=>st===409?'Работа ещё не сдана. Баллы можно будет поставить после сдачи.'
+  :st===400?'Проверь баллы: целые числа от нуля до максимума.'
+  :st===403?'Нет доступа: вход мог истечь. Открой свою ссылку преподавателя заново.'
+  :st===404?'Такой работы уже нет, возможно, пробник отменили.'
+  :`Сервер ответил ${st}.`;
+/* Same double-submit guard as the assign sheet: the `sending` flag is released in `finally`,
+   the button is off while the request runs. The status line survives the redraw (ckNote). */
+async function checkSend(id,btn){
+  const msg=document.getElementById('ck-msg');
+  if(sending||!btn||btn.disabled||!msg||!ck||ck.id!==id)return;
+  const say=(text,bad)=>{ckNote={id,text,bad:!!bad};msg.textContent=text;msg.className='ck-msg grow '+(bad?'bad':'good');};
+  /* controls are found by position, never by building a selector from the task number (which is data) */
+  const part2=Object.create(null);
+  ck.long.forEach((t,i)=>{const s=document.querySelector(`[data-ck-pts="${i}"]`),c=document.querySelector(`[data-ck-note="${i}"]`);
+    if(s&&c)part2[t.n]={pts:Number(s.value),comment:c.value};});
+  const first=!ck.checked;
+  let r;
+  sending=true;
+  try{
+    btn.disabled=true;say('Отправляю…');
+    try{r=await api(`/ege/exams/${id}/check`,{method:'POST',body:{part2}});}
+    catch(err){if(err.message!=='401'){say('Нет связи с сервером. Ничего не сохранено.',true);btn.disabled=false;}return;}
+  }finally{sending=false;}
+  if(r.status!==200){
+    say(ckErr(r.status),true);
+    if(r.status===409||r.status===404)refreshKeep().catch(()=>{});   // the state changed: redraw it, the message stays
+    else btn.disabled=false;
+    return;}
+  say(`${first?'Готово. Работа проверена, ученик получит сообщение в Telegram.':'Изменения сохранены, новое сообщение ученику не уходит.'} ${mskTime(Date.now())}`);
+  try{await refreshKeep();}catch(err){if(err.message!=='401')say('Сохранено, но список не обновился. Обнови страницу.',true);}
+}
+
 // ---- маршруты ----
-async function refresh(){await load();for(const k in summaries)delete summaries[k];route();}
+async function refresh(){await load();if(!auth){data=null;return;}for(const k in summaries)delete summaries[k];route();}
+/* Refresh that keeps the scroll position (route() otherwise scrolls to the top): after an
+   exam action the changed row is usually mid-page. A lead's card is drawn after its journal
+   arrives (renderStudent), so the position is kept until that second draw. */
+let keepY=null;
+async function refreshKeep(y){
+  keepY=y===undefined?window.scrollY:y;
+  try{await refresh();}catch(e){keepY=null;throw e;}
+  if(keepY!==null){window.scrollTo(0,keepY);
+    const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
+    // the check page and a lead's card draw after a request: they apply the scroll themselves
+    if(!(/^#\/check\/[a-z0-9]+$/.test(location.hash)||(m&&!data.byUser[m[1]])))keepY=null;}
+}
 function route(){
   const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
-  if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else renderList();
-  window.scrollTo(0,0);
+  const mc=location.hash.match(/^#\/check\/([a-z0-9]+)$/);
+  if(!mc){ckShown=null;ckGen++;}   // leaving the check page: a draw still in flight must not paint over the new page
+  if(mc)renderCheck(mc[1]).catch(err=>{keepY=null;ckShown=null;if(err.message!=='401')app.innerHTML=`<p class="center muted">Не удалось открыть работу: ${esc(err.message)}</p>`;});
+  else if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else if(location.hash==='#/exams')renderExams();else renderList();
+  if(keepY===null)window.scrollTo(0,0);
 }
 function render(msg){
   document.getElementById('logout').style.display=auth?'':'none';
   if(!auth){app.innerHTML=`<div class="center"><h2>Панель преподавателя</h2><p class="lead">${esc(msg||'Открой свою личную ссылку для входа.')}</p></div>`;return;}
   app.innerHTML='<p class="center muted">Загружаю данные…</p>';
-  refresh().catch(e=>{if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
+  refresh().catch(e=>{
+    if(/ (401|403)$/.test(e.message))return expire();   // a token the server no longer accepts
+    if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось загрузить данные: ${esc(e.message)}</p>`;});
 }
 
 document.addEventListener('click',e=>{
   const th=e.target.closest('th[data-sort]');
   if(th){const k=th.dataset.sort;if(sortKey===k)sortDir=-sortDir;else{sortKey=k;sortDir=k==='name'?1:-1;}renderList();return;}
+  const pa=e.target.closest('a[data-ph]');
+  if(pa){openPhoto(e,pa);return;}
   const b=e.target.closest('[data-act]');
   if(!b){
     /* buttons and the Telegram link inside a row must not open the card */
@@ -563,6 +1033,14 @@ document.addEventListener('click',e=>{
   else if(a==='active')setActive(id,b.dataset.v==='1');
   else if(a==='vdel')delVariant(b.dataset.user,id);
   else if(a==='vdel-go')delVariantGo(b.dataset.user,id);
+  else if(a==='open-check')location.hash='#/check/'+id;
+  else if(a==='check-send')checkSend(id,b);
+  else if(a==='assign')assignSheet({exam:b.dataset.exam,user:b.dataset.user});
+  else if(a==='past-go')pastGo(b);
+  else if(a==='past-back')pastBack();
+  else if(a==='move')moveSheet(id);
+  else if(a==='cancel')cancelSheet(id);
+  else if(a==='cancel-go')cancelGo(id,b);
 });
 document.getElementById('sheet-ov').addEventListener('click',e=>{if(e.target.id==='sheet-ov')closeSheet();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});
@@ -573,10 +1051,17 @@ document.getElementById('theme').addEventListener('click',()=>{
   if(dark)document.documentElement.removeAttribute('data-theme');else document.documentElement.setAttribute('data-theme','dark');
   try{localStorage.setItem('ege_theme',dark?'light':'dark');}catch(e){}
   document.querySelector('meta[name="theme-color"]').setAttribute('content',dark?'#f2efe7':'#161713');});
-window.addEventListener('hashchange',async()=>{
+/* Enter in a field and the submit button both land here (assign and move sheets). */
+document.addEventListener('submit',e=>{
+  const f=e.target;if(!f.matches||!f.matches('#as-form'))return;
+  e.preventDefault();const b=f.querySelector('button[type="submit"]');
+  if(!b||b.disabled)return;
+  if(f.dataset.kind==='assign')assignGo(b);else moveGo(f.dataset.id,b);
+});
+window.addEventListener('hashchange',async()=>{keepY=null;ckNote=null;
   if(/^#\/login\//.test(location.hash)){await loginFromHash();render();return;}
-  if(data)route();});
-(async()=>{await loginFromHash();render();})();
+  if(data&&auth)route();});
+(async()=>{if(!auth)pendSave();await loginFromHash();render();})();
 </script>
 </body>
 </html>

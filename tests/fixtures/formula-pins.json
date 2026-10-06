@@ -1,0 +1,652 @@
+[
+ {
+  "html": "<p>\\$5 + $x$</p>",
+  "formulas": [
+   {
+    "tex": "5 + ",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a$$b$$</p>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$$a$$b$</p>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": true
+   }
+  ]
+ },
+ {
+  "html": "<p>$a=\\$5$</p>",
+  "formulas": [
+   {
+    "tex": "a=\\$5",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$\\$5$</p>",
+  "formulas": [
+   {
+    "tex": "\\$5",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>&#36;x&#36;</p>",
+  "formulas": [
+   {
+    "tex": "x",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>&#x24;x&#x24;</p>",
+  "formulas": [
+   {
+    "tex": "x",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>&dollar;x&dollar;</p>",
+  "formulas": [
+   {
+    "tex": "x",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a&ltb$</p>",
+  "formulas": [
+   {
+    "tex": "a<b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a&lt;b$ и $x&gt;1$ и $a&amp;b$ и $a&quot;b$</p>",
+  "formulas": [
+   {
+    "tex": "a<b",
+    "display": false
+   },
+   {
+    "tex": "x>1",
+    "display": false
+   },
+   {
+    "tex": "a&b",
+    "display": false
+   },
+   {
+    "tex": "a\"b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a&amp;lt;b$</p>",
+  "formulas": [
+   {
+    "tex": "a&lt;b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>&amp;dollar;x&amp;dollar;</p>",
+  "formulas": []
+ },
+ {
+  "html": "<code>$x$</code>",
+  "formulas": []
+ },
+ {
+  "html": "<pre>$x$</pre><p>$y$</p>",
+  "formulas": [
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$x$ <code>$y$</code> $z$</p>",
+  "formulas": [
+   {
+    "tex": "x",
+    "display": false
+   },
+   {
+    "tex": "z",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<pre><code>$x$</code></pre>$w$",
+  "formulas": [
+   {
+    "tex": "w",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a +\n b$ и $$c\n=d$$</p>",
+  "formulas": [
+   {
+    "tex": "a +\n b",
+    "display": false
+   },
+   {
+    "tex": "c\n=d",
+    "display": true
+   }
+  ]
+ },
+ {
+  "html": "<p>${</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$${</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$\\frac{a}{b}$ и $\\text{a$b}$ и $\\{x\\}$</p>",
+  "formulas": [
+   {
+    "tex": "\\frac{a}{b}",
+    "display": false
+   },
+   {
+    "tex": "\\text{a$b}",
+    "display": false
+   },
+   {
+    "tex": "\\{x\\}",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>цена $5</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$a+b</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$$x^2</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$x$ и $</p>",
+  "formulas": [
+   {
+    "tex": "x",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$$x$</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$x$$</p>",
+  "formulas": [
+   {
+    "tex": "x",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$$$x$$$</p>",
+  "formulas": [
+   {
+    "tex": "$x",
+    "display": true
+   }
+  ]
+ },
+ {
+  "html": "<p>$ $</p>",
+  "formulas": [
+   {
+    "tex": " ",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$$$$</p>",
+  "formulas": [
+   {
+    "tex": "",
+    "display": true
+   }
+  ]
+ },
+ {
+  "html": "<p>$a$ <b>$b$</b> $c$</p>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "b",
+    "display": false
+   },
+   {
+    "tex": "c",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a</b>b$</p>",
+  "formulas": [
+   {
+    "tex": "ab",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a<b>b</b>$</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$a\\\\$ b$</p>",
+  "formulas": [
+   {
+    "tex": "a\\\\",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a\\$ b$ c$</p>",
+  "formulas": [
+   {
+    "tex": "a\\$ b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$}a$ b$</p>",
+  "formulas": [
+   {
+    "tex": "}a",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a}$b$</p>",
+  "formulas": [
+   {
+    "tex": "a}",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>5$ и 6$, потом $x$</p>",
+  "formulas": [
+   {
+    "tex": " и 6",
+    "display": false
+   },
+   {
+    "tex": "x",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$&#92;$x$</p>",
+  "formulas": [
+   {
+    "tex": "\\$x",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$&bsol;$x$</p>",
+  "formulas": [
+   {
+    "tex": "\\$x",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$&lbrace;a$b&rbrace;$</p>",
+  "formulas": [
+   {
+    "tex": "{a$b}",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$&#123;a$b&#125;$</p>",
+  "formulas": [
+   {
+    "tex": "{a$b}",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a&nbsp;b$</p>",
+  "formulas": [
+   {
+    "tex": "a b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$$a$$ $b$ $$c$$</p>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": true
+   },
+   {
+    "tex": "b",
+    "display": false
+   },
+   {
+    "tex": "c",
+    "display": true
+   }
+  ]
+ },
+ {
+  "html": "<p>$x$</p><p>$y$</p><table><tr><td>$$z$$</td></tr></table>",
+  "formulas": [
+   {
+    "tex": "x",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   },
+   {
+    "tex": "z",
+    "display": true
+   }
+  ]
+ },
+ {
+  "html": "<img alt=\"$z$\" src=\"data:image/png;base64,AA==\">",
+  "formulas": []
+ },
+ {
+  "html": "<p>цена \\$5 и \\$6, а $x$</p>",
+  "formulas": [
+   {
+    "tex": "5 и \\$6, а ",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<code>$\\frac{1$</code>",
+  "formulas": []
+ },
+ {
+  "html": "<p><code>x</p><p>$y$</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p><b>x</p><p>$y$</p>",
+  "formulas": [
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a</span>b$</p>",
+  "formulas": [
+   {
+    "tex": "ab",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<div>$a</div>$b$",
+  "formulas": [
+   {
+    "tex": "b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$a<br>b$ $c$</p>",
+  "formulas": [
+   {
+    "tex": " ",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<ul><li>$a$</li><li>$$b$$</li></ul>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "b",
+    "display": true
+   }
+  ]
+ },
+ {
+  "html": "<h3>$a$</h3><blockquote>$b$</blockquote>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$x$</p>\n<p>$$y$$</p>",
+  "formulas": [
+   {
+    "tex": "x",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": true
+   }
+  ]
+ },
+ {
+  "html": "<p>$&#36;$</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$&#36;x$</p>",
+  "formulas": []
+ },
+ {
+  "html": "<p>$a&LT;b$</p>",
+  "formulas": [
+   {
+    "tex": "a<b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p>$&#36x$</p>",
+  "formulas": []
+ },
+ {
+  "html": "<table><tr><td><code>x</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><b>x</td><td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><code>x<td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><code>x</td></tr><tr><td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><code>x<tr><td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><th><code>x</th><th>$a$</th></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><code>x</td></tr><tr><td>$a$</td></tr></table>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<p><code>x</p><table><tr><td>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<div><code>x<table><tr><td>$a$</td></tr></table>$y$</div>",
+  "formulas": []
+ },
+ {
+  "html": "<table><tr><td>$a$</td><td><i>$b$</i></td></tr></table>",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "b",
+    "display": false
+   }
+  ]
+ },
+ {
+  "html": "<table><tr><td><table><tr><td><code>x</td></tr></table>$a$</td></tr></table>$y$",
+  "formulas": [
+   {
+    "tex": "a",
+    "display": false
+   },
+   {
+    "tex": "y",
+    "display": false
+   }
+  ]
+ }
+]

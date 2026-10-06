@@ -130,6 +130,31 @@ Then the files:
 
 Verify: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/x/photos` prints `403`.
 
+### Preparing and assigning exams (Claude Code)
+
+Exams are not uploaded through the panel. Work happens in a Claude Code chat with the project
+skill. Its source is `tools/assigned-exam-skill/SKILL.md` (`.claude/` is git-ignored); install it once:
+
+    mkdir -p .claude/skills/assigned-exam && cp tools/assigned-exam-skill/SKILL.md .claude/skills/assigned-exam/
+
+Flow: source files in `~/math-source/exams/<slug>/` (outside the repository), a typeset `exam.json`,
+answers verified by computation, `node tools/exam_check.mjs` (validation, the HTML allowlist gate,
+every formula rendered with the repo's KaTeX), a local `node tools/exam_preview.mjs` for review,
+`node tools/exam_api.mjs upload`, and, only with an explicit yes because the student gets a Telegram
+message, `node tools/exam_api.mjs assign ... --yes`. `exams`, `students`, `status` and `delete` are
+there too. The tool logs in with `~/ege-teacher-link.txt` and prints no secrets.
+
+- Do not assign an exam to a student until the trainer exam screens (Plan 2) are released: the student cannot open it yet.
+- The catalog is numbered: `exams` prints "No. N · title", and `--exam` takes that number (or a title).
+- Statements and solutions are HTML checked against an allowlist (`exam-validate.js`, run by
+  `exam_check.mjs` and again before `upload`). Short answers are plain text as a student types them;
+  write `\lt` instead of `<` inside formulas.
+- Production writes (`upload`, `assign`, `delete`) are run by the owner. To try the tools without
+  touching production, start `node tools/exam-dev-stack.mjs` and pass
+  `--api http://127.0.0.1:8090/api --link-file <throwaway file>` (the stack prints the link).
+- Exam content and previews stay out of the repository (it is public).
+  `tests/fixtures/exam-sample.json` is a made-up example of the file format.
+
 ### Rollout
 
 1. The teacher presses "Старт" in the bot once, from the account that should
