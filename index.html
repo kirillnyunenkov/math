@@ -278,6 +278,14 @@
   .ex-tgph[hidden]{display:none;}
   .vintro.ex-pintro .lead{margin-bottom:0;}
   .vbar .vprog.bad{color:var(--err-text);}
+  /* result of an assigned exam: same blocks as the generator's, plus the teacher's comment, the solution and "waiting for the check" */
+  .vtag.wait{background:var(--surface-2);color:var(--ink-2);}
+  .vresult .lead,.vresult .ex-note{margin:var(--s4) 0 0;color:var(--invert-ink);opacity:.8;font-size:var(--fs-sm);line-height:1.5;}
+  .ex-sol{margin-top:var(--s3);}
+  .ex-sol summary{cursor:pointer;color:var(--accent);font-weight:500;}
+  .ex-sol[open] summary{margin-bottom:var(--s2);}
+  .ex-comment{margin-top:var(--s4);padding:var(--s3) var(--s4);background:var(--surface-2);border-radius:var(--r-md);white-space:pre-wrap;overflow-wrap:anywhere;}
+  .ex-comment-h{font-size:var(--fs-xs);font-weight:600;color:var(--ink-3);margin-bottom:var(--s2);}
   /* the save note may be two lines on a phone; it shrinks and wraps instead of pushing the button to a second row */
   .vbar #ex-save{flex:1 1 0;min-width:0;}
   .vbar #ex-save.bad{line-height:1.25;}

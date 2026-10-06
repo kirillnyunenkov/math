@@ -317,3 +317,141 @@ test('pickerActive: the dialog mark holds 90 s and never before it was set', () 
   assert.equal(C.pickerActive(undefined, 1000), false);
   assert.equal(C.pickerActive(NaN, 1000), false);
 });
+
+// ---- the result screen ----
+const ExamCore = createRequire(import.meta.url)('../exam-core.js');
+const RTASKS = [
+  { n: 1, kind: 'short', max: 1, cond: 'a' }, { n: 2, kind: 'short', max: 1, cond: 'b' }, { n: 3, kind: 'short', max: 1, cond: 'c' },
+  { n: 13, kind: 'long', max: 2, cond: 'd' }, { n: 14, kind: 'long', max: 3, cond: 'e' },
+];
+const rview = (extra) => Object.assign({ phase: 'submitted', full: false, tasks: RTASKS, answers: { 1: '5', 2: '1' }, ok: { 1: true, 2: false, 3: false },
+  key: { 1: { a: '5', sol: '<p>x</p>' }, 2: { a: '-1,5' }, 3: { a: '0,5' }, 13: { a: '<p>x</p>' }, 14: {} }, p1: 1 }, extra || {});
+
+test('resultOf: a submitted exam has part 1 points and part 2 waiting for the teacher', () => {
+  const r = C.resultOf(rview(), C.wellFormedTasks(RTASKS));
+  assert.equal(r.checked, false);
+  assert.equal(r.p1, 1); assert.equal(r.max1, 3); assert.equal(r.max2, 5); assert.equal(r.hasLong, true);
+  assert.equal(r.part2, null); assert.equal(r.total, null); assert.equal(r.second, null);
+  assert.deepEqual(r.items.map((i) => i.state), ['ok', 'no', 'no', 'wait', 'wait']);
+  assert.deepEqual(r.items.map((i) => i.label), ['верно', 'неверно', 'неверно', 'на проверке', 'на проверке']);
+  assert.equal(r.items[1].given, '1'); assert.equal(r.items[1].correct, '-1,5');
+  assert.equal(r.items[2].given, '');                                    // never answered
+  assert.equal(r.items[0].sol, '<p>x</p>');
+  assert.equal(r.items[3].answer, '<p>x</p>'); assert.equal(r.items[4].answer, '');
+});
+
+test('resultOf: a checked exam sums part 2 and agrees with ExamCore.total', () => {
+  const part2 = { 13: { pts: 2, comment: ' ok\nline2 ' }, 14: { pts: 1, comment: '' } };
+  const v = rview({ phase: 'checked', part2: part2 });
+  const r = C.resultOf(v, C.wellFormedTasks(RTASKS));
+  assert.equal(r.part2, 3);
+  assert.deepEqual(r.total, ExamCore.total(RTASKS, 1, part2));
+  assert.deepEqual(r.items.slice(3).map((i) => i.state), ['ok', 'part']);
+  assert.deepEqual(r.items.slice(3).map((i) => i.label), ['2 из 2', '1 из 3']);
+  assert.equal(r.items[3].comment, 'ok\nline2');
+  const zero = C.resultOf(rview({ phase: 'checked', part2: { 13: { pts: 0 } } }), C.wellFormedTasks(RTASKS));
+  assert.deepEqual(zero.items.slice(3).map((i) => i.state), ['no', 'no']);          // a missing grade is 0
+  assert.equal(zero.total.pts, 1);
+});
+
+test('resultOf: points are clamped and never NaN, whatever the server sent', () => {
+  const t = C.wellFormedTasks(RTASKS);
+  const r = C.resultOf(rview({ phase: 'checked', p1: 'many', part2: { 13: { pts: 99 }, 14: { pts: NaN } } }), t);
+  assert.equal(r.p1, 1);                                                  // not a number: counted from ok
+  assert.equal(r.items[3].pts, 2); assert.equal(r.items[4].pts, 0);
+  assert.equal(r.total.pts, 3);
+  assert.equal(C.resultOf(rview({ p1: 77 }), t).p1, 3);                   // above the maximum
+  assert.equal(C.resultOf(rview({ p1: -4 }), t).p1, 0);
+  assert.equal(C.resultOf(rview({ p1: Infinity }), t).p1, 1);
+  const neg = C.resultOf(rview({ phase: 'checked', part2: { 13: { pts: -3 }, 14: { pts: 1.6 } } }), t);
+  assert.deepEqual([neg.items[3].pts, neg.items[4].pts], [0, 2]);
+});
+
+test('resultOf survives hostile objects instead of the promised ones', () => {
+  const t = C.wellFormedTasks(RTASKS);
+  const bad = [null, 7, 'x', [], [true, true], { __proto__: { 1: true } }, JSON.parse('{"__proto__":{"1":true},"constructor":{"1":true}}')];
+  bad.forEach((b) => {
+    const r = C.resultOf({ phase: 'checked', tasks: RTASKS, answers: b, ok: b, key: b, part2: b, p1: 0, full: b }, t);
+    assert.equal(r.items.filter((i) => i.ok).length, 0);
+    assert.equal(r.total.pts, 0); assert.equal(r.second, null);
+    r.items.forEach((i) => { assert.equal(typeof i.label, 'string'); assert.ok(!/NaN|undefined/.test(i.label)); });
+  });
+  assert.doesNotThrow(() => C.resultOf(null, t));
+  assert.doesNotThrow(() => C.resultOf({ phase: 'checked' }, []));
+  // ok[n] must be exactly true; a string or a number is not "right"
+  const r = C.resultOf(rview({ ok: { 1: 'true', 2: 1, 3: {} } }), t);
+  assert.equal(r.items.filter((i) => i.ok).length, 0);
+  // key entries that are not objects, answers that are not strings
+  const k = C.resultOf(rview({ key: { 1: 'x', 2: { a: { x: 1 } }, 3: { a: 7, sol: 5 }, 13: [], 14: { a: null } }, answers: { 1: { a: 1 }, 2: 5 } }), t);
+  assert.equal(k.items[0].correct, ''); assert.equal(k.items[1].correct, ''); assert.equal(k.items[2].correct, '7'); assert.equal(k.items[2].sol, '');
+  assert.equal(k.items[0].given, ''); assert.equal(k.items[1].given, '');
+});
+
+test('resultOf keeps the key answer of a short task as plain text and cuts it', () => {
+  const t = C.wellFormedTasks(RTASKS);
+  const r = C.resultOf(rview({ key: { 1: { a: '<img src=x onerror=alert(1)>' }, 2: { a: 'y'.repeat(500) } } }), t);
+  assert.equal(r.items[0].correct, '<img src=x onerror=alert(1)>');       // not interpreted here: the page escapes it
+  assert.equal(r.items[1].correct.length, 200);
+});
+
+test('resultOf: a task without a known maximum counts for 1, like the server', () => {
+  const tasks = C.wellFormedTasks([{ n: 1, kind: 'short', cond: 'a' }, { n: 13, kind: 'long', cond: 'b' }]);
+  const r = C.resultOf({ phase: 'checked', ok: { 1: true }, key: {}, p1: 1, part2: { 13: { pts: 1 } } }, tasks);
+  assert.deepEqual(r.total, { pts: 2, max: 2 });
+  assert.equal(r.items[1].label, '1 из 1');
+});
+
+test('secondaryOf: only a full exam, whole points 0..33 and a sane answer', () => {
+  const f = (p) => p * 3;
+  assert.equal(C.secondaryOf(true, 10, f), 30);
+  assert.equal(C.secondaryOf(true, 0, f), 0);
+  assert.equal(C.secondaryOf(true, 33, f), 99);
+  assert.equal(C.secondaryOf(false, 10, f), null);
+  assert.equal(C.secondaryOf(undefined, 10, f), null);
+  assert.equal(C.secondaryOf('true', 10, f), null);
+  assert.equal(C.secondaryOf(true, 34, f), null);                        // outside the table
+  assert.equal(C.secondaryOf(true, -1, f), null);
+  assert.equal(C.secondaryOf(true, 2.5, f), null);
+  assert.equal(C.secondaryOf(true, NaN, f), null);
+  assert.equal(C.secondaryOf(true, 10, undefined), null);                // the global is missing
+  assert.equal(C.secondaryOf(true, 10, () => undefined), null);
+  assert.equal(C.secondaryOf(true, 10, () => NaN), null);
+  assert.equal(C.secondaryOf(true, 10, () => 101), null);
+  assert.equal(C.secondaryOf(true, 10, () => { throw new Error('x'); }), null);
+  const sec = [0, 6, 11];
+  assert.equal(C.resultOf(rview({ phase: 'checked', full: true, part2: {} }), C.wellFormedTasks(RTASKS), { secondary: (p) => sec[p] }).second, 6);
+  assert.equal(C.resultOf(rview({ phase: 'checked', full: false, part2: {} }), C.wellFormedTasks(RTASKS), { secondary: (p) => sec[p] }).second, null);
+  assert.equal(C.resultOf(rview({ phase: 'submitted', full: true }), C.wellFormedTasks(RTASKS), { secondary: (p) => sec[p] }).second, null);
+});
+
+test('ownGet reads own properties of plain objects only', () => {
+  assert.equal(C.ownGet({ 3: 'x' }, 3), 'x');
+  assert.equal(C.ownGet({ 3: 'x' }, '3'), 'x');
+  assert.equal(C.ownGet({}, 'constructor'), undefined);
+  assert.equal(C.ownGet({}, '__proto__'), undefined);
+  assert.equal(C.ownGet(['a', 'b'], 1), undefined);
+  assert.equal(C.ownGet(null, 1), undefined);
+  assert.equal(C.ownGet('abc', 0), undefined);
+});
+
+test('pointsOf rounds and clamps, anything else takes the fallback', () => {
+  assert.equal(C.pointsOf(1.4, 0, 3, 9), 1);
+  assert.equal(C.pointsOf(7, 0, 3, 9), 3);
+  assert.equal(C.pointsOf(-1, 0, 3, 9), 0);
+  assert.equal(C.pointsOf('2', 0, 3, 9), 9);
+  assert.equal(C.pointsOf(NaN, 0, 3, 9), 9);
+  assert.equal(C.pointsOf(Infinity, 0, 3, 9), 9);
+});
+
+test('mergePhotoLists takes the server list and keeps a photo uploaded here that it does not list yet', () => {
+  const known = ['13', '14'];
+  const mk = (id, n) => ({ id: id, n: n, file: id + '.jpg' });
+  const raw = [mk('a', '13'), mk('bot1', '')];
+  const held = [mk('a', '13'), mk('mine', '14'), mk('old', '13')];
+  const out = C.mergePhotoLists(raw, held, new Set(['mine', 'a']), known);
+  assert.deepEqual(out.map((p) => p.id), ['a', 'bot1', 'mine']);          // `old` has no local preview: the server forgot it
+  assert.deepEqual(C.mergePhotoLists(raw, held, [], known).map((p) => p.id), ['a', 'bot1']);
+  assert.deepEqual(C.mergePhotoLists(undefined, held, new Set(['mine']), known).map((p) => p.id), ['mine']);
+  assert.deepEqual(C.mergePhotoLists(raw, null, null, known).map((p) => p.id), ['a', 'bot1']);
+  assert.deepEqual(C.mergePhotoLists([mk('x', '99')], [], null, known), []);   // not a task of the exam
+});

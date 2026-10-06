@@ -231,7 +231,78 @@
     return typeof setAt === 'number' && setAt > 0 && nowMs >= setAt && nowMs - setAt < PHOTO.PICKER_MS;
   }
 
-  const api = { canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
+  /* The server list of the photo phase merged into a carried list: what the server says now is the truth, except a photo
+     that was uploaded from this very page (`localIds`: ids with a local preview) and is not in that answer yet, because the
+     answer was read just before the upload was committed. Fresh objects, bad items dropped, never more than LIST_MAX. */
+  function mergePhotoLists(raw, held, localIds, known) {
+    const out = wellFormedPhotos(raw, known), have = new Set(out.map(function (p) { return p.id; }));
+    const mine = localIds instanceof Set ? localIds : new Set(Array.isArray(localIds) ? localIds : []);
+    wellFormedPhotos(held, known).forEach(function (p) {
+      if (mine.has(p.id) && !have.has(p.id) && out.length < PHOTO.LIST_MAX) { have.add(p.id); out.push(p); }
+    });
+    return out;
+  }
+
+  /* ---- the result screen (phases "submitted" and "checked") ---- */
+  // Nothing from the server is trusted to have the promised shape: only own properties of plain objects are read.
+  const isPlain = function (x) { return !!x && typeof x === 'object' && !Array.isArray(x); };
+  function ownGet(obj, key) {
+    const k = String(key);
+    return isPlain(obj) && Object.prototype.hasOwnProperty.call(obj, k) ? obj[k] : undefined;
+  }
+  // A finite number clamped to lo..hi (rounded to a whole point); `fb` for anything else.
+  function pointsOf(x, lo, hi, fb) {
+    if (typeof x !== 'number' || !Number.isFinite(x)) return fb;
+    return Math.max(lo, Math.min(hi, Math.round(x)));
+  }
+  const text = function (x, cut) { return typeof x === 'string' ? x.trim().slice(0, cut) : ''; };
+
+  /* The test score ("Тестовый балл") of a full exam: only for a full exam, only for whole primary points in the range of
+     the table the generator uses (0..33, the profile exam), and only when the answer is a number from 0 to 100.
+     `fn` is the page's secondaryScore; null means "show no tile". */
+  const SEC_MAX_PRIMARY = 33;
+  function secondaryOf(full, pts, fn) {
+    if (full !== true || typeof fn !== 'function' || !Number.isInteger(pts) || pts < 0 || pts > SEC_MAX_PRIMARY) return null;
+    let r;
+    try { r = fn(pts); } catch (e) { return null; }
+    return typeof r === 'number' && Number.isFinite(r) && r >= 0 && r <= 100 ? r : null;
+  }
+
+  /* Everything the result page shows, as plain data (the page escapes it): the tiles and one entry per task.
+     `tasks` is wellFormedTasks(v.tasks). Part 1 points are the server's (it grades the short answers); part 2 points and the
+     total are summed here the way ExamCore.total does (a task without a known maximum counts for 1). Until the exam is
+     checked part 2 has no points: state 'wait'. A short answer counts as right only when ok[n] is exactly true.
+     state: 'ok' | 'part' | 'no' | 'wait'. Text fields are plain strings: the key's `a` of a short task is plain text,
+     `answer` and `sol` are teacher HTML that the page passes through its HTML gate. */
+  function resultOf(v, tasks, opts) {
+    v = isPlain(v) ? v : {};
+    const checked = v.phase === 'checked', mxOf = function (t) { return t.max || 1; };
+    const typed = answersOf(v.answers, tasks);
+    let max1 = 0, max2 = 0, sum1 = 0, sum2 = 0, hasLong = false;
+    const items = tasks.map(function (t) {
+      const mx = mxOf(t), k = ownGet(v.key, t.n), key = isPlain(k) ? k : {};
+      const sol = text(key.sol, MAX_COND), a = typeof key.a === 'string' ? key.a : typeof key.a === 'number' && Number.isFinite(key.a) ? String(key.a) : '';
+      if (t.kind === 'short') {
+        const ok = ownGet(v.ok, t.n) === true;
+        max1 += mx; if (ok) sum1 += mx;
+        return { n: t.n, kind: 'short', max: mx, ok: ok, state: ok ? 'ok' : 'no', label: ok ? 'верно' : 'неверно',
+          given: typeof typed[t.n] === 'string' ? typed[t.n].trim() : '', correct: a.trim().slice(0, 200), sol: sol };
+      }
+      hasLong = true; max2 += mx;
+      const g = ownGet(v.part2, t.n), gg = isPlain(g) ? g : {};
+      const pts = checked ? pointsOf(gg.pts, 0, mx, 0) : 0;
+      sum2 += pts;
+      const state = !checked ? 'wait' : pts >= mx ? 'ok' : pts > 0 ? 'part' : 'no';
+      return { n: t.n, kind: 'long', max: mx, pts: pts, state: state, label: checked ? pts + ' из ' + mx : 'на проверке',
+        answer: a.trim() ? a : '', sol: sol, comment: checked ? text(gg.comment, 5000) : '' };
+    });
+    const p1 = pointsOf(v.p1, 0, max1, Math.min(sum1, max1));
+    const total = checked ? { pts: p1 + sum2, max: max1 + max2 } : null;
+    return { checked: checked, items: items, hasLong: hasLong, p1: p1, max1: max1, max2: max2, part2: checked ? sum2 : null, total: total,
+      second: total ? secondaryOf(v.full, total.pts, opts && opts.secondary) : null };
+  }
+
+  const api = { mergePhotoLists: mergePhotoLists, ownGet: ownGet, pointsOf: pointsOf, secondaryOf: secondaryOf, resultOf: resultOf, canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
     classifyStatus: classifyStatus, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;

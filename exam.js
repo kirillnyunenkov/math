@@ -17,7 +17,7 @@
     save: null, leaving: null, det: {}, listeners: [], saveTimer: 0, retryTimer: 0,
     picker: 0, carry: null,            // picker: when the file dialog was opened; carry: photos handed from the open to the photo screen
     noLong: {}, lostBy: Object.create(null),   // exams seen without a part 2; photos lost on leaving, per exam, until the note is shown
-    shownPhase: '', shownId: '' };
+    shownPhase: '', shownId: '', sheets: 0 };   // sheets: confirmation sheets of this module that are open
 
   const seen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || []; } catch (e) { return []; } };
   const markSeen = (id) => { try { const s = seen(); if (s.indexOf(id) < 0) { s.push(id); localStorage.setItem(SEEN_KEY, JSON.stringify(s.slice(-50))); } } catch (e) {} };
@@ -194,7 +194,9 @@
   function leave(carry) {
     clearTimers();
     st.listeners.splice(0).forEach((off) => off());
-    if (st.carry) { dropPhotos(st.carry); st.carry = null; }   // nobody took them over
+    if (st.carry) { addLost(st.carry.id, dropPhotos(st.carry)); st.carry = null; }   // nobody took them over
+    // A question of this screen (leave? finish? delete?) does not outlive it: its answer would be about a screen that is gone.
+    if (st.sheets > 0) { st.sheets = 0; if (typeof closeSheet === 'function') closeSheet(false); }
     const s = st.save; st.save = null;
     if (s) {
       s.dead = true;
@@ -242,10 +244,11 @@
     if (v.phase === 'missed') return paintMissed(v);
     if (v.phase === 'open') return paintOpen(v);
     if (v.phase === 'photos') return paintPhotos(v);
+    if (v.phase === 'submitted' || v.phase === 'checked') return paintResult(v);
     appEl.innerHTML = shell('<p class="lead">' + esc(v.phase) + '</p>');   // replaced by later tasks
   }
 
-  const titleOf = (v) => esc(String(v.title == null ? '' : v.title).trim() || 'Пробник');
+  const titleOf = (v) => esc((typeof v.title === 'string' ? v.title.trim() : '') || 'Пробник');
   const numOk = (x) => typeof x === 'number' && Number.isFinite(x);
 
   function paintScheduled(v, again) {
@@ -386,8 +389,11 @@
     leave(json.phase === 'photos');
     st.shownPhase = kp; st.shownId = ki;
     st.id = id; st.req++; st.view = json; setOffset(json.now);
-    paint(json);
-    if (st.carry) { addLost(id, dropPhotos(st.carry)); st.carry = null; }   // the new screen did not take them
+    // Whatever happens while painting, photos the new screen did not take over are dropped here (no uploads or
+    // beforeunload guard left behind with nobody to own them); a painting that throws leaves a retry screen.
+    try { paint(json); }
+    catch (e) { fail('Не получилось показать пробник.', true); }
+    finally { if (st.carry) { addLost(id, dropPhotos(st.carry)); st.carry = null; } }
   }
 
   // ---- autosave of part 1 ----
@@ -396,6 +402,11 @@
     if (e) { e.textContent = t; e.classList.toggle('bad', !!bad); }
   };
   const live = (s) => !!s && !s.dead && st.save === s;
+  // ask() of index.html that leave() can close: a confirmation of one screen must not stay on top of the next one.
+  async function askHere(o) {
+    st.sheets++;
+    try { return await ask(o); } finally { if (st.sheets > 0) st.sheets--; }
+  }
 
   // One POST of answers; resolves to the HTTP status, or null for a network error or a timeout. The screen keeps its token
   // (refreshed while it is the signed-in one) so that a sign-out cannot strip it from the last request.
@@ -485,7 +496,7 @@
 
   // ---- finishing early ----
   async function finishNow(s) {
-    if (s.finishing || s.dead) return;
+    if (s.finishing || s.dead || s.result) return;
     if (s.fatal) {
       if (s.fatal === 'auth') note('Нужно войти заново', 'Твой вход устарел, пробник не принимает ответы. Войди через ссылку из Telegram и открой пробник снова.');
       else note('Пробник недоступен', 'Сервер не нашёл этот пробник. Напиши преподавателю.');
@@ -493,7 +504,7 @@
     }
     if (uploading(s)) { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Завершить» ещё раз.'); return; }
     const failedPh = !!s.ph && s.ph.pending.length > 0;
-    const ok = await ask({ title: 'Завершить пробник?',
+    const ok = await askHere({ title: 'Завершить пробник?',
       text: 'Ответы первой части после этого изменить нельзя.' + (s.hasLong ? ' Фото второй части можно будет прикрепить ещё 10 минут.' : '') +
         (failedPh ? ' Фото, которые не загрузились, пропадут: прикрепишь их заново.' : ''),
       ok: 'Завершить', cancel: 'Вернуться' });
@@ -508,7 +519,7 @@
       // Only when the server itself refuses them (a 4xx other than the ones above) can he finish and lose them, knowingly.
       if (s.q.has() && !s.closed) {
         if (s.lastKind !== 'client') { note('Ответы пока не сохранились', 'Проверь интернет и нажми «Завершить» ещё раз. Не закрывай эту страницу, пока не появится «Сохранено».'); return; }
-        const sure = await ask({ title: 'Не все ответы сохранились', text: 'Сервер не принял часть ответов. Если завершить сейчас, они пропадут. Завершить всё равно?',
+        const sure = await askHere({ title: 'Не все ответы сохранились', text: 'Сервер не принял часть ответов. Если завершить сейчас, они пропадут. Завершить всё равно?',
           ok: 'Завершить', cancel: 'Вернуться', danger: true });
         if (!sure || s.dead) return;
       }
@@ -619,7 +630,7 @@
   function newPhotos(id, tasks, list) {
     const known = tasks.filter((t) => t.kind === 'long').map((t) => String(t.n));
     return { id: id, s: null, known: known, server: C.wellFormedPhotos(list, known), pending: [], local: new Map(), urls: new Set(), msgs: new Map(),
-      deleting: new Set(), ctls: new Set(), timers: new Set(), ftoken: '', ftokenAt: 0, tokP: null, rev: 0, seq: 0, busy: null,
+      deleting: new Set(), ro: false, ctls: new Set(), timers: new Set(), ftoken: '', ftokenAt: 0, tokP: null, rev: 0, seq: 0, busy: null,
       polling: false, pollT: 0, pollFails: 0, polledAt: 0, gen: 0, guard: null, dead: false };
   }
   const phLive = (P) => !!P && !P.dead && !!P.s && live(P.s);
@@ -654,10 +665,12 @@
     clearTimeout(P.pollT); P.pollT = 0;
   }
   // A new session takes over photos that were detached: the task list may differ, what does not fit is let go.
-  function attachPhotos(P, s, tasks) {
+  // `raw` is the photo list of the response that brought the new screen: photos the bot received meanwhile show at once.
+  function attachPhotos(P, s, tasks, raw) {
     P.s = s; s.ph = P;
     P.known = tasks.filter((t) => t.kind === 'long').map((t) => String(t.n));
-    P.server = C.wellFormedPhotos(P.server, P.known);
+    P.server = Array.isArray(raw) ? C.mergePhotoLists(raw, P.server, P.local, P.known) : C.wellFormedPhotos(P.server, P.known);
+    P.local.forEach((u, id) => { if (!P.server.some((q) => q.id === id)) { revokeUrl(P, u); P.local.delete(id); } });
     P.pending.filter((x) => P.known.indexOf(x.n) < 0).forEach((x) => dropPending(P, x));
   }
   function dropPending(P, it) {
@@ -711,7 +724,7 @@
     const src = P.local.get(p.id) || (tok ? thumbUrl(tok, p) : '');
     return '<figure class="ex-thumb">' + (src ? '<img data-ex-img="' + esc(p.id) + '" src="' + esc(src) + '" alt="' + esc(altOf(p.n)) + '" loading="lazy" decoding="async">'
         : '<span class="ex-nopic" aria-hidden="true"></span>') +
-      '<button type="button" class="ex-del" data-ex-del="' + esc(p.id) + '" aria-label="Удалить фото"' + (P.deleting.has(p.id) ? ' disabled' : '') + '>×</button></figure>';
+      (P.ro ? '' : '<button type="button" class="ex-del" data-ex-del="' + esc(p.id) + '" aria-label="Удалить фото"' + (P.deleting.has(p.id) ? ' disabled' : '') + '>×</button>') + '</figure>';
   }
   function pendFig(x) {
     const bad = x.state === 'err';
@@ -801,7 +814,7 @@
     const tick = async () => {
       if (gen !== P.gen) return;
       P.pollT = 0;
-      if (!phLive(P)) return;
+      if (!phLive(P) || P.s.fatal) return;                              // a permanent refusal stops the poll for good
       if (P.polling) { schedule(1000); return; }
       if (document.visibilityState === 'hidden') return;                // paused: coming back to the page asks at once
       P.polling = true; P.polledAt = Date.now();
@@ -825,7 +838,7 @@
       schedule(C.pollDelay(P.pollFails));
     };
     const resume = () => {
-      if (!phLive(P) || P.polling || gen !== P.gen) return;
+      if (!phLive(P) || P.s.fatal || P.polling || gen !== P.gen) return;
       schedule(Math.max(0, 3000 - (Date.now() - P.polledAt)));          // never faster than every 3 s
     };
     listen(document, 'visibilitychange', () => { if (document.visibilityState === 'visible') resume(); });
@@ -981,7 +994,7 @@
   async function removePhoto(P, pid) {
     const p = P.server.find((x) => x.id === pid);
     if (!phLive(P) || !p || P.deleting.has(pid)) return;
-    const sure = await ask({ title: 'Удалить фото?', text: 'Оно пропадёт из пробника.', ok: 'Удалить', cancel: 'Оставить', danger: true });
+    const sure = await askHere({ title: 'Удалить фото?', text: 'Оно пропадёт из пробника.', ok: 'Удалить', cancel: 'Оставить', danger: true });
     if (!sure || !phLive(P) || !P.server.some((x) => x.id === pid)) return;
     P.deleting.add(pid); drawBlock(P, p.n);
     let r = null;
@@ -1002,14 +1015,14 @@
 
   // ---- the photo phase: only photos are left, for a few minutes ----
   function paintPhotos(v) {
-    const id = st.id, carry = st.carry; st.carry = null;
+    const id = st.id, carry = st.carry;                                 // st.carry is cleared once the new session owns them (adopt drops what is left)
     const raw = Array.isArray(v.tasks) ? v.tasks : [];
     const tasks = C.wellFormedTasks(v.tasks, { noCond: true }).filter((t) => t.kind === 'long');
     const done = '<button class="btn primary" data-ex-done>Готово</button>';
     const bar = '<div class="vbar"><span class="vtimer" id="ex-timer" role="timer"></span>' +
       '<span class="vprog" id="ex-save" role="status" aria-live="polite">' + (tasks.length ? 'Фото решений' : 'Фото не нужны') + '</span><span class="spacer"></span>' + done + '</div>';
     if (!tasks.length) {
-      if (carry) dropPhotos(carry);
+      if (carry) { addLost(id, dropPhotos(carry)); st.carry = null; }
       if (raw.length) { fail('Не получилось загрузить задания пробника.', true); return; }
       // An exam without a part 2: nothing to attach, the student just hands the work in.
       st.noLong[id] = true;
@@ -1024,7 +1037,7 @@
     delete st.noLong[id];
     const lost = takeLost(id);
     const s = st.save = makeSession(id, v, tasks);
-    if (carry) attachPhotos(carry, s, tasks); else { s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s; }
+    if (carry && !carry.dead) { attachPhotos(carry, s, tasks, v.photos); st.carry = null; } else { s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s; st.carry = null; }
     bindOpen(s);
     appEl.innerHTML = shell(bar +
       '<div class="vintro ex-pintro"><p class="lead">Ответы первой части сохранены. Сфотографируй решения второй части и прикрепи к заданиям — ' +
@@ -1038,13 +1051,13 @@
   }
 
   async function doneNow(s) {
-    if (!live(s) || s.finishing) return;
+    if (!live(s) || s.finishing || s.result) return;
     const P = s.ph, wait = () => { note('Фото ещё загружаются', 'Подожди, пока загрузка закончится, и нажми «Готово» ещё раз.'); };
     if (uploading(s)) { wait(); return; }
     if (s.fatal) { note(s.fatal === 'auth' ? 'Нужно войти заново' : 'Пробник недоступен', s.fatal === 'auth' ? 'Войди через ссылку из Telegram и открой пробник снова.' : 'Сервер не нашёл этот пробник. Напиши преподавателю.'); return; }
     if (P && P.known.length) {
       const failed = P.pending.length > 0;
-      const ok = await ask({ title: 'Всё прикреплено?',
+      const ok = await askHere({ title: 'Всё прикреплено?',
         text: 'После этого фото добавить уже нельзя.' + (failed ? ' Фото, которые не загрузились, пропадут.' : ''), ok: 'Готово', cancel: 'Ещё добавлю' });
       if (!ok || !live(s)) return;
       if (uploading(s)) { wait(); return; }                             // a photo was added while the question was open
@@ -1063,6 +1076,65 @@
     }
   }
 
+  // ---- the result: "submitted" (part 2 waits for the teacher) and "checked" ----
+  /* The same blocks as the generator's result (vresult / vscores / vscore / vtag / vans-row). Everything is drawn from
+     ExamClientCore.resultOf (plain data, never NaN); the teacher's HTML (statement, solution, long-task key) goes through
+     safeHtml, everything else through esc(). The short-task key `a` is plain text by contract and is only ever escaped.
+     Photos: the same tiles and file token as the photo phase, read-only (P.ro: no delete button, no clicks). */
+  const SUB = 'style="font-size:16px;font-weight:500;opacity:.7"';
+  const tile = (k, v) => '<div class="vscore"><div class="vk">' + k + '</div><div class="vv">' + v + '</div></div>';
+  const frac = (a, b) => Number(a) + '<span ' + SUB + '>/' + Number(b) + '</span>';
+  const CARD = { ok: 'r-ok', part: 'is-o', no: 'r-no', wait: '' };
+  const TAGC = { ok: 'ok', part: 'part', no: 'no', wait: 'wait' };
+
+  function resultCard(t, it, P) {
+    const n = Number(it.n);
+    const head = '<div class="vlabel">Задание ' + n + '<span class="vtag ' + TAGC[it.state] + '">' + esc(it.label) + '</span></div>' +
+      '<div class="cond"><div class="tex">' + safeHtml(t.cond) + '</div></div>';
+    const sol = it.sol ? '<details class="ex-sol"><summary>Решение</summary><div class="tex">' + safeHtml(it.sol) + '</div></details>' : '';
+    if (it.kind === 'short') {
+      return '<div class="vcard ' + CARD[it.state] + '" data-n="' + n + '">' + head +
+        '<div class="vans-row"><span class="yours">Твой ответ: ' + (it.given ? esc(it.given) : '—') + '</span> · <span class="right">Верный: ' +
+        (it.correct ? esc(it.correct) : '—') + '</span></div>' + sol + '</div>';
+    }
+    const photos = P.server.some((p) => p.n === String(n)) ? '<div class="ex-photos" data-ex-ph="' + n + '"><div class="ex-thumbs"></div></div>' : '';
+    return '<div class="vcard ' + CARD[it.state] + '" data-n="' + n + '">' + head +
+      '<div class="answer long tex">Ответ: ' + (it.answer ? safeHtml(it.answer) : 'не указан') + '</div>' + photos +
+      (it.comment ? '<div class="ex-comment"><div class="ex-comment-h">Комментарий преподавателя</div>' + esc(it.comment) + '</div>' : '') + sol + '</div>';
+  }
+
+  function paintResult(v) {
+    const id = st.id, tasks = C.wellFormedTasks(v.tasks);
+    if (!tasks.length) { fail('Не получилось загрузить задания пробника.', true); return; }
+    const R = C.resultOf(v, tasks, { secondary: typeof secondaryScore === 'function' ? secondaryScore : null });
+    const dropped = !Array.isArray(v.tasks) || v.tasks.length !== tasks.length;
+    const lost = takeLost(id);
+    // A session of its own so that the file token, the thumbnails and the stale-screen checks work as on the other screens;
+    // `result` keeps the finish / done buttons of a screen being replaced from acting on it.
+    const s = st.save = makeSession(id, v, tasks);
+    s.result = true; s.closed = true;
+    const P = s.ph = newPhotos(id, tasks, v.photos); P.s = s; P.ro = true;
+    const tiles = tile('Часть 1', frac(R.p1, R.max1)) +
+      (R.hasLong ? tile('Часть 2', R.checked ? frac(R.part2, R.max2) : '<span style="font-size:16px">на проверке</span>') : '') +
+      (R.checked ? tile('Первичный балл', frac(R.total.pts, R.total.max)) : '') +
+      (R.second !== null ? tile('Тестовый балл', Number(R.second)) : '');
+    const waits = !R.checked && R.hasLong
+      ? '<p class="lead">Первая часть проверена. Вторую часть посмотрит преподаватель — когда она будет проверена, баллы и комментарии появятся здесь, и тебе придёт сообщение в Telegram.</p>' : '';
+    const bot = P.server.some((p) => p.n === '')
+      ? '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div></div>' : '';
+    stageAndMount(shell('<div class="vresult"><h2>' + titleOf(v) + '</h2><div class="vscores">' + tiles + '</div>' + waits +
+        (lost && !R.checked ? '<p class="ex-note">Часть фото не успела загрузиться и в работу не попала.</p>' : '') +
+        (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши преподавателю.</p>' : '') +
+        '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>' +
+        tasks.map((t, i) => resultCard(t, R.items[i], P)).join('') + bot),
+      () => live(s) && parseRoute().view === 'exam',
+      () => {
+        if (!live(s)) return;
+        drawAll(P); refreshPics(P);
+        if (R.checked) markSeen(id);                     // the banner on the hub stops showing the checked exam once its result was seen
+      });
+  }
+
   // The way out of the screen that can be asked about: the back button, the title and any "К заданиям" button, while photos
   // are still on their way or failed. (A hash change or the browser's own back cannot be held; those leave a note, see takeLost.)
   function leaveGuard(s, e) {
@@ -1071,8 +1143,11 @@
     const hit = t.closest('#back, [data-home]') || (t.closest('#home') && !t.closest('a'));
     if (!hit) return;
     e.preventDefault(); e.stopImmediatePropagation();
-    ask({ title: 'Уйти со страницы?', text: uploadingP(P) ? 'Фото ещё загружаются. Уйти и потерять их?' : 'Часть фото не загрузилась. Уйти и потерять их?',
-      ok: 'Уйти', cancel: 'Остаться', danger: true }).then((yes) => { if (yes && live(s)) go('#/'); });
+    askHere({ title: 'Уйти со страницы?', text: uploadingP(P) ? 'Фото ещё загружаются. Уйти и потерять их?' : 'Часть фото не загрузилась. Уйти и потерять их?',
+      ok: 'Уйти', cancel: 'Остаться', danger: true }).then((yes) => {
+      // The screen may have been replaced while the question was open; and photos that finished meanwhile are not lost.
+      if (yes && live(s) && st.save && st.save.id === s.id) go('#/');
+    });
   }
 
   // ---- clicks on this module's elements ----
@@ -1084,7 +1159,7 @@
     if (t.closest('[data-ex-finish]') && s) { finishNow(s); return; }
     if (t.closest('[data-ex-done]') && s) { doneNow(s); return; }
     const P = s && s.ph;
-    if (!phLive(P)) return;
+    if (!phLive(P) || P.ro) return;                                     // the result shows photos, it never changes them
     const pick = t.closest('[data-ex-pick]');
     if (pick) {
       const box = pick.closest('.ex-photos'), f = box && box.querySelector('input[type="file"]');
