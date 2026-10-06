@@ -205,3 +205,12 @@ Short, in Russian, plain words: what is shown on which prototype (by prototype n
 «№5, кофейные автоматы»), where you did not draw and why, how it was checked, what to look at before the
 merge. Say honestly which figures you looked at yourself and which were only checked by calculation, which
 calls were borderline, and where his description of a task did not match what is in the bank.
+
+## Figures for an assigned exam (пробник)
+
+The same drawing rules apply, but nothing goes into the repository and the file is a PNG, not an SVG: exam HTML accepts only
+`data:image/png|jpeg|webp|gif`. Build in `~/math-source/exams/<slug>/` following the `assigned-exam` skill (section «The usual request»):
+statement drawings of a Школково variant are dvisvgm SVGs, not the bank's cairo SVGs, so `Fig(src, grid=True)` does not read them;
+subclass `Fig`, map grid coordinates to the page yourself (the page group is scaled ×2) and render the result with
+`tools/assigned-exam-skill/render_svg.py`. Trees, boxes and other from-scratch figures can reuse the helpers of `tools/figs/*.py`
+by loading the spec module (cwd = repo root). Look at every PNG, in the dark theme too (the trainer inverts all `<img>` there).
