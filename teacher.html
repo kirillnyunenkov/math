@@ -538,7 +538,7 @@ function sheet(html){document.getElementById('sheet').innerHTML=html;document.ge
 /* Set only by the assign and move sheets: the element to give focus back to on close. */
 let sheetOpener=null;
 function closeSheet(){document.getElementById('sheet-ov').classList.remove('open');
-  const o=sheetOpener;sheetOpener=null;if(o&&o!==document.body&&document.contains(o))o.focus();}
+  const o=sheetOpener;sheetOpener=null;if(o&&o!==document.body&&document.contains(o))o.focus({preventScroll:true});}
 function showLink(u,secret,title){
   const url=linkFor(u,secret);
   sheet(`<h3>${esc(title)}</h3><p>Отправь эту ссылку ученику <b>${esc(u.name||u.login)}</b>. По ней он входит на любом устройстве — пусть никому её не пересылает.</p>
@@ -675,21 +675,27 @@ function readWhen(){
    assignment), the error goes to #as-err, success closes the sheet and reloads the data. */
 let sending=false;
 async function sendExam(kind,path,body,btn){
-  if(sending)return;
   const err=document.getElementById('as-err');
-  sending=true;btn.disabled=true;err.textContent='';
-  let r;try{r=await api(path,{method:'POST',body});}
-  catch(e){sending=false;if(e.message==='401')closeSheet();else{err.textContent='Нет связи с сервером.';btn.disabled=false;}return;}
-  sending=false;
+  if(sending||!btn||btn.disabled||!err)return;
+  sending=true;
+  let r;
+  try{
+    btn.disabled=true;err.textContent='';
+    try{r=await api(path,{method:'POST',body});}
+    catch(e){if(e.message==='401')closeSheet();else{err.textContent='Нет связи с сервером.';btn.disabled=false;}return;}
+  }finally{sending=false;}   // never left set: a stuck flag would silence every later exam action
   if(r.status!==200){
     err.textContent=fmtErr(kind,r.status);btn.disabled=false;
     if(r.status===409||r.status===404){
-      // nothing can be done with this assignment any more: only "Закрыть" is left, and the lists are refreshed behind the sheet
+      // nothing can be done with this assignment any more: only "Закрыть" is left, the fields are locked
+      // (Enter in a field must do nothing), and the lists are refreshed behind the sheet
       const acts=btn.closest('.acts');if(acts)acts.innerHTML='<button type="button" class="btn" data-act="close">Закрыть</button>';
+      document.querySelectorAll('#as-form input,#as-form select').forEach(x=>{x.disabled=true;});
       refreshKeep().catch(()=>{});}
     return;}
+  const y=window.scrollY;   // read before closeSheet(): giving focus back must not move the page
   closeSheet();
-  try{await refreshKeep();}catch(e){if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось обновить данные: ${esc(e.message)}</p>`;}
+  try{await refreshKeep(y);}catch(e){if(e.message!=='401')app.innerHTML=`<p class="center muted">Не удалось обновить данные: ${esc(e.message)}</p>`;}
 }
 /* A start in the past is asked about on a second sheet step; `pending` holds the request meanwhile. */
 let pending=null;
@@ -755,8 +761,8 @@ async function refresh(){await load();for(const k in summaries)delete summaries[
    exam action the changed row is usually mid-page. A lead's card is drawn after its journal
    arrives (renderStudent), so the position is kept until that second draw. */
 let keepY=null;
-async function refreshKeep(){
-  keepY=window.scrollY;
+async function refreshKeep(y){
+  keepY=y===undefined?window.scrollY:y;
   try{await refresh();}catch(e){keepY=null;throw e;}
   if(keepY!==null){window.scrollTo(0,keepY);
     const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
@@ -816,6 +822,7 @@ document.getElementById('theme').addEventListener('click',()=>{
 document.addEventListener('submit',e=>{
   const f=e.target;if(!f.matches||!f.matches('#as-form'))return;
   e.preventDefault();const b=f.querySelector('button[type="submit"]');
+  if(!b||b.disabled)return;
   if(f.dataset.kind==='assign')assignGo(b);else moveGo(f.dataset.id,b);
 });
 window.addEventListener('hashchange',async()=>{keepY=null;
