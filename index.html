@@ -235,6 +235,27 @@
     color:var(--ink-3);cursor:pointer;line-height:0;}
   .hub-note .hn-x:hover{background:var(--surface-2);color:var(--ink);}
 
+  /* Назначенный пробник: баннер на хабе. Синий, а не тёплый: это сообщение интерфейса,
+     тёплые цвета остаются за статусом решённых задач. */
+  .ex-banner{display:flex;align-items:center;gap:var(--s4);flex-wrap:wrap;margin:var(--s4) 0;padding:var(--s4) var(--s5);
+    background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--r-lg);}
+  .ex-banner .ex-b-body{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:2px;}
+  .ex-banner .ex-b-t{font-family:'Literata',Georgia,serif;font-weight:600;color:var(--ink);}
+  .ex-banner .ex-b-s{font-size:var(--fs-sm);color:var(--ink-2);}
+  .vintro .vactions{display:flex;gap:var(--s2);flex-wrap:wrap;margin-top:var(--s5);}
+  a.btn{text-decoration:none;}
+  /* the banner changed state (e.g. the exam just opened): the new text and button ease in instead of snapping */
+  @keyframes exIn{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+  @keyframes exGlow{0%{box-shadow:0 0 0 0 var(--accent-line);}100%{box-shadow:0 0 0 12px transparent;}}
+  .ex-banner.ex-fresh{animation:exGlow .9s ease-out 1;}
+  .ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn{animation:exIn .45s ease-out both;}
+  .ex-banner.ex-fresh .btn{animation-delay:.12s;}
+  .ex-screen-in{animation:exIn .5s ease-out both;}
+  /* teacher HTML that did not pass the check is shown as plain text */
+  .ex-plain{white-space:pre-wrap;overflow-wrap:anywhere;}
+  .ex-note{margin:var(--s2) 0 0;font-size:var(--fs-sm);color:var(--ink-3);}
+  @media (prefers-reduced-motion:reduce){.ex-banner.ex-fresh,.ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn,.ex-screen-in{animation:none;}}
+
   /* сводка прогресса — плоская, без тени: это фон, а не объект */
   .hub-prog{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
     padding:var(--s6);margin-bottom:var(--s4);}
@@ -1774,6 +1795,7 @@ const Sync={
     const a=document.activeElement;
     if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'))return;
     if(parseRoute().view==='variant'&&variant&&!variant.finished)return;
+    if(parseRoute().view==='exam')return;
     render();},
   expired(disabled){
     auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
@@ -2574,6 +2596,7 @@ function doInstall(){
 function parseRoute(){
   if(/#\/help\b/.test(location.hash))return{view:'help'};
   if(/#\/v\b/.test(location.hash))return{view:'variant'};
+  const ex=location.hash.match(/#\/exam\/([A-Za-z0-9]+)/);if(ex)return{view:'exam',id:ex[1]};
   const m=location.hash.match(/#\/t\/(\d+)/);return m?{view:'task',n:+m[1]}:{view:'hub'};
 }
 function go(h){location.hash=h;}
@@ -2677,6 +2700,7 @@ function renderHub(){
   appEl.innerHTML=`<section class="hub"><h2>Задания ЕГЭ</h2>
     <p class="sub">Выбери номер задания — внутри прототипы для отработки. Прогресс сохраняется автоматически.</p>
     ${noteHTML}
+    ${window.ExamUI?ExamUI.bannerHTML():''}
     ${progHTML}
     <button class="variant-cta" data-variant>
       <span class="vc-ico"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/></svg></span>
@@ -2996,6 +3020,7 @@ function renderWall(){
 }
 let variant=null, variantTimerId=null;
 function render(){
+  if(window.ExamUI)ExamUI.leave();
   if(variantTimerId){clearInterval(variantTimerId);variantTimerId=null;}
   if(gated()){if(lastRouteKey!=='wall'){lastRouteKey='wall';scrollTop();}renderWall();return;}
   burgerEl.style.display='';
@@ -3019,6 +3044,7 @@ function render(){
   else if(guest){accountEl.querySelector('.acc-label').textContent='Войти';accountEl.title='Войти через Telegram';}
   if(r.view==='help'||isStandalone()){installEl.style.setProperty('display','none','important');}else{installEl.style.removeProperty('display');}
   if(r.view==='help')renderHelp();
+  else if(r.view==='exam'&&window.ExamUI)ExamUI.render(r.id);
   else if(r.view==='variant')renderVariant();
   else if(r.view==='task')renderTask(r.n);
   else renderHub();
@@ -3581,5 +3607,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   render();
 });
 </script>
+<script src="exam-validate.js"></script>
+<script src="exam-client-core.js"></script>
+<script src="exam.js"></script>
 </body>
 </html>

@@ -10,6 +10,10 @@ test('whenText formats Moscow time with the weekday and the right preposition', 
   assert.equal(C.whenText(1798750800), 'в пятницу, 1 января, в 0:00');           // year rolls over
 });
 
+test('whenText uses "во" before Tuesday', () => {
+  assert.equal(C.whenText(1791558000 + 4 * 86400), 'во вторник, 13 октября, в 18:00');
+});
+
 test('the clock offset turns the device clock into the server clock', () => {
   const off = C.offsetOf(1000, 5_000_000);                    // device is way off
   assert.equal(off, 1000 * 1000 - 5_000_000);

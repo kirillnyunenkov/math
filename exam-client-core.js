@@ -7,6 +7,7 @@
   const MONTHS = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
 
   // "в пятницу, 9 октября, в 18:00" — Moscow time is UTC+3 all year round.
+  // Twin of when() in backend/pb_hooks/exams.js (the Telegram messages): change both together.
   function whenText(ts) {
     const d = new Date((ts + 10800) * 1000), m = d.getUTCMinutes();
     return DAYS[d.getUTCDay()] + ', ' + d.getUTCDate() + ' ' + MONTHS[d.getUTCMonth()] + ', в ' + d.getUTCHours() + ':' + (m < 10 ? '0' : '') + m;
