@@ -6,6 +6,8 @@
   'use strict';
 
   const MAX_TASKS_JSON = 4800000, MAX_KEY_JSON = 1900000;
+  // The server limits are in bytes of UTF-8, not characters (Cyrillic is 2 bytes a letter).
+  const jsonBytes = (v) => new TextEncoder().encode(JSON.stringify(v)).length;
 
   // ---- safe HTML ----------------------------------------------------------
   /* A strict allowlist, deliberately NOT a model of the browser's HTML parser: every "<"
@@ -305,8 +307,8 @@
     });
     Object.keys(x.key).forEach(function (n) { if (!seen[n]) warnings.push('В key есть ответ для задания ' + n + ', а самого задания нет.'); });
 
-    if (JSON.stringify(x.tasks).length > MAX_TASKS_JSON) errors.push('Размер условий заданий больше допустимого (картинки лучше ужать).');
-    if (JSON.stringify(x.key).length > MAX_KEY_JSON) errors.push('Размер ключа (ответы и решения) больше допустимого.');
+    if (jsonBytes(x.tasks) > MAX_TASKS_JSON) errors.push('Размер условий заданий больше допустимого (картинки лучше ужать).');
+    if (jsonBytes(x.key) > MAX_KEY_JSON) errors.push('Размер ключа (ответы и решения) больше допустимого.');
     return done();
   }
 

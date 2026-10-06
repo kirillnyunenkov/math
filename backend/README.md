@@ -144,6 +144,7 @@ every formula rendered with the repo's KaTeX), a local `node tools/exam_preview.
 message, `node tools/exam_api.mjs assign ... --yes`. `exams`, `students`, `status` and `delete` are
 there too. The tool logs in with `~/ege-teacher-link.txt` and prints no secrets.
 
+- Do not assign an exam to a student until the trainer exam screens (Plan 2) are released: the student cannot open it yet.
 - The catalog is numbered: `exams` prints "No. N · title", and `--exam` takes that number (or a title).
 - Statements and solutions are HTML checked against an allowlist (`exam-validate.js`, run by
   `exam_check.mjs` and again before `upload`). Short answers are plain text as a student types them;

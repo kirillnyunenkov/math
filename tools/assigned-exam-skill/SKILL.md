@@ -23,6 +23,7 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
   `--api http://127.0.0.1:8090/api --link-file <throwaway file>`.
 - Assigning sends a Telegram message to the student. Run `--yes` (or give him the `--yes` command) only after
   his explicit yes that names the student, the exam (№ and title) and the time.
+- Do not assign an exam to a student until the trainer exam screens (Plan 2) are released: the student cannot open it yet.
 - Times are Moscow time. Default duration is 235 minutes.
 
 ## Workflow
@@ -61,11 +62,13 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
    To fix an uploaded exam that was **never assigned**: `delete --exam <№ or title>` (add `--yes` after he
    confirms), then upload again. Deleting shifts the numbers of later exams: tell him.
 7. **Assign.** He can do it in the panel (tab «Пробники» → «Назначить пробник»), or ask you ("назначь Ивану
-   пробник 3 на пятницу 18:00"). Resolve names with `students` and `exams`. Build the command **without**
-   `--yes` and show him the plan the tool prints, as it would run:
+   пробник 3 на пятницу 18:00"). Resolve names with `students` and `exams` (read-only). You never run `assign`
+   against production, not even without `--yes`: describe the plan yourself from that output (student, exam
+   № and title, start in Moscow time, duration, "the student gets a Telegram message now and a reminder an hour
+   before"). Ask for his explicit yes naming student, exam (№ and title) and time. After it, give him the command
+   in a bash block for him to run against production (he sees the tool's own plan, then adds `--yes`):
    `node tools/exam_api.mjs assign --student "<name>" --exam <№> --at "YYYY-MM-DD HH:MM" [--minutes 235]`.
-   Ask for his explicit yes naming student, exam (№ and title) and time. After it, give him the same command
-   with `--yes` to run against production. Ambiguous student or exam: ask, do not guess.
+   Ambiguous student or exam: ask, do not guess.
 8. **Status:** `node tools/exam_api.mjs status` answers "что назначено / ждёт проверки" (read-only, you may run it).
    Part 2 is checked in the panel: `teacher.html#/check/<assignment id>`; the bot sends that
    link when a student submits.
@@ -75,4 +78,4 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
 - `exam_check` errors: fix the JSON, never loosen the validator.
 - Upload answers 413: the Caddy body-limit step of `backend/README.md` was not applied on the server; tell Кирилл.
 - Assign says "уже назначен": that exam is already given to that student; assignments can be moved or
-  canceled in the panel only before the start.
+  canceled in the panel before the start, or when it was missed (never opened and the window has passed).

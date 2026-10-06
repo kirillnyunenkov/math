@@ -326,16 +326,22 @@ async function api(path,opt){opt=opt||{};
   let json=null;try{json=await r.json();}catch(e){}
   if(r.status===401&&!opt.anon){expire();throw new Error('401');}
   return{status:r.status,json:json};}
-async function all(c,filter,fields){
+async function all(c,filter,fields,sort){
   const out=[];
   for(let page=1;;page++){
-    const r=await api(`/collections/${c}/records?perPage=500&page=${page}&skipTotal=1&sort=created`+(filter?'&filter='+encodeURIComponent(filter):'')+(fields?'&fields='+encodeURIComponent(fields):''));
+    const r=await api(`/collections/${c}/records?perPage=500&page=${page}&skipTotal=1&sort=${sort||'created'}`+(filter?'&filter='+encodeURIComponent(filter):'')+(fields?'&fields='+encodeURIComponent(fields):''));
     if(r.status!==200)throw new Error(c+' '+r.status);
     out.push(...r.json.items);if(r.json.items.length<500)return out;
   }}
 
 // ---- вход ----
-function logout(msg){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render(msg);}
+/* Signing out (or an expired session) drops everything loaded for the teacher, so that Back
+   cannot redraw cached student data without a session. */
+function logout(msg){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
+  data=null;for(const k in summaries)delete summaries[k];
+  ckGen++;ckShown=null;ck=null;ckNote=null;ckTok={v:'',t:0};ckTokP=null;
+  try{closeSheet();}catch(e){}
+  render(msg);}
 /* A link such as teacher.html#/check/<id> (from the bot) opened without a valid session: the
    route is kept for this tab and restored once after the next successful login. */
 const PEND_KEY='ege_teacher_pending_hash';
@@ -388,8 +394,8 @@ async function load(){
   const soft=p=>p.catch(e=>{if(e.message==='401')throw e;
     const m=/ (\d+)$/.exec(e.message);if(!m||m[1]!=='404')bad.push(m?m[1]:'net');return [];});
   const [exams,asg,photos]=await Promise.all([
-    soft(all('exams',null,'id,title,full,created')),
-    soft(all('exam_assignments',null,'id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,via_tg,answers,ok,part2,created')),
+    soft(all('exams',null,'id,title,full,created','created,id')),
+    soft(all('exam_assignments',null,'id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,created')),
     soft(all('exam_photos',null,'id,assignment,user,n,file'))]);
   data.exams=exams;data.asg=asg;data.photos=photos;data.examErr=bad[0]||null;
 }
@@ -974,7 +980,7 @@ async function checkSend(id,btn){
 }
 
 // ---- маршруты ----
-async function refresh(){await load();for(const k in summaries)delete summaries[k];route();}
+async function refresh(){await load();if(!auth){data=null;return;}for(const k in summaries)delete summaries[k];route();}
 /* Refresh that keeps the scroll position (route() otherwise scrolls to the top): after an
    exam action the changed row is usually mid-page. A lead's card is drawn after its journal
    arrives (renderStudent), so the position is kept until that second draw. */
@@ -1054,7 +1060,7 @@ document.addEventListener('submit',e=>{
 });
 window.addEventListener('hashchange',async()=>{keepY=null;ckNote=null;
   if(/^#\/login\//.test(location.hash)){await loginFromHash();render();return;}
-  if(data)route();});
+  if(data&&auth)route();});
 (async()=>{if(!auth)pendSave();await loginFromHash();render();})();
 </script>
 </body>

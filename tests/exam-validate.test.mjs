@@ -205,11 +205,21 @@ test('an unpaired dollar is a warning, not an error', () => {
   assert.deepEqual(V.validateExam(sample()).warnings, []);
 });
 
-test('the size caps match the server fields', () => {
+test('the size caps are counted in UTF-8 bytes like the server fields', () => {
   const x = sample(); x.tasks[0].cond = '<p>' + 'a'.repeat(4_900_000) + '</p>';
   assert.ok(errs(x).some((e) => /размер/i.test(e) && /задан/i.test(e)));
   const y = sample(); y.key['1'].sol = '<p>' + 'a'.repeat(1_950_000) + '</p>';
   assert.ok(errs(y).some((e) => /размер/i.test(e) && /ключ/i.test(e)));
+  // Cyrillic: under the cap in characters, over it in bytes (2 bytes a letter)
+  const c = sample(); c.tasks[0].cond = '<p>' + 'ж'.repeat(2_600_000) + '</p>';
+  assert.ok(JSON.stringify(c.tasks).length < 4_800_000 && new TextEncoder().encode(JSON.stringify(c.tasks)).length > 4_800_000);
+  assert.ok(errs(c).some((e) => /размер/i.test(e) && /задан/i.test(e)));
+  const d = sample(); d.key['1'].sol = '<p>' + 'ж'.repeat(1_000_000) + '</p>';
+  assert.ok(JSON.stringify(d.key).length < 1_900_000 && new TextEncoder().encode(JSON.stringify(d.key)).length > 1_900_000);
+  assert.ok(errs(d).some((e) => /размер/i.test(e) && /ключ/i.test(e)));
+  // and just under the cap in bytes passes
+  const ok = sample(); ok.key['1'].sol = '<p>' + 'ж'.repeat(900_000) + '</p>';
+  assert.ok(!errs(ok).some((e) => /размер/i.test(e)));
 });
 
 test('a part 2 solution is a warning, an odd short answer is a warning', () => {
