@@ -62,7 +62,7 @@ const html = `<!doctype html>
 <style>body{font:16px/1.5 system-ui,sans-serif;max-width:820px;margin:24px auto;padding:0 16px;color:#222}
 h1{font-size:24px}h3{margin:0 0 8px;font-size:17px}.t{border:1px solid #ddd;border-radius:12px;padding:16px;margin:16px 0}
 .k{background:#f4f7fb;border-radius:8px;padding:8px 12px;margin-top:8px}table{border-collapse:collapse}
-td,th{border:1px solid #ccc;padding:4px 10px;text-align:left}.m{color:#666;font-size:14px;font-weight:400}img{max-width:100%}
+td,th{border:1px solid #ccc;padding:4px 10px;text-align:left}.m{color:#666;font-size:14px;font-weight:400}img{width:auto;height:auto;max-width:100%}
 .wrap{overflow-x:auto}.warn{background:#fff3cd;border:1px solid #e0c36a;border-radius:8px;padding:8px 12px}</style></head>
 <body>
 <h1>${esc(exam.title)}${exam.full ? ' <span class="m">· полный вариант</span>' : ''}</h1>

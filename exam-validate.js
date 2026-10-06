@@ -26,10 +26,53 @@
   };
   const ALLOWED_TAGS = ('p br hr b i em strong u sup sub span div ul ol li table thead tbody tr th td blockquote pre code h3 h4 img').split(' ');
   const ATTR_VALUE = {
-    src: /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=]+$/,
+    src: /^data:image\/(png|jpeg|webp|gif|svg\+xml);base64,[A-Za-z0-9+\/=]+$/,
     width: /^\d+(px)?$/, height: /^\d+(px)?$/, colspan: /^\d+$/, rowspan: /^\d+$/, align: /^(left|right|center)$/,
     alt: /^[^"<>]*$/,
   };
+  /* An SVG figure is allowed only as the content of an <img src="data:image/svg+xml;base64,...">: a browser never runs
+     scripts in an SVG used as an image and never loads anything external for it. The checks below are a second line
+     (someone may save the figure and open the file directly): no script, no event handlers, no foreign content,
+     no external references, no entities, no CSS escapes. Every check is a single regular expression run over the
+     whole text, so the cost is linear and one occurrence cannot hide another. Returns '' when the SVG is fine,
+     otherwise the reason. */
+  const MAX_SVG_CHARS = 400000;
+  function svgProblem(b64) {
+    let text;
+    try {
+      const bin = atob(b64), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch (e) { return 'файл не читается (это не SVG в base64).'; }
+    if (text.length > MAX_SVG_CHARS) return 'файл слишком большой (больше ' + (MAX_SVG_CHARS / 1000) + ' тысяч символов).';
+    // Character references are decoded first, so an entity cannot spell a forbidden word.
+    text = text.replace(/&#[xX]([0-9a-fA-F]+);|&#([0-9]+);/g, function (m, h, d) {
+      const cp = h ? parseInt(h, 16) : parseInt(d, 10);
+      return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : '\uFFFD';
+    });
+    // The plain W3C DOCTYPE (matplotlib and Batik write it) has no internal subset and is harmless: drop it. Any other one is refused.
+    text = text.replace(/^\s*(<\?xml[^>]*\?>\s*)?<!DOCTYPE\s+svg\s+PUBLIC\s+(["'])[^"'\[\]<>]*\2\s+(["'])http:\/\/www\.w3\.org\/[^"'\[\]<>]*\3\s*>/i, '$1');
+    if (/<\s*!\s*(entity|doctype)/i.test(text) || /<\s*\?\s*xml-stylesheet/i.test(text)) return 'объявления ENTITY, DOCTYPE (кроме обычного W3C) и таблицы стилей не разрешены.';
+    const root = /<svg[\s>][^>]*/i.exec(text);
+    if (!root) return 'внутри нет тега <svg>.';
+    // The site shows an SVG at the size written on its root tag (it ignores width/height of the <img>), so the size must be there.
+    if (!/\swidth\s*=\s*["']?\s*[0-9.]+\s*(px|pt)?\s*["'\s\/>]/i.test(root[0] + ' ') || !/\sheight\s*=\s*["']?\s*[0-9.]+\s*(px|pt)?\s*["'\s\/>]/i.test(root[0] + ' '))
+      return 'у корневого тега <svg> нет размера: допиши width и height в пикселях, например width="300" height="200" (без них рисунок растянется на всю ширину).';
+    // Element names may carry a namespace prefix (<s:script>); anything in the XHTML namespace is refused.
+    if (/<\s*(?:[A-Za-z_][\w.-]*:)?(script|foreignobject|iframe|embed|object|audio|video|link|meta|animate|set|handler|listener)\b/i.test(text) || /http:\/\/www\.w3\.org\/1999\/xhtml/i.test(text))
+      return 'внутри есть скрипт, вставка чужого содержимого или анимация (script, foreignObject, iframe, animate и подобное).';
+    if (/[\s"'\/]on[a-z]+\s*=/i.test(text)) return 'внутри есть обработчик события (onload и подобные).';
+    if (/javascript\s*:/i.test(text)) return 'внутри есть ссылка javascript:.';
+    if (/\\/.test(text)) return 'внутри есть обратная косая черта (так прячут запрещённые слова в стилях).';
+    // Every reference is checked on its own: only to an element of the same file (#id) or to an embedded raster picture.
+    if (/(?:href|src)\s*=\s*(?!"\s*#|'\s*#|"\s*data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=\s]*"|'\s*data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=\s]*')/i.test(text))
+      return 'внутри есть внешняя ссылка (разрешены только ссылки на части этого же рисунка и встроенные png/jpeg/webp/gif).';
+    if (/url\(\s*["']?\s*(?!#)/i.test(text)) return 'внутри есть внешняя ссылка url(…) (разрешены только url(#id)).';
+    if (/(?:image-set|cross-fade|element)\s*\(/i.test(text) || /(?:^|[^\w-])(?:image|src)\s*\(/i.test(text)) return 'внутри есть CSS-функция, которая загружает адрес (image-set, image(), src()).';
+    if (/@import/i.test(text)) return 'внутри есть @import.';
+    return '';
+  }
+
   // Opening tag: lowercase name, attributes only as ` name="value"` (double quotes, no < > " inside), optional "/".
   const TAG_OPEN = /<([a-z][a-z0-9]*)((?:[ \t\r\n]+[a-z][a-z-]*="[^"<>]*")*)[ \t\r\n]*\/?>/y;
   const TAG_CLOSE = /<\/([a-z][a-z0-9]*)>/y;
@@ -61,7 +104,8 @@
           while ((am = ATTR.exec(m[2])) !== null) {
             const an = am[1], av = am[2];
             if (!allowed[an]) return 'атрибут «' + an + '» у тега «' + name + '» не разрешён';
-            if (!ATTR_VALUE[an].test(av)) return 'недопустимое значение атрибута «' + an + '»' + (an === 'src' ? ' (картинка — только встроенная data:image png/jpeg/webp/gif в base64)' : '');
+            if (!ATTR_VALUE[an].test(av)) return 'недопустимое значение атрибута «' + an + '»' + (an === 'src' ? ' (картинка — только встроенная data:image png/jpeg/webp/gif/svg+xml в base64)' : '');
+            if (an === 'src' && av.indexOf('data:image/svg+xml;base64,') === 0) { const sp = svgProblem(av.slice(26)); if (sp) return 'картинка SVG не подходит: ' + sp; }
             if (an === 'src') seenSrc = true;
           }
           if (name === 'img' && !seenSrc) return 'картинка без встроенного src';
