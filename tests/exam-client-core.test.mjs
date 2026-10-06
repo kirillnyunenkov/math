@@ -150,7 +150,9 @@ test('classifyStatus tells a retry from a permanent answer', () => {
   assert.equal(C.classifyStatus(403), 'auth');
   assert.equal(C.classifyStatus(404), 'gone');
   assert.equal(C.classifyStatus(400), 'client');
-  assert.equal(C.classifyStatus(429), 'client');
+  assert.equal(C.classifyStatus(429), 'retry');                  // too many requests: passes by itself
+  assert.equal(C.classifyStatus(408), 'retry');                  // request timeout: so does this
+  assert.equal(C.classifyStatus(422), 'client');
   assert.equal(C.classifyStatus(500), 'retry');
   assert.equal(C.classifyStatus(503), 'retry');
   assert.equal(C.classifyStatus(null), 'retry');                 // no answer at all: network error or timeout
@@ -189,4 +191,103 @@ test('mergePending lays unsent text over the server text for short tasks only', 
   assert.deepEqual(C.mergePending({ 1: 'old', 2: 'two' }, pend, tasks), { 1: 'new', 2: 'two' });
   assert.deepEqual(C.mergePending({ 1: 'old' }, null, tasks), { 1: 'old' });
   assert.deepEqual(C.mergePending({}, { 2: '' }, tasks), { 2: '' });   // an erased field is also unsent text
+});
+
+test('fitSize scales the long side to the limit, never up, never below one pixel', () => {
+  assert.deepEqual(C.fitSize(4032, 3024, 2000), { w: 2000, h: 1500 });
+  assert.deepEqual(C.fitSize(3024, 4032, 2000), { w: 1500, h: 2000 });
+  assert.deepEqual(C.fitSize(800, 600, 2000), { w: 800, h: 600 });          // small: unchanged
+  assert.deepEqual(C.fitSize(2000, 2000, 2000), { w: 2000, h: 2000 });
+  assert.deepEqual(C.fitSize(1, 20000, 2000), { w: 1, h: 2000 });           // a thin strip keeps one pixel
+  assert.deepEqual(C.fitSize(0, 100, 2000), { w: 0, h: 0 });
+  assert.deepEqual(C.fitSize(NaN, 100, 2000), { w: 0, h: 0 });
+  assert.deepEqual(C.fitSize(100, 100, 0), { w: 0, h: 0 });
+  assert.deepEqual(C.fitSize('100', 100, 2000), { w: 0, h: 0 });
+});
+
+test('dimsOk accepts normal photos and refuses empty, fractional and absurd sizes', () => {
+  assert.equal(C.dimsOk(4032, 3024), true);
+  assert.equal(C.dimsOk(12000, 9000), true);
+  assert.equal(C.dimsOk(0, 100), false);
+  assert.equal(C.dimsOk(100.5, 100), false);
+  assert.equal(C.dimsOk(NaN, 100), false);
+  assert.equal(C.dimsOk(30000, 30000), false);                              // 900 Mpx: a decompression bomb
+  assert.equal(C.dimsOk('4000', 3000), false);
+});
+
+test('wellFormedTasks without statements (the photo phase) keeps long tasks with an empty cond', () => {
+  const raw = [{ n: 13, kind: 'long', max: 2 }, { n: 14, kind: 'long', max: 3, cond: 'x' }, { n: 15, kind: 'long', max: 2, cond: 5 }];
+  assert.deepEqual(C.wellFormedTasks(raw), [{ n: 14, kind: 'long', max: 3, cond: 'x' }]);   // default: cond is required
+  assert.deepEqual(C.wellFormedTasks(raw, { noCond: true }), [{ n: 13, kind: 'long', max: 2, cond: '' }, { n: 14, kind: 'long', max: 3, cond: 'x' }]);
+});
+
+test('wellFormedPhotos keeps only well-formed items of known tasks or of the bot', () => {
+  const known = [13, 14];
+  const good = [{ id: 'abc123', n: '13', file: 'a_1.jpg' }, { id: 'def456', n: '', file: 'file_1.png' }, { id: 'g7', n: '14', file: 'b.webp' }];
+  assert.deepEqual(C.wellFormedPhotos(good, known), good);
+  assert.deepEqual(C.wellFormedPhotos(good, ['13']).map((p) => p.id), ['abc123', 'def456']);   // digit strings work too
+  const bad = JSON.parse(`[null, 5, "x", [], {"id":"a1","n":"99","file":"f.jpg"}, {"id":"a2","n":"__proto__","file":"f.jpg"},
+    {"id":"a3","n":13,"file":"f.jpg"}, {"id":"a4","n":"13"}, {"id":"a5","n":"13","file":""}, {"id":"a6","n":"13","file":"../x.jpg"},
+    {"id":"a7","n":"13","file":"a/b.jpg"}, {"id":"a8","n":"13","file":".."}, {"id":"a9","n":"13","file":"a?b.jpg"},
+    {"id":"__proto__","n":"13","file":"f.jpg"}, {"id":"bad id","n":"13","file":"f.jpg"}, {"id":"<img>","n":"13","file":"f.jpg"},
+    {"n":"13","file":"f.jpg"}, {"id":7,"n":"13","file":"f.jpg"}, {"id":"ok1","n":"13","file":"f.jpg"}, {"id":"ok1","n":"14","file":"g.jpg"},
+    {"id":"c1","n":"toString","file":"f.jpg"}, {"id":"c2","n":"constructor","file":"f.jpg"}]`);
+  // "__proto__" as an id has a harmless shape and is kept as a plain string; the rest is dropped; the duplicate id loses
+  assert.deepEqual(C.wellFormedPhotos(bad, known).map((p) => p.id), ['__proto__', 'ok1']);
+  assert.deepEqual(C.wellFormedPhotos(null, known), []);
+  assert.deepEqual(C.wellFormedPhotos({ length: 3 }, known), []);
+  assert.deepEqual(C.wellFormedPhotos(good, null).map((p) => p.id), ['def456']);              // no known tasks: only the bot's
+  const many = Array.from({ length: 500 }, (_, i) => ({ id: 'p' + i, n: '', file: 'f' + i + '.jpg' }));
+  assert.equal(C.wellFormedPhotos(many, known).length, C.PHOTO.LIST_MAX);
+  const out = C.wellFormedPhotos(good, known); out[0].id = 'changed';
+  assert.equal(good[0].id, 'abc123');                                                         // fresh objects
+});
+
+test('photoSig tells equal lists from different ones', () => {
+  const a = [{ id: 'a', n: '13', file: 'x.jpg' }, { id: 'b', n: '', file: 'y.jpg' }];
+  assert.equal(C.photoSig(a), C.photoSig(a.map((p) => Object.assign({}, p))));
+  assert.notEqual(C.photoSig(a), C.photoSig(a.slice(0, 1)));
+  assert.notEqual(C.photoSig(a), C.photoSig(a.slice().reverse()));
+  assert.equal(C.photoSig([]), '');
+});
+
+test('photoRoom counts what the server holds and what is on its way against five', () => {
+  assert.equal(C.photoRoom(0, 0), 5);
+  assert.equal(C.photoRoom(3, 1), 1);
+  assert.equal(C.photoRoom(5, 0), 0);
+  assert.equal(C.photoRoom(4, 4), 0);                                       // never negative
+  assert.equal(C.photoRoom(undefined, undefined), 5);
+});
+
+test('pollDelay is 15 s, then backs off to a 2 minute ceiling', () => {
+  assert.deepEqual([0, 1, 2, 3, 4, 50].map(C.pollDelay), [15000, 30000, 60000, 120000, 120000, 120000]);
+  assert.equal(C.pollDelay(NaN), 15000);
+  assert.equal(C.pollDelay(undefined), 15000);
+  assert.equal(C.pollDelay(-1), 15000);
+});
+
+test('uploadRetryDelay gives three retries, then null', () => {
+  assert.deepEqual([1, 2, 3].map(C.uploadRetryDelay), [3000, 10000, 30000]);
+  assert.equal(C.uploadRetryDelay(4), null);
+  assert.equal(C.uploadRetryDelay(NaN), null);
+  assert.equal(C.uploadRetryDelay('1'), null);
+});
+
+test('uploadVerdict reads the refusal codes of the photo route', () => {
+  assert.equal(C.uploadVerdict(200), 'ok');
+  assert.equal(C.uploadVerdict(409, 'closed'), 'closed');
+  assert.equal(C.uploadVerdict(401), 'auth');
+  assert.equal(C.uploadVerdict(403, 'forbidden'), 'auth');
+  assert.equal(C.uploadVerdict(404, 'not found'), 'gone');
+  assert.equal(C.uploadVerdict(400, 'too many'), 'tooMany');
+  assert.equal(C.uploadVerdict(400, 'bad task'), 'badTask');
+  assert.equal(C.uploadVerdict(400, 'bad file'), 'badFile');
+  assert.equal(C.uploadVerdict(400, 'one file expected'), 'badFile');
+  assert.equal(C.uploadVerdict(400, undefined), 'badFile');
+  assert.equal(C.uploadVerdict(413), 'badFile');
+  assert.equal(C.uploadVerdict(429), 'retry');
+  assert.equal(C.uploadVerdict(408), 'retry');
+  assert.equal(C.uploadVerdict(500), 'retry');
+  assert.equal(C.uploadVerdict(null), 'retry');
+  assert.equal(C.uploadVerdict(undefined), 'retry');
 });

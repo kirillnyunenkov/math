@@ -255,6 +255,28 @@
   .ex-plain{white-space:pre-wrap;overflow-wrap:anywhere;}
   .ex-note{margin:var(--s2) 0 0;font-size:var(--fs-sm);color:var(--ink-3);}
   .vtimer.low{color:var(--err-text);}
+  /* фото решений второй части: плитки 96 px, статус загрузки внизу плитки, крестик справа сверху */
+  .ex-photos{display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s4);}
+  .ex-thumbs{display:flex;flex-wrap:wrap;gap:var(--s3);}
+  .ex-thumbs:empty{display:none;}
+  .ex-thumb{position:relative;margin:0;width:96px;height:96px;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);}
+  .ex-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .ex-thumb img.ex-broken{visibility:hidden;}
+  .ex-thumb.ex-busy img{opacity:.55;}
+  .ex-thumb.ex-err{border-color:var(--err);}
+  .ex-del{position:absolute;top:4px;right:4px;width:32px;height:32px;padding:0;border-radius:var(--r-full);border:1px solid var(--line-strong);
+    background:var(--surface);color:var(--ink);font:inherit;font-size:20px;line-height:1;cursor:pointer;}
+  .ex-del:disabled{opacity:.5;cursor:default;}
+  .ex-st{position:absolute;left:0;right:0;bottom:0;padding:3px var(--s2);font:inherit;font-size:var(--fs-2xs);line-height:1.3;text-align:center;
+    background:var(--surface);color:var(--ink-2);border:0;border-top:1px solid var(--line);}
+  button.ex-st{cursor:pointer;color:var(--err-text);font-weight:600;min-height:28px;}
+  .ex-row{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;}
+  .ex-add:disabled{opacity:.5;cursor:default;}
+  .ex-cnt{font-size:var(--fs-sm);color:var(--ink-3);font-variant-numeric:tabular-nums;}
+  .ex-msg{margin:0;font-size:var(--fs-sm);color:var(--ink-2);}
+  .ex-msg:empty{display:none;}
+  .ex-tgph[hidden]{display:none;}
+  .vintro.ex-pintro .lead{margin-bottom:0;}
   .vbar .vprog.bad{color:var(--err-text);}
   /* the save note may be two lines on a phone; it shrinks and wraps instead of pushing the button to a second row */
   .vbar #ex-save{flex:1 1 0;min-width:0;}
