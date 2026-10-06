@@ -83,3 +83,24 @@ test('assign and delete without --yes print the plan, exit 3 and write nothing',
     assert.doesNotMatch(a.out + d.out + bad.out, /StubSecret1|stub-token/);
   } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('delete: a refused request reports the status code, not a guessed reason', async () => {
+  const srv = createServer((q, s) => {
+    q.resume();
+    s.setHeader('content-type', 'application/json');
+    const u = q.url.split('?')[0];
+    if (u.endsWith('/auth-with-password')) return s.end(JSON.stringify({ token: 'stub-token', record: { role: 'teacher' } }));
+    if (u.endsWith('/collections/exams/records') && q.method === 'GET') return s.end(JSON.stringify({ items: [{ id: 'e1', title: 'Пример', full: false, created: '2026-01-01' }] }));
+    s.statusCode = 400; s.end('{"message":"internal detail"}');
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const dir = mkdtempSync(join(tmpdir(), 'exam-api-test-'));
+  try {
+    const link = join(dir, 'link.txt');
+    writeFileSync(link, 'http://localhost:3456/teacher.html#/login/teacher.StubSecret1\n');
+    const d = await run(['delete', '--exam', '1', '--yes', '--api', 'http://127.0.0.1:' + srv.address().port + '/api', '--link-file', link]);
+    assert.equal(d.code, 1, d.out);
+    assert.match(d.out, /ответ 400/);
+    assert.doesNotMatch(d.out, /internal detail|StubSecret1|stub-token/);
+  } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
