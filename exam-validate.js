@@ -32,10 +32,11 @@
   };
   /* An SVG figure is allowed only as the content of an <img src="data:image/svg+xml;base64,...">: a browser never runs
      scripts in an SVG used as an image and never loads anything external for it. The checks below are a second line
-     (the figure is also opened directly by someone who saves it): no script, no event handlers, no foreign content,
-     no external references, no entities. Returns '' when the SVG is fine, otherwise the reason. */
+     (someone may save the figure and open the file directly): no script, no event handlers, no foreign content,
+     no external references, no entities, no CSS escapes. Every check is a single regular expression run over the
+     whole text, so the cost is linear and one occurrence cannot hide another. Returns '' when the SVG is fine,
+     otherwise the reason. */
   const MAX_SVG_CHARS = 400000;
-  const SVG_BAD_TAG = /<\s*(script|foreignobject|iframe|embed|object|audio|video|link|meta|animate|set|handler|listener)\b/i;
   function svgProblem(b64) {
     let text;
     try {
@@ -44,20 +45,30 @@
       text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
     } catch (e) { return 'файл не читается (это не SVG в base64).'; }
     if (text.length > MAX_SVG_CHARS) return 'файл слишком большой (больше ' + (MAX_SVG_CHARS / 1000) + ' тысяч символов).';
-    if (!/<svg[\s>]/i.test(text)) return 'внутри нет тега <svg>.';
-    if (SVG_BAD_TAG.test(text)) return 'внутри есть скрипт, вставка чужого содержимого или анимация (script, foreignObject, iframe, animate и подобное).';
-    if (/<\s*!\s*(entity|doctype)/i.test(text) || /<\s*\?\s*xml-stylesheet/i.test(text)) return 'объявления ENTITY, DOCTYPE и таблицы стилей не разрешены.';
+    // Character references are decoded first, so an entity cannot spell a forbidden word.
+    text = text.replace(/&#[xX]([0-9a-fA-F]+);|&#([0-9]+);/g, function (m, h, d) {
+      const cp = h ? parseInt(h, 16) : parseInt(d, 10);
+      return cp > 0 && cp <= 0x10ffff && !(cp >= 0xd800 && cp <= 0xdfff) ? String.fromCodePoint(cp) : '\uFFFD';
+    });
+    // The plain W3C DOCTYPE (matplotlib and Batik write it) has no internal subset and is harmless: drop it. Any other one is refused.
+    text = text.replace(/^\s*(<\?xml[^>]*\?>\s*)?<!DOCTYPE\s+svg\s+PUBLIC\s+(["'])[^"'\[\]<>]*\2\s+(["'])http:\/\/www\.w3\.org\/[^"'\[\]<>]*\3\s*>/i, '$1');
+    if (/<\s*!\s*(entity|doctype)/i.test(text) || /<\s*\?\s*xml-stylesheet/i.test(text)) return 'объявления ENTITY, DOCTYPE (кроме обычного W3C) и таблицы стилей не разрешены.';
+    const root = /<svg[\s>][^>]*/i.exec(text);
+    if (!root) return 'внутри нет тега <svg>.';
+    // The site shows an SVG at the size written on its root tag (it ignores width/height of the <img>), so the size must be there.
+    if (!/\swidth\s*=\s*["']?\s*[0-9.]+\s*(px|pt)?\s*["'\s\/>]/i.test(root[0] + ' ') || !/\sheight\s*=\s*["']?\s*[0-9.]+\s*(px|pt)?\s*["'\s\/>]/i.test(root[0] + ' '))
+      return 'у корневого тега <svg> нет размера: допиши width и height в пикселях, например width="300" height="200" (без них рисунок растянется на всю ширину).';
+    // Element names may carry a namespace prefix (<s:script>); anything in the XHTML namespace is refused.
+    if (/<\s*(?:[A-Za-z_][\w.-]*:)?(script|foreignobject|iframe|embed|object|audio|video|link|meta|animate|set|handler|listener)\b/i.test(text) || /http:\/\/www\.w3\.org\/1999\/xhtml/i.test(text))
+      return 'внутри есть скрипт, вставка чужого содержимого или анимация (script, foreignObject, iframe, animate и подобное).';
     if (/[\s"'\/]on[a-z]+\s*=/i.test(text)) return 'внутри есть обработчик события (onload и подобные).';
     if (/javascript\s*:/i.test(text)) return 'внутри есть ссылка javascript:.';
-    // References: only to an element of the same file (#id) or to an embedded raster picture.
-    const ref = /(?:href|src)\s*=\s*("[^"]*"|'[^']*')/gi;
-    let m;
-    while ((m = ref.exec(text)) !== null) {
-      const v = m[1].slice(1, -1).trim();
-      if (v.charAt(0) !== '#' && !/^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=\s]+$/.test(v)) return 'внутри есть внешняя ссылка (разрешены только ссылки на части этого же рисунка и встроенные png/jpeg/webp/gif).';
-    }
-    const url = /url\(\s*(["']?)([^)]*)\1\s*\)/gi;
-    while ((m = url.exec(text)) !== null) if (m[2].trim().charAt(0) !== '#') return 'внутри есть внешняя ссылка url(…) (разрешены только url(#id)).';
+    if (/\\/.test(text)) return 'внутри есть обратная косая черта (так прячут запрещённые слова в стилях).';
+    // Every reference is checked on its own: only to an element of the same file (#id) or to an embedded raster picture.
+    if (/(?:href|src)\s*=\s*(?!"\s*#|'\s*#|"\s*data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=\s]*"|'\s*data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+\/=\s]*')/i.test(text))
+      return 'внутри есть внешняя ссылка (разрешены только ссылки на части этого же рисунка и встроенные png/jpeg/webp/gif).';
+    if (/url\(\s*["']?\s*(?!#)/i.test(text)) return 'внутри есть внешняя ссылка url(…) (разрешены только url(#id)).';
+    if (/(?:image-set|cross-fade|element)\s*\(/i.test(text) || /(?:^|[^\w-])(?:image|src)\s*\(/i.test(text)) return 'внутри есть CSS-функция, которая загружает адрес (image-set, image(), src()).';
     if (/@import/i.test(text)) return 'внутри есть @import.';
     return '';
   }

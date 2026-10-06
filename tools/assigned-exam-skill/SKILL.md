@@ -50,14 +50,17 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
      followed by a letter is an error). A dollar sign in text goes only inside a formula: `$\$5$`.
    - HTML is an allowlist, nothing else passes. Tags: p br hr b i em strong u sup sub span div ul ol li table
      thead tbody tr th td blockquote pre code h3 h4 img. Attributes: only `img` src/width/height/alt and
-     `th`/`td` colspan/rowspan/align. No links, forms, scripts, handlers, `style`, `class`, svg.
-   - Figures only as `<img src="data:image/(png|jpeg|webp|gif);base64,…">`. Crop, shrink with Pillow to at most
+     `th`/`td` colspan/rowspan/align. No links, forms, scripts, handlers, `style`, `class`, inline `<svg>` tags (an SVG figure goes only as an image, see below).
+   - Raster figures only as `<img src="data:image/(png|jpeg|webp|gif);base64,…">`. Crop, shrink with Pillow to at most
      ~900 px wide, save as PNG/JPEG, then check the file size stays small (the validator rejects oversize files).
-   - A vector figure is an SVG used as an image: `<img src="data:image/svg+xml;base64,…" width="…" height="…">`, the same way the
+   - A vector figure is an SVG used as an image: `<img src="data:image/svg+xml;base64,…">`, the same way the
      trainer's own figures (`img/tN/gfx/*.svg`) are shown (dark theme inverts them automatically). Never an inline `<svg>` tag.
      Inside the SVG the gate refuses scripts, event handlers (`onload`…), `foreignObject`, animation, entities/DOCTYPE and any
      external reference (only `#id` and embedded png/jpeg/webp/gif are allowed); at most 400 000 characters. Export from
-     Inkscape/matplotlib as plain SVG; if the gate complains, fix the file, do not strip the check.
+     Inkscape/matplotlib as plain SVG; if the gate complains, fix the file, do not strip the check. **The site shows an SVG at
+     the size written on its root tag** (the `width`/`height` of the `<img>` are ignored), so the root `<svg>` must carry
+     `width="300" height="200"` in px/pt (about 250-350 px wide for a figure beside text); the gate refuses an SVG without them.
+     A plain W3C `<!DOCTYPE svg PUBLIC …>` line (matplotlib writes it) is fine; entities and other DOCTYPEs are not.
 3. **Verify.** Recompute every part 1 answer independently. Show Кирилл a table: task · source answer · your
    answer · match. Resolve every mismatch with him before going on; never pick one silently.
 4. **Check:** `node tools/exam_check.mjs ~/math-source/exams/<slug>/exam.json` until "Ошибок нет".

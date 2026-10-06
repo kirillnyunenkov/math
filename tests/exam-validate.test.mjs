@@ -438,7 +438,7 @@ test('only a full exam is held to the real shape; any other exam stays free', ()
 
 // ---- SVG figures: only as <img src="data:image/svg+xml;base64,..."> and only without anything active ----------------
 const svgImg = (svg, extra) => '<p><img src="data:image/svg+xml;base64,' + Buffer.from(svg, 'utf8').toString('base64') + '"' + (extra || '') + '></p>';
-const SVG_OK = '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs><linearGradient id="g"/></defs><path d="M0 0L10 10" stroke="#000" fill="url(#g)"/><use href="#g"/></svg>';
+const SVG_OK = '<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" width="120" height="80" viewBox="0 0 10 10"><defs><linearGradient id="g"/></defs><path d="M0 0L10 10" stroke="#000" fill="url(#g)"/><use href="#g"/></svg>';
 
 test('an SVG figure is accepted as an image, like the trainer does for its own figures', () => {
   assert.equal(V.htmlProblem(svgImg(SVG_OK, ' width="120" height="80" alt="Рисунок"')), '');
@@ -466,6 +466,7 @@ test('an SVG with anything active or external is refused, whatever the spelling'
     '<html><body>not a figure</body></html>', '', 'just text',
   ];
   bad.forEach((b) => assert.notEqual(V.htmlProblem(svgImg(b)), '', JSON.stringify(b)));
+  bad.forEach((b) => { const sized = b.replace('<svg', '<svg width="50" height="50"'); assert.notEqual(V.htmlProblem(svgImg(sized)), '', 'sized ' + JSON.stringify(sized)); });
   assert.notEqual(V.htmlProblem('<img src="data:image/svg+xml;base64,@@@">'), '', 'not base64');
   assert.notEqual(V.htmlProblem('<img src="data:image/svg+xml;base64,/w==">'), '', 'not utf-8 text');
   assert.notEqual(V.htmlProblem(svgImg('<svg>' + 'a'.repeat(400001) + '</svg>')), '', 'too big');
@@ -475,4 +476,42 @@ test('SVG as markup in the text and other SVG-like forms stay refused', () => {
   ['<svg><circle r="1"/></svg>', '<p><svg></svg></p>', '<img src="data:image/svg;base64,AA==">', '<img src="data:image/svg+xml,%3Csvg/%3E">',
     '<img src="data:image/svg+xml;utf8,<svg/>">', '<img src="https://example.com/a.svg">', '<img src="a.svg">',
   ].forEach((b) => assert.notEqual(V.htmlProblem(b), '', b));
+});
+
+test('SVG bypasses found in review are refused: prefixed tags, entities, CSS escapes and functions, shadowed attributes', () => {
+  const S = '<svg xmlns="http://www.w3.org/2000/svg" xmlns:s="http://www.w3.org/2000/svg" xmlns:h="http://www.w3.org/1999/xhtml" width="50" height="50"';
+  const bad = [
+    S + '><s:script>fetch("/x")</s:script></svg>', S + '><s:foreignObject/></svg>', S + '><s:animate attributeName="href" to="x"/></svg>',
+    S + '><h:script>1</h:script></svg>', S + '><ev:listener xmlns:ev="http://www.w3.org/2001/xml-events" event="load"/></svg>',
+    S + ' style="background:u&#114;l(http://example.com/a.png)"><rect/></svg>', S + ' style="background:url&#40;http://example.com/a.png)"><rect/></svg>',
+    S + "><style>@\\69mport 'http://example.com/a.css';</style></svg>", S + '><style>\\75rl(http://example.com/a.png)</style></svg>',
+    S + " style=\"background:image-set('http://example.com/a.png' 1x)\"><rect/></svg>", S + ' style="background:-webkit-image-set(\'http://example.com/a.png\' 1x)"><rect/></svg>',
+    S + ' style="background:image(\'http://example.com/a.png\')"><rect/></svg>', S + ' style="background:cross-fade(url(#a), url(#b), 50%)"><rect/></svg>',
+    S + "><image id='x href=\"#' href=\"http://example.com/a.png\" width=\"10\" height=\"10\"/></svg>",
+    S + '><g id="url(#a" fill="url(https://example.com/x)"/></svg>',
+  ];
+  bad.forEach((b) => assert.notEqual(V.htmlProblem(svgImg(b)), '', JSON.stringify(b)));
+});
+
+test('realistic exports pass: matplotlib with the W3C DOCTYPE, Inkscape with embedded raster, styles in CDATA', () => {
+  const matplotlib = '<?xml version="1.0" encoding="utf-8" standalone="no"?>\n<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"\n  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">\n'
+    + '<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="460.8pt" height="345.6pt" viewBox="0 0 460.8 345.6" xmlns="http://www.w3.org/2000/svg" version="1.1"><defs><style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style></defs><g id="figure_1"><path d="M 0 0 L 10 10" style="fill: none; stroke: #000000"/><use xlink:href="#m1" x="5" y="5"/></g></svg>';
+  const inkscape = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<!-- Created with Inkscape (http://www.inkscape.org/) -->\n<svg xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="200px" height="100px" viewBox="0 0 200 100" version="1.1"><sodipodi:namedview id="nv" inkscape:zoom="1"/><defs><marker id="m"><path d="M0 0"/></marker></defs><path d="M0 0" style="marker-end:url(#m)"/><image width="4" height="4" xlink:href="data:image/png;base64,iVBORw0KGgo="/></svg>';
+  const css = '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><style><![CDATA[ .a { fill: #fff; stroke: url(#g); font-family: "DejaVu Sans"; } text:hover { fill: red } @media (prefers-color-scheme: dark) { .a { fill: #000 } } ]]></style><linearGradient id="g"/><text class="a">x &#8722; 1 &amp; 2</text></svg>';
+  [matplotlib, inkscape, css].forEach((g, i) => assert.equal(V.htmlProblem(svgImg(g)), '', 'realistic #' + i));
+});
+
+test('an SVG without a size on its root tag is refused with a hint (the site shows the SVG at its own size)', () => {
+  ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0"/></svg>', '<svg width="50"><path d="M0 0"/></svg>', '<svg height="50"><path d="M0 0"/></svg>',
+    '<svg width="100%" height="100%"><path d="M0 0"/></svg>', '<svg width="auto" height="50"><path d="M0 0"/></svg>',
+  ].forEach((g) => assert.match(V.htmlProblem(svgImg(g)), /размер|width/i, g));
+  ['<svg width="50" height="50"/>', '<svg width="50px" height="30pt"/>', '<svg width=\'12.5\' height=\'7.5\'/>', '<svg\n  width="50"\n  height="50"\n/>'].forEach((g) => assert.equal(V.htmlProblem(svgImg(g)), '', g));
+});
+
+test('the SVG gate is linear in time on hostile repetitive input', () => {
+  const t0 = Date.now();
+  ['url('.repeat(70000), 'href="#'.repeat(50000), ' on'.repeat(130000), '<'.repeat(390000), ' '.repeat(390000)].forEach((junk) => {
+    V.htmlProblem(svgImg('<svg width="5" height="5">' + junk + '</svg>'));
+  });
+  assert.ok(Date.now() - t0 < 3000, 'took ' + (Date.now() - t0) + ' ms');
 });
