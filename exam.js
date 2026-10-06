@@ -14,25 +14,42 @@
   const TG_BOT = 'kirill_repet_bot';             // the sign-in bot that also takes photos of part 2
 
   const st = { mine: null, mineAt: 0, loading: false, hubTimer: 0, hubMiss: 0, user: '', gen: 0, req: 0, schedMiss: 0, id: null, view: null, offset: 0, synced: false, timers: [],
-    queue: null, away: null, photos: [], ftoken: '', ftokenAt: 0, picker: false, saveTimer: 0, saveFail: false,
+    save: null, leaving: null, listeners: [], saveTimer: 0, retryTimer: 0,
+    photos: [], ftoken: '', ftokenAt: 0, picker: false,
     shownPhase: '', shownId: '' };
 
   const seen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || []; } catch (e) { return []; } };
   const markSeen = (id) => { try { const s = seen(); if (s.indexOf(id) < 0) { s.push(id); localStorage.setItem(SEEN_KEY, JSON.stringify(s.slice(-50))); } } catch (e) {} };
 
+  // A request that hangs (a connection that went away without an error) is cut after `opt.timeout` ms (default 20 s)
+  // and fails like any other network error: nothing waits on it for ever, the save queue backs off and tries again.
   async function xapi(path, opt) {
     opt = opt || {};
-    const r = await fetch(API + '/ege/exams' + path, {
-      method: opt.method || 'GET',
-      body: opt.form || (opt.body && JSON.stringify(opt.body)),
-      headers: Object.assign(opt.form ? {} : { 'content-type': 'application/json' }, auth ? { Authorization: auth.token } : {}),
-    });
-    let json = null; try { json = await r.json(); } catch (e) {}
-    return { status: r.status, json: json };
+    const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+    const cut = ctl ? setTimeout(() => ctl.abort(), C.clampDelay(opt.timeout || 20000)) : 0;
+    try {
+      const r = await fetch(API + '/ege/exams' + path, {
+        method: opt.method || 'GET',
+        body: opt.form || (opt.body && JSON.stringify(opt.body)),
+        keepalive: !!opt.keep,                         // lets a save started while the page closes still go out
+        signal: ctl ? ctl.signal : undefined,
+        headers: Object.assign(opt.form ? {} : { 'content-type': 'application/json' }, auth ? { Authorization: auth.token } : {}),
+      });
+      let json = null; try { json = await r.json(); } catch (e) {}
+      return { status: r.status, json: json };
+    } finally { clearTimeout(cut); }
   }
 
   // ---- timers owned by the open exam screen ----
-  function clearTimers() { st.timers.forEach((t) => { clearTimeout(t); clearInterval(t); }); st.timers = []; }
+  function clearTimers() {
+    st.timers.forEach((t) => { clearTimeout(t); clearInterval(t); }); st.timers = [];
+    clearTimeout(st.saveTimer); clearTimeout(st.retryTimer); st.saveTimer = 0; st.retryTimer = 0;
+  }
+  // Listeners of the open screen on document / window / appEl: all removed together by leave().
+  function listen(target, type, fn) {
+    target.addEventListener(type, fn);
+    st.listeners.push(() => target.removeEventListener(type, fn));
+  }
   // Every delay goes through ExamClientCore.clampDelay: a NaN or a start weeks away must not fire at once.
   function later(fn, ms) { const t = setTimeout(fn, C.clampDelay(ms)); st.timers.push(t); return t; }
   function every(fn, ms) { const t = setInterval(fn, C.clampDelay(ms)); st.timers.push(t); return t; }
@@ -148,12 +165,21 @@
       '<button class="btn" data-home>К заданиям</button></div></div>');
   }
 
-  // Stops this module's timers and forgets the open exam. Called by render() before every screen.
+  // Stops this module's timers and listeners and forgets the open exam. Called by render() before every screen.
+  // Typed answers that are still unsent get one last try (no retry, nothing painted); renderExam waits for it.
   function leave() {
     clearTimers();
+    st.listeners.splice(0).forEach((off) => off());
+    const s = st.save; st.save = null;
+    if (s) {
+      s.dead = true;
+      if (!s.closed && s.q.has()) {
+        st.leaving = { id: s.id, p: Promise.resolve(s.busy).then(() => (s.q.has() ? send(s, { force: true }) : null)).catch(() => {}) };
+      }
+    }
     if (st.id) st.mineAt = 0;                            // coming back to the hub: the list is read again
     st.req++;                                            // an answer still on its way must not paint
-    st.id = null; st.view = null; st.queue = null; st.away = null; st.shownPhase = ''; st.shownId = '';
+    st.id = null; st.view = null; st.shownPhase = ''; st.shownId = '';
   }
 
   async function renderExam(id) {
@@ -161,11 +187,14 @@
     const keepPhase = st.shownPhase, keepId = st.shownId;
     leave(); st.shownPhase = keepPhase; st.shownId = keepId;
     st.id = id;
+    const lv = st.leaving && st.leaving.id === id ? st.leaving.p : null; st.leaving = null;
     const my = ++st.req;                               // only the latest request may paint (A -> hub -> A)
     setBack(true); statsEl.innerHTML = '';
     if (!C) { fail('Не получилось загрузить пробник.'); return; }
     if (!auth) { fail('Чтобы открыть пробник, войди в тренажёр через Telegram.'); return; }
     appEl.innerHTML = '<div class="vbox"><div class="vwait" role="status"><div class="vwait-ring" aria-hidden="true"></div><p>Загружаю пробник…</p></div></div>';
+    // Answers typed on this exam just before (navigating away and straight back) must reach the server before it is read.
+    if (lv) { await Promise.race([lv, new Promise((res) => setTimeout(res, 2500))]); if (st.id !== id || my !== st.req) return; }
     let r;
     try { r = await xapi('/' + encodeURIComponent(id)); }
     catch (e) { if (st.id === id && my === st.req) fail('Нет связи с сервером. Проверь интернет.', true); return; }
@@ -185,6 +214,7 @@
     st.shownPhase = v.phase; st.shownId = v.id;
     if (v.phase === 'scheduled') return paintScheduled(v, again);
     if (v.phase === 'missed') return paintMissed(v);
+    if (v.phase === 'open') return paintOpen(v);
     appEl.innerHTML = shell('<p class="lead">' + esc(v.phase) + '</p>');   // replaced by later tasks
   }
 
@@ -220,11 +250,210 @@
       '<button class="btn" data-home>К заданиям</button></div></div>');
   }
 
+  // ---- the open phase ----
+  // The whole page is made of what the server sent; nothing here is built from it other than through esc() / Number() /
+  // safeHtml(), and no selector is ever built from a task number (cards are found through dataset).
+  // iPhone has no minus sign on a numeric keypad: always the text keyboard there (same attributes as ansAttrs of the generator).
+  const ansAttrs = () => IS_IPHONE ? 'type="text" autocapitalize="off" autocorrect="off" spellcheck="false"'
+    : 'type="text" inputmode="decimal"';
+  const ballWordOf = (n) => (typeof ballWord === 'function' ? ballWord(n) : 'б.');
+
+  function cardHTML(t, typed) {
+    const long = t.kind === 'long';
+    return '<div class="vcard" data-n="' + t.n + '" data-exn="' + t.n + '">' +
+      '<div class="vlabel">Задание ' + t.n + (long && t.max ? '<span class="vlabel-art"> · максимум ' + t.max + ' ' + ballWordOf(t.max) + '</span>' : '') + '</div>' +
+      '<div class="cond"><div class="tex">' + safeHtml(t.cond) + '</div></div>' +
+      (long ? photoBlockHTML(t) :
+        '<input class="v-input" ' + ansAttrs() + ' maxlength="40" placeholder="Ответ" data-ex-in="' + t.n + '" value="' + esc(typed[t.n]) + '" autocomplete="off" aria-label="Ответ на задание ' + t.n + '">') +
+      '</div>';
+  }
+  const photoBlockHTML = () => '<p class="vlong-hint">Решение записывай на листе. Фото решения прикрепишь к этому заданию.</p>';   // replaced by the photos task
+  const tgBlockHTML = () => '';       // filled in by the photos task
+  function mountPhotos() {}           // filled in by the photos task
+
+  // The timer starts empty: it is filled from the server clock only (never "NaN:NaN").
+  function barHTML() {
+    return '<div class="vbar"><span class="vtimer" id="ex-timer" role="timer"></span>' +
+      '<span class="vprog" id="ex-save" role="status" aria-live="polite"></span><span class="spacer"></span>' +
+      '<button class="btn primary" data-ex-finish>Завершить</button></div>';
+  }
+
+  function paintOpen(v) {
+    const id = st.id, tasks = C.wellFormedTasks(v.tasks);
+    if (!tasks.length) { fail('Не получилось загрузить задания пробника.', true); return; }
+    const typed = C.answersOf(v.answers, tasks), hasLong = tasks.some((t) => t.kind === 'long');
+    const dropped = !Array.isArray(v.tasks) || v.tasks.length !== tasks.length;
+    // One session per painted open screen: what is typed, what is in flight, and whether the screen is still ours.
+    const s = st.save = { id: id, q: new C.SaveQueue(), busy: null, fails: 0, nextAt: 0, dead: false, closed: false,
+      syncing: false, finishing: false, away: new C.AwayTracker(2), until: v.until, tick: null };
+    st.photos = Array.isArray(v.photos) ? v.photos.slice() : [];
+    bindOpen(s);
+    stageAndMount(shell(barHTML() +
+        (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши преподавателю.</p>' : '') +
+        tasks.map((t) => cardHTML(t, typed)).join('') +
+        (hasLong ? tgBlockHTML(v) : '') +
+        '<div style="text-align:center;margin-top:8px"><button class="btn primary" data-ex-finish>Завершить пробник</button></div>'),
+      () => st.save === s && !s.dead && parseRoute().view === 'exam',
+      () => { startTimer(s); mountPhotos(v); });
+  }
+
+  // ---- countdown by the server clock ----
+  function startTimer(s) {
+    const tick = () => {
+      if (s.dead) return;
+      const e = document.getElementById('ex-timer');
+      if (!st.synced || typeof s.until !== 'number' || !Number.isFinite(s.until)) { if (e) e.textContent = ''; return; }
+      const sec = C.leftSec(s.until, st.offset, Date.now());
+      if (e) { e.textContent = C.fmtLeft(sec); e.classList.toggle('low', sec <= 300); }
+      if (sec === 0) syncPhase(s);                    // idempotent: one sync cycle at a time
+    };
+    s.tick = tick; every(tick, 1000); tick();
+  }
+  const timeLeft = (s) => (st.synced && typeof s.until === 'number' && Number.isFinite(s.until) ? C.leftSec(s.until, st.offset, Date.now()) : -1);
+
+  // The screen takes the next phase from the server, never from the device clock: flush what is typed,
+  // ask, and if the server still says "open" ask again (2 s five times, then every 10 s). Replaces the screen only on a phase change.
+  function syncPhase(s) {
+    if (s.dead || s.syncing) return;
+    s.syncing = true;
+    let tries = 0;
+    const step = async () => {
+      if (s.dead) return;
+      await flush(s, { force: true });
+      if (s.dead) return;
+      let r = null;
+      try { r = await xapi('/' + encodeURIComponent(s.id)); } catch (e) { r = null; }
+      if (s.dead) return;
+      if (r && r.status === 200 && r.json && typeof r.json.phase === 'string') {
+        if (r.json.phase !== 'open') { adopt(s.id, r.json); return; }
+        setOffset(r.json.now);
+        if (typeof r.json.until === 'number' && Number.isFinite(r.json.until)) s.until = r.json.until;
+        if (timeLeft(s) > 0) { s.syncing = false; return; }       // the server says there is time left after all
+      }
+      tries++;
+      later(step, tries < 5 ? 2000 : 10000);
+    };
+    step();
+  }
+  // Shows a phase fetched by syncPhase: the same as renderExam, without a second request.
+  function adopt(id, json) {
+    const kp = st.shownPhase, ki = st.shownId;
+    leave(); st.shownPhase = kp; st.shownId = ki;
+    st.id = id; st.req++; st.view = json; setOffset(json.now);
+    paint(json);
+  }
+
+  // ---- autosave of part 1 ----
+  const setSaveText = (t, bad) => {
+    const e = document.getElementById('ex-save');
+    if (e) { e.textContent = t; e.classList.toggle('bad', !!bad); }
+  };
+  const live = (s) => !s.dead && st.save === s;
+
+  // One request. Typed answers stay queued until the server says 200; a failure backs off 5 s, 15 s, 30 s and keeps them.
+  // A stale screen (left, replaced) paints and acks nothing. Returns true when the server took the answers.
+  async function send(s, opt) {
+    const snap = s.q.snapshot();
+    if (live(s)) setSaveText('Сохраняю…');
+    let r = null;
+    try { r = await xapi('/' + s.id + '/answers', { method: 'POST', body: { answers: snap }, keep: !!(opt && opt.keep) }); } catch (e) { r = null; }
+    if (!live(s)) return !!(r && r.status === 200);
+    if (r && r.status === 200) {
+      s.q.ack(snap); s.fails = 0; s.nextAt = 0;
+      setSaveText(s.q.has() ? 'Сохраняю…' : 'Сохранено');
+      return true;
+    }
+    if (r && r.status === 409) { s.closed = true; setSaveText(''); syncPhase(s); return false; }   // the window is over: the server decides what comes next
+    s.fails++;
+    const d = C.retryDelay(s.fails);
+    s.nextAt = Date.now() + d;
+    setSaveText('Не сохранено — проверь связь', true);
+    clearTimeout(st.retryTimer);
+    st.retryTimer = setTimeout(() => flush(s, { force: true }), C.clampDelay(d));
+    return false;
+  }
+  // One request at a time; whatever is typed meanwhile goes out right after it. `force` ignores the back-off (the page is
+  // going away, or a button was pressed); `keep` makes the request survive a closing page.
+  function flush(s, opt) {
+    opt = opt || {};
+    if (!s || s.dead || s.closed || !s.q.has()) return Promise.resolve();
+    if (s.busy) return s.busy;
+    if (!opt.force && Date.now() < s.nextAt) return Promise.resolve();      // backing off: the retry timer will send it
+    clearTimeout(st.saveTimer);
+    s.busy = (async () => {
+      try { while (await send(s, opt) && s.q.has() && !s.dead && !s.closed) { /* typed while the request was out */ } }
+      finally { s.busy = null; }
+    })();
+    return s.busy;
+  }
+
+  // ---- finishing early ----
+  async function finishNow(s) {
+    if (s.finishing || s.dead) return;
+    const ok = await ask({ title: 'Завершить пробник?',
+      text: 'Ответы первой части после этого изменить нельзя. Фото второй части можно будет прикрепить ещё 10 минут.',
+      ok: 'Завершить', cancel: 'Вернуться' });
+    if (!ok || s.dead) return;
+    s.finishing = true;
+    document.querySelectorAll('[data-ex-finish]').forEach((b) => { b.disabled = true; });
+    try {
+      await flush(s, { force: true });
+      if (s.dead) return;
+      // Answers that could not be saved must not be cut off by finishing: the student keeps the page and tries again.
+      if (s.q.has() && !s.closed) { note('Ответы пока не сохранились', 'Проверь интернет и нажми «Завершить» ещё раз. Не закрывай эту страницу, пока не появится «Сохранено».'); return; }
+      const r = await xapi('/' + s.id + '/finish', { method: 'POST' }).catch(() => null);
+      if (s.dead) return;
+      if (!r || (r.status !== 200 && r.status !== 409)) { note('Не получилось завершить', 'Проверь интернет и нажми «Завершить» ещё раз. Ответы сохранены.'); return; }
+      renderExam(s.id);                                    // the server says which screen is next
+    } finally {
+      s.finishing = false;
+      if (!s.dead) document.querySelectorAll('[data-ex-finish]').forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  // ---- the away journal: when the page is hidden or loses focus ----
+  function currentTask() {
+    const cards = document.querySelectorAll('[data-exn]');
+    for (const c of cards) { if (c.getBoundingClientRect().bottom > 130) return c.dataset.exn; }
+    return '';
+  }
+  // Only while the exam is open by the server clock. The report is one shot: a refusal (for instance 400 for a
+  // too long interval, or 409 after the end) is ignored and never retried.
+  const openNow = (s) => !s.dead && !!st.view && st.view.phase === 'open' && timeLeft(s) !== 0;
+  function awayOut(s) { if (openNow(s) && !st.picker) s.away.hide(Date.now(), currentTask()); }
+  function awayBack(s) {
+    if (s.dead) return;
+    if (st.picker) { st.picker = false; return; }
+    const a = s.away.show(Date.now());
+    if (a && openNow(s)) xapi('/' + s.id + '/away', { method: 'POST', body: { n: a.n, sec: a.sec } }).catch(() => {});
+  }
+
+  // Everything the open screen listens to; leave() removes all of it.
+  function bindOpen(s) {
+    listen(appEl, 'input', (e) => {
+      const inp = e.target.closest && e.target.closest('[data-ex-in]');
+      if (!inp || s.dead) return;
+      s.q.set(inp.dataset.exIn, inp.value);
+      if (!s.fails) setSaveText('Сохраняю…');
+      clearTimeout(st.saveTimer); st.saveTimer = setTimeout(() => flush(s), C.clampDelay(700));
+    });
+    listen(appEl, 'focusout', (e) => { if (e.target.closest && e.target.closest('[data-ex-in]')) flush(s); });
+    listen(document, 'visibilitychange', () => {
+      if (document.visibilityState === 'hidden') { awayOut(s); flush(s, { force: true, keep: true }); }
+      else { awayBack(s); if (s.tick) s.tick(); }
+    });
+    listen(window, 'pagehide', () => flush(s, { force: true, keep: true }));
+    listen(window, 'blur', () => awayOut(s));
+    listen(window, 'focus', () => awayBack(s));
+    listen(window, 'online', () => flush(s, { force: true }));
+  }
+
   // ---- clicks on this module's elements ----
   appEl.addEventListener('click', (e) => {
     const open = e.target.closest('[data-exam]');
     if (open) { go('#/exam/' + open.dataset.exam); return; }
     if (e.target.closest('[data-ex-retry]') && st.id) { renderExam(st.id); return; }
+    if (e.target.closest('[data-ex-finish]') && st.save) { finishNow(st.save); return; }
   });
 
   window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, leave: leave, safeHtml: safeHtml, reset: reset };

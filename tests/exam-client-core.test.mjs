@@ -80,3 +80,65 @@ test('refreshDelay waits for a start ahead and backs off 30 s, 60 s for a past o
   assert.equal(C.refreshDelay(NaN, now, 2), 60000);
   assert.equal(C.refreshDelay(now / 1000, now, 1), 30000);                     // exactly now counts as past
 });
+
+test('wellFormedTasks keeps well-formed tasks and drops the rest without throwing', () => {
+  const good = { n: 1, kind: 'short', max: 1, cond: '<p>x</p>' };
+  const out = C.wellFormedTasks([
+    good,
+    { n: 13, kind: 'long', max: 2, cond: '<p>y</p>' },
+    { n: 1, kind: 'short', max: 1, cond: 'dup' },                // duplicate number
+    { n: '__proto__', kind: 'short', max: 1, cond: 'a' },
+    { n: 'constructor', kind: 'short', max: 1, cond: 'a' },
+    { n: 0, kind: 'short', max: 1, cond: 'a' },
+    { n: 41, kind: 'short', max: 1, cond: 'a' },
+    { n: 2.5, kind: 'short', max: 1, cond: 'a' },
+    { n: '3', kind: 'short', max: 1, cond: 'a' },                // a string is not a task number
+    { n: 4, kind: 'medium', max: 1, cond: 'a' },
+    { n: 5, kind: 'short', max: 1, cond: { toString() { return 'x'; } } },
+    { n: 6, kind: 'short', max: 1 },                              // no statement
+    { n: 7, kind: 'short', max: 1, cond: 'x'.repeat(C.MAX_COND + 1) },
+    null, 5, 'x', [], undefined,
+  ]);
+  assert.deepEqual(out.map((t) => t.n), [1, 13]);
+  assert.deepEqual(out[1], { n: 13, kind: 'long', max: 2, cond: '<p>y</p>' });
+  assert.deepEqual(C.wellFormedTasks(null), []);
+  assert.deepEqual(C.wellFormedTasks({ length: 3 }), []);
+  assert.deepEqual(C.wellFormedTasks('abc'), []);
+});
+
+test('wellFormedTasks coerces max into a small integer', () => {
+  const m = (max) => C.wellFormedTasks([{ n: 13, kind: 'long', max: max, cond: 'c' }])[0].max;
+  assert.equal(m(3), 3);
+  assert.equal(m(2.6), 3);
+  assert.equal(m('9'), 0);                                       // not a number: the label is left out
+  assert.equal(m(NaN), 0);
+  assert.equal(m(-4), 0);
+  assert.equal(m(Infinity), 0);
+  assert.equal(m(1e9), 10);                                      // the upload check allows 1..10
+});
+
+test('answersOf takes only the typed text of the listed short tasks', () => {
+  const tasks = C.wellFormedTasks([{ n: 1, kind: 'short', max: 1, cond: 'a' }, { n: 2, kind: 'short', max: 1, cond: 'b' },
+    { n: 13, kind: 'long', max: 2, cond: 'c' }]);
+  const raw = JSON.parse('{"1":"5","2":7,"13":"text","99":"x","__proto__":"p","constructor":"c"}');
+  assert.deepEqual(C.answersOf(raw, tasks), { 1: '5' });         // a number is not typed text; long and unknown tasks are not answers
+  assert.deepEqual(C.answersOf(null, tasks), {});
+  assert.deepEqual(C.answersOf('abc', tasks), {});
+  assert.deepEqual(C.answersOf([], tasks), {});
+  assert.equal(C.answersOf({ 1: 'x'.repeat(100) }, tasks)[1].length, 40);
+});
+
+test('retryDelay backs off 5 s, 15 s, 30 s and stays there', () => {
+  assert.deepEqual([1, 2, 3, 4, 50].map(C.retryDelay), [5000, 15000, 30000, 30000, 30000]);
+  assert.equal(C.retryDelay(0), 5000);
+  assert.equal(C.retryDelay(NaN), 5000);
+});
+
+test('SaveQueue survives an ack of a value that is not queued any more', () => {
+  const q = new C.SaveQueue();
+  q.set(1, 'a');
+  q.ack({ 1: 'a', 2: 'zzz' });
+  assert.equal(q.has(), false);
+  q.ack({});
+  assert.equal(q.has(), false);
+});

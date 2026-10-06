@@ -254,6 +254,11 @@
   /* teacher HTML that did not pass the check is shown as plain text */
   .ex-plain{white-space:pre-wrap;overflow-wrap:anywhere;}
   .ex-note{margin:var(--s2) 0 0;font-size:var(--fs-sm);color:var(--ink-3);}
+  .vtimer.low{color:var(--err-text);}
+  .vbar .vprog.bad{color:var(--err-text);}
+  /* the save note may be two lines on a phone; it shrinks and wraps instead of pushing the button to a second row */
+  .vbar #ex-save{flex:1 1 0;min-width:0;}
+  .vbar #ex-save.bad{line-height:1.25;}
   @media (prefers-reduced-motion:reduce){.ex-banner.ex-fresh,.ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn,.ex-screen-in{animation:none;}}
 
   /* сводка прогресса — плоская, без тени: это фон, а не объект */
