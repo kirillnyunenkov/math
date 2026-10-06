@@ -255,6 +255,8 @@
   .ex-plain{white-space:pre-wrap;overflow-wrap:anywhere;}
   .ex-note{margin:var(--s2) 0 0;font-size:var(--fs-sm);color:var(--ink-3);}
   .ex-note.ex-savehint{margin:0 0 var(--s3);color:var(--err-text);}
+  .vbar #ex-save.ok{color:var(--ok-text);font-weight:600;animation:exSaved .3s ease-out;}
+  @keyframes exSaved{from{opacity:0;transform:translateY(3px) scale(.96);}to{opacity:1;transform:none;}}
   .vtimer.low{color:var(--err-text);}
   /* фото решений второй части: плитки 96 px, статус загрузки внизу плитки, крестик справа сверху */
   .ex-photos{display:flex;flex-direction:column;gap:var(--s3);margin-top:var(--s4);}
@@ -262,6 +264,24 @@
   .ex-thumbs:empty{display:none;}
   .ex-thumb{position:relative;margin:0;width:96px;height:96px;border:1px solid var(--line);border-radius:var(--r-md);overflow:hidden;background:var(--surface-2);}
   .ex-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+  .ex-thumb.ex-z img{cursor:zoom-in;}
+  .ex-thumb.ex-z::after{content:"⤢";position:absolute;right:4px;bottom:4px;width:22px;height:22px;border-radius:var(--r-full);
+    background:rgba(0,0,0,.5);color:#fff;font-size:13px;line-height:22px;text-align:center;pointer-events:none;}
+  .ex-thumb.ex-busy.ex-z::after{display:none;}
+  /* the full-size viewer: a dark layer over the page; the picture is as large as the screen allows, a tap enlarges it */
+  html.ex-lb-open{overflow:hidden;}
+  .ex-lb{position:fixed;inset:0;z-index:100000;background:rgba(10,10,12,.94);display:flex;flex-direction:column;overscroll-behavior:contain;}
+  .ex-lb-bar{display:flex;align-items:center;justify-content:space-between;padding:var(--s2) var(--s3);padding-top:max(var(--s2),env(safe-area-inset-top));color:#fff;flex:0 0 auto;}
+  .ex-lb-cnt{font-size:var(--fs-sm);opacity:.85;font-variant-numeric:tabular-nums;}
+  .ex-lb-x{width:48px;height:48px;border-radius:var(--r-full);border:1px solid rgba(255,255,255,.28);background:rgba(255,255,255,.1);color:#fff;font-size:30px;line-height:1;cursor:pointer;margin-left:auto;}
+  .ex-lb-stage{flex:1 1 auto;min-height:0;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+  .ex-lb-img{max-width:100%;max-height:100%;object-fit:contain;display:block;cursor:zoom-in;}
+  .ex-lb.zoom .ex-lb-stage{overflow:auto;display:block;-webkit-overflow-scrolling:touch;}
+  .ex-lb.zoom .ex-lb-img{max-width:none;max-height:none;width:220%;height:auto;cursor:zoom-out;}
+  .ex-lb-nav{position:absolute;top:50%;transform:translateY(-50%);width:48px;height:64px;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:34px;cursor:pointer;border-radius:var(--r-md);}
+  .ex-lb-nav.prev{left:6px;}.ex-lb-nav.next{right:6px;}
+  .ex-lb-nav[hidden],.ex-lb.zoom .ex-lb-nav,.ex-lb.zoom .ex-lb-tip{display:none;}
+  .ex-lb-tip{margin:0;padding:var(--s2) var(--s3) max(var(--s3),env(safe-area-inset-bottom));text-align:center;font-size:var(--fs-xs);color:rgba(255,255,255,.65);flex:0 0 auto;}
   .ex-thumb img.ex-broken{visibility:hidden;}
   .ex-thumb.ex-busy img{opacity:.55;}
   .ex-thumb.ex-err{border-color:var(--err);}
@@ -292,7 +312,7 @@
   /* the save note may be two lines on a phone; it shrinks and wraps instead of pushing the button to a second row */
   .vbar #ex-save{flex:1 1 0;min-width:0;}
   .vbar #ex-save.bad{line-height:1.25;}
-  @media (prefers-reduced-motion:reduce){.ex-banner.ex-fresh,.ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn,.ex-screen-in{animation:none;}}
+  @media (prefers-reduced-motion:reduce){.ex-banner.ex-fresh,.ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn,.ex-screen-in,.vbar #ex-save.ok{animation:none;}}
 
   /* сводка прогресса — плоская, без тени: это фон, а не объект */
   .hub-prog{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
