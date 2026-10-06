@@ -182,6 +182,13 @@
   .list .it:last-child{border-bottom:none;}
   .list .it .vres{flex:1;text-align:right;}
   .list .it .btn{min-height:32px;padding:0 var(--s3);}
+  .list .it{align-items:center;flex-wrap:wrap;}
+  .chip.ex-open,.chip.ex-photos{background:var(--accent-soft);color:var(--accent);}
+  .chip.ex-submitted{background:var(--warn-soft);color:var(--warn-text);}
+  .chip.ex-checked{background:var(--ok-soft);color:var(--ok-text);}
+  .chip.ex-missed{background:var(--err-soft);color:var(--err-text);}
+  .chip.ex-scheduled{background:var(--todo-soft);color:var(--todo-text);}
+  .acts-cell{white-space:nowrap;text-align:right;}
   .wrong .it{display:block;}
   .wrong .meta{display:flex;justify-content:space-between;gap:var(--s3);color:var(--ink-3);font-size:var(--fs-xs);}
   .wrong .cond{margin:6px 0;font-size:var(--fs-sm);color:var(--ink-2);}
@@ -236,6 +243,8 @@
 
 <script src="sync-core.js"></script>
 <script src="stats-core.js"></script>
+<script src="exam-core.js"></script>
+<script src="exam-panel-core.js"></script>
 <script src="config.js"></script>
 <script>
 /* Панель преподавателя. Данные учеников сюда приходят только с сервера и
@@ -256,10 +265,10 @@ async function api(path,opt){opt=opt||{};
   let json=null;try{json=await r.json();}catch(e){}
   if(r.status===401&&!opt.anon){logout('Вход больше не действует. Открой актуальную ссылку преподавателя.');throw new Error('401');}
   return{status:r.status,json:json};}
-async function all(c,filter){
+async function all(c,filter,fields){
   const out=[];
   for(let page=1;;page++){
-    const r=await api(`/collections/${c}/records?perPage=500&page=${page}&skipTotal=1&sort=created`+(filter?'&filter='+encodeURIComponent(filter):''));
+    const r=await api(`/collections/${c}/records?perPage=500&page=${page}&skipTotal=1&sort=created`+(filter?'&filter='+encodeURIComponent(filter):'')+(fields?'&fields='+encodeURIComponent(fields):''));
     if(r.status!==200)throw new Error(c+' '+r.status);
     out.push(...r.json.items);if(r.json.items.length<500)return out;
   }}
@@ -302,6 +311,15 @@ async function load(){
   const linkOf={};links.forEach(l=>linkOf[l.user]=l);
   const userOf={};users.forEach(u=>userOf[u.id]=u);
   data={students,leads:pr.json.items.filter(p=>!p.mine),profOf,userOf,linkOf,byUser,loaded:Date.now()};
+  /* Exams: a server without the exam collections must not break the panel
+     (any error except a 401 gives an empty list). `tasks`/`key` of exams and
+     `log` of assignments are never requested here — hence the field lists. */
+  const soft=p=>p.catch(e=>{if(e.message==='401')throw e;return [];});
+  const [exams,asg,photos]=await Promise.all([
+    soft(all('exams',null,'id,title,full,created')),
+    soft(all('exam_assignments',null,'id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,via_tg,answers,ok,part2,created')),
+    soft(all('exam_photos',null,'id,assignment,user,n,file'))]);
+  data.exams=exams;data.asg=asg;data.photos=photos;
 }
 /* A lead's journal is fetched only when their card is opened. */
 async function loadOne(id){
@@ -330,12 +348,28 @@ function ago(ts){
 const fmtDate=ts=>new Date(ts).toLocaleString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
 const fmtDay=ts=>new Date(ts).toLocaleDateString('ru-RU',{timeZone:'Europe/Moscow',day:'numeric',month:'short'});
 
-const tabs=cur=>`<div class="tabs">
+// the third tab's badge counts works waiting for a check, else the catalog size
+const tabs=cur=>{const wait=(data.asg||[]).filter(a=>phaseOf(a)==='submitted').length;
+  return `<div class="tabs">
   <a href="#/" class="${cur==='s'?'on':''}">Ученики <span>${data.students.length}</span></a>
-  <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a></div>`;
+  <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a>
+  <a href="#/exams" class="${cur==='x'?'on':''}">Пробники <span>${wait||(data.exams||[]).length}</span></a></div>`;};
 /* Telegram usernames are [A-Za-z0-9_]; anything else is shown as plain text. */
 const tgLink=un=>/^[A-Za-z0-9_]{1,64}$/.test(un||'')?`<a href="https://t.me/${un}" target="_blank" rel="noopener">@${un}</a>`:'<span class="muted">—</span>';
 const pbTime=s=>s?Date.parse(String(s).replace(' ','T')):null;
+
+// ---- пробники от преподавателя ----
+const nowS=()=>Math.floor(Date.now()/1000);
+const examOf=id=>(data.exams||[]).find(e=>e.id===id);
+// the catalog is numbered by upload order: the owner says "пробник 3"
+const examNo=id=>(data.exams||[]).findIndex(e=>e.id===id)+1;
+const examLabel=e=>`№${examNo(e.id)} · ${e.title}`;
+const nameOf=uid=>{const u=(data.userOf||{})[uid];return u?(u.name||u.login):'—';};
+const phaseOf=a=>ExamCore.phase({start:a.start,duration:a.duration,opened:a.opened,finished:a.finished,photos_done:a.photos_done,checked:a.checked},nowS());
+const asgOfUser=uid=>(data.asg||[]).filter(a=>a.user===uid);
+const photosOfAsg=id=>(data.photos||[]).filter(p=>p.assignment===id);
+const fmtTs=ts=>fmtDate(ts*1000);
+const chipFor=ph=>`<span class="chip ex-${ph}">${ExamPanelCore.PHASE_TEXT[ph]}</span>`;
 
 // ---- список учеников ----
 let sortKey='last',sortDir=-1;
@@ -528,11 +562,44 @@ async function setActive(uid,on){
   await refresh();
 }
 
+// ---- пробники: списки и каталог ----
+function asgRow(a,acts){
+  const e=examOf(a.exam),ph=phaseOf(a),ps=photosOfAsg(a.id).length;
+  return `<tr class="row" data-act="open-check" data-id="${esc(a.id)}">
+    <td><span class="name">${esc(nameOf(a.user))}</span></td>
+    <td>${e?esc(examLabel(e)):'—'}</td><td>${esc(fmtTs(a.start))}</td><td>${chipFor(ph)}</td>
+    <td class="num">${a.settled?esc(a.p1):'—'}</td>
+    <td class="hide-m">${ps?ps+' фото':'—'}</td>
+    <td class="acts-cell">${acts||''}</td></tr>`;
+}
+function renderExams(){
+  const A=data.asg||[],E=data.exams||[],by=ph=>A.filter(a=>phaseOf(a)===ph).sort((x,y)=>y.start-x.start);
+  const table=(rows,withActs)=>rows.length?`<div class="table-wrap"><table>
+    <thead><tr><th>Ученик</th><th>Пробник</th><th>Начало</th><th>Статус</th><th class="num">1 часть</th><th class="hide-m">Вторая часть</th><th></th></tr></thead>
+    <tbody>${rows.map(a=>asgRow(a,withActs?`<button class="btn quiet" data-act="move" data-id="${esc(a.id)}">Перенести</button> <button class="btn danger" data-act="cancel" data-id="${esc(a.id)}">Отменить</button>`:'')).join('')}</tbody></table></div>`:'';
+  const toCheck=by('submitted'),live=[...by('open'),...by('photos'),...by('scheduled')],missed=by('missed'),done=by('checked').slice(0,20);
+  const sec=(title,html,empty)=>`<div class="panel"><h3>${title}</h3>${html||`<p class="muted">${empty}</p>`}</div>`;
+  const times=id=>A.filter(a=>a.exam===id).length;
+  app.innerHTML=`${tabs('x')}
+    <div class="toolbar"><h2 class="grow">Пробники</h2><button class="btn" data-act="assign">Назначить пробник</button></div>
+    <p class="lead">Свои пробники лежат в закрытом каталоге. Ученик видит пробник только после того, как ты назначил его на время: выбери ученика, пробник из каталога, дату и время.</p>
+    ${sec('Ждут проверки',table(toCheck),'Работ на проверку нет.')}
+    ${sec('Назначены и идут',table(live,true),'Ничего не назначено.')}
+    ${missed.length?sec('Пропущены',table(missed,true),''):''}
+    <div class="panel"><h3>Каталог</h3>
+      ${E.length?`<div class="list">${E.map(e=>`<div class="it"><span><b>№${examNo(e.id)} · ${esc(e.title)}</b>${e.full?' <span class="chip">полный вариант</span>':''} <span class="muted">· загружен ${fmtDay(pbTime(e.created))}${times(e.id)?' · назначен '+times(e.id)+' раз':''}</span></span>
+        <span><button class="btn" data-act="assign" data-exam="${esc(e.id)}">Назначить</button></span></div>`).join('')}</div>`
+        :'<p class="muted">Каталог пуст. Пробники готовятся и загружаются через Claude Code (навык assigned-exam).</p>'}
+      <p class="muted">Новый пробник: пришли исходник в чат Claude Code — он соберёт файл, сверит ответы, покажет предпросмотр и загрузит сюда.</p>
+    </div>
+    ${done.length?sec('Проверены (последние 20)',table(done),''):''}`;
+}
+
 // ---- маршруты ----
 async function refresh(){await load();for(const k in summaries)delete summaries[k];route();}
 function route(){
   const m=location.hash.match(/^#\/s\/([a-z0-9]+)$/);
-  if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else renderList();
+  if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else if(location.hash==='#/exams')renderExams();else renderList();
   window.scrollTo(0,0);
 }
 function render(msg){
@@ -563,6 +630,7 @@ document.addEventListener('click',e=>{
   else if(a==='active')setActive(id,b.dataset.v==='1');
   else if(a==='vdel')delVariant(b.dataset.user,id);
   else if(a==='vdel-go')delVariantGo(b.dataset.user,id);
+  else if(a==='open-check')location.hash='#/check/'+id;
 });
 document.getElementById('sheet-ov').addEventListener('click',e=>{if(e.target.id==='sheet-ov')closeSheet();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet();});
