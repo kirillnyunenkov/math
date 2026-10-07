@@ -1558,6 +1558,34 @@
     .lnk .chev{transition:none;}
     .hub-go:hover .hg-act .ic{transform:none;}
   }
+  .my-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5);margin:0 0 var(--s4);}
+  .my-card h3{margin:0 0 var(--s3);font-size:var(--fs-md);}
+  .my-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .my-tbl{border-collapse:collapse;font-size:var(--fs-sm);font-variant-numeric:tabular-nums;}
+  .my-tbl th,.my-tbl td{border:1px solid var(--line);min-width:42px;height:30px;padding:0 4px;text-align:center;font-weight:500;}
+  .my-tbl th.my-n{position:sticky;left:0;background:var(--surface);min-width:34px;z-index:1;}
+  .my-tbl td.my-sol,.my-tbl th.my-sol{min-width:64px;background:var(--surface-2);}
+  .my-full{background:var(--ok-soft);color:var(--ok-text);}
+  .my-part{background:var(--warn-soft);color:var(--warn-text);}
+  .my-zero{background:var(--err-soft);color:var(--err-text);}
+  .my-na{color:var(--ink-3);}
+  .my-total td,.my-total th{font-weight:700;}
+  .my-legend{margin:var(--s3) 0 0;font-size:var(--fs-xs);color:var(--ink-2);}
+  .my-ch{display:block;}
+  .my-gl{stroke:var(--line);stroke-width:1;}
+  .my-gt,.my-dt{fill:var(--ink-2);font-size:11px;}
+  .my-vt{fill:var(--ink);font-size:12px;font-weight:600;}
+  .my-line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;}
+  .my-dot{fill:var(--accent);}
+  .my-list{display:flex;flex-direction:column;gap:var(--s2);}
+  .my-row{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;font:inherit;color:inherit;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3) var(--s4);min-height:52px;cursor:pointer;}
+  .my-row.my-manual{cursor:default;}
+  .my-r-t{display:block;font-weight:600;}
+  .my-r-s{display:block;font-size:var(--fs-sm);color:var(--ink-2);margin-top:2px;}
+  .my-r-body{flex:1;min-width:0;}
+  .my-r-go{margin-left:auto;flex:none;color:var(--accent);font-weight:600;font-size:var(--fs-sm);}
+  .my-new{background:var(--accent);color:var(--accent-on);border-radius:var(--r-md);padding:1px 7px;font-size:var(--fs-xs);font-weight:600;}
 </style>
 <script defer src="katex/katex.min.js"></script>
 <script defer src="katex/auto-render.min.js"></script>
@@ -1858,7 +1886,7 @@ const Sync={
     const a=document.activeElement;
     if(a&&(a.tagName==='INPUT'||a.tagName==='TEXTAREA'))return;
     if(parseRoute().view==='variant'&&variant&&!variant.finished)return;
-    if(parseRoute().view==='exam')return;
+    if(parseRoute().view==='exam'||parseRoute().view==='exams')return;
     render();},
   expired(disabled){
     auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
@@ -2661,6 +2689,7 @@ function doInstall(){
 function parseRoute(){
   if(/#\/help\b/.test(location.hash))return{view:'help'};
   if(/#\/v\b/.test(location.hash))return{view:'variant'};
+  if(/#\/exams\b/.test(location.hash))return{view:'exams'};
   const ex=location.hash.match(/#\/exam\/([A-Za-z0-9]+)/);if(ex)return{view:'exam',id:ex[1]};
   const m=location.hash.match(/#\/t\/(\d+)/);return m?{view:'task',n:+m[1]}:{view:'hub'};
 }
@@ -3118,6 +3147,7 @@ function render(){
   if(r.view==='help'||isStandalone()){installEl.style.setProperty('display','none','important');}else{installEl.style.removeProperty('display');}
   if(r.view==='help')renderHelp();
   else if(r.view==='exam'&&window.ExamUI)exUI('render',r.id);
+  else if(r.view==='exams'&&window.ExamUI)exUI('renderMy');
   else if(r.view==='variant')renderVariant();
   else if(r.view==='task')renderTask(r.n);
   else renderHub();
@@ -3682,6 +3712,8 @@ window.addEventListener('DOMContentLoaded',()=>{
 </script>
 <script src="exam-validate.js"></script>
 <script src="exam-client-core.js"></script>
+<script src="exam-history-core.js"></script>
+<script src="exam-my-view.js"></script>
 <script src="exam.js"></script>
 </body>
 </html>

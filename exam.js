@@ -1353,5 +1353,23 @@
     if (phLive(P) && files.length) addFiles(P, f.dataset.exFile, files);
   });
 
-  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, leave: leave, safeHtml: safeHtml, reset: reset };
+  // ---- "Мои пробники": the dashboard and the list of every checked exam ----
+  async function renderMy() {
+    leave(); st.id = null;
+    const my = ++st.req;
+    setBack(true); statsEl.innerHTML = '';
+    if (!C || !window.ExamMyView) { fail('Не получилось загрузить страницу.'); return; }
+    if (!auth) { fail('Чтобы увидеть свои пробники, войди в тренажёр через Telegram.'); return; }
+    appEl.innerHTML = '<div class="vbox"><div class="vwait" role="status"><div class="vwait-ring" aria-hidden="true"></div><p>Загружаю пробники…</p></div></div>';
+    let r;
+    try { r = await xapi('/summary'); }
+    catch (e) { if (my === st.req && parseRoute().view === 'exams') fail('Нет связи с сервером. Проверь интернет.'); return; }
+    if (my !== st.req || parseRoute().view !== 'exams') return;
+    if (r.status === 401 || r.status === 403) { fail('Чтобы увидеть свои пробники, войди в тренажёр через Telegram.'); return; }
+    if (r.status !== 200 || !r.json || !Array.isArray(r.json.items)) { fail('Не получилось загрузить пробники.'); return; }
+    appEl.innerHTML = shell(window.ExamMyView.pageHtml(r.json.items, { seen: seen() }));
+    appEl.querySelectorAll('[data-my-scroll]').forEach((el) => { el.scrollLeft = el.scrollWidth; });   // the newest exams are on the right
+  }
+
+  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, renderMy: renderMy, leave: leave, safeHtml: safeHtml, reset: reset };
 })();

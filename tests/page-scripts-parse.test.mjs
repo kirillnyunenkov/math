@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { Script } from 'node:vm';
 
-for (const f of ['exam.js', 'exam-client-core.js', 'exam-validate.js', 'exam-panel-core.js']) {
+for (const f of ['exam.js', 'exam-client-core.js', 'exam-validate.js', 'exam-panel-core.js', 'exam-history-core.js', 'exam-my-view.js']) {
   test(`${f} compiles`, () => {
     const src = readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
     assert.doesNotThrow(() => new Script(src, { filename: f }));
