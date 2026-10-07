@@ -1060,3 +1060,22 @@ test('manual exams: validation, duplicates, listing and delete', async () => {
   assert.equal((await req('DELETE', `/ege/exams/history/${id}`, tok.teacher)).status, 404);
   assert.equal((await summary(s.token)).json.items.length, 0);
 });
+
+test('manual exams: a test score of 0 is accepted and comes back as 0', async () => {
+  const s = await student(7000000125);
+  const r = await histPost(tok.teacher, { user: s.id, date: '2025-12-01', title: 'Нулевой', ...ROW({ test: 0 }) });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const it = (await summary(s.token)).json.items[0];
+  assert.equal(it.test, 0);
+});
+
+test('manual exams: na must be a list of distinct task numbers', async () => {
+  const s = await student(7000000126);
+  const add = (o) => histPost(tok.teacher, { user: s.id, date: '2025-12-02', title: 'Список na', ...ROW(), ...o });
+  assert.equal((await add({ na: 6 })).status, 400);
+  assert.equal((await add({ na: { 6: 1 } })).status, 400);
+  assert.equal((await add({ na: '6' })).status, 400);
+  assert.equal((await add({ na: [6, 6] })).status, 400);
+  assert.equal((await add({ na: ['6'] })).status, 400);
+  assert.equal((await add({ na: [6] })).status, 200);
+});

@@ -521,13 +521,21 @@ function histAdd(e) {
     const n = Hist.NUMS[i], v = incoming[String(n)];
     scores[n] = v == null ? null : (intOf(v) === null ? -1 : v);
   }
-  const arr = b.na || [];
-  for (let i = 0; i < arr.length; i++) { const n = intOf(arr[i]); if (n === null) return fail(e, 400, "bad na"); na.push(n); }
+  const arr = b.na == null ? [] : b.na;
+  if (typeof arr === "string" || typeof arr.length !== "number") return fail(e, 400, "bad na");
+  for (let i = 0; i < arr.length; i++) {
+    const n = intOf(arr[i]);
+    if (n === null || na.indexOf(n) >= 0) return fail(e, 400, "bad na");
+    na.push(n);
+  }
   const bad = Hist.checkManual(scores, na) || (intOf(b.test) === null ? "Тестовый балл: целое число от 0 до 100." : Hist.checkTest(b.test));
   if (bad) return fail(e, 400, bad);
   const rec = new Record($app.findCollectionByNameOrId("exam_history"));
   rec.set("user", user.id); rec.set("date", date); rec.set("title", title); rec.set("scores", scores); rec.set("na", na); rec.set("test", b.test);
-  try { $app.save(rec); } catch (_) { return fail(e, 400, "already added"); }
+  try { $app.save(rec); } catch (err) {
+    // only the unique index (same student, date and title) is the teacher's mistake; anything else is ours
+    return /unique/i.test(String(err)) ? fail(e, 400, "already added") : fail(e, 500, "could not save");
+  }
   return e.json(200, { id: rec.id });
 }
 
