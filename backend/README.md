@@ -130,6 +130,22 @@ Then the files:
 
 Verify: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/x/photos` prints `403`.
 
+### Teacher photos in the comment of a task
+
+While checking, the teacher can attach up to 5 photos to the comment of each long task (panel, check page: the
+button, a screenshot pasted into the comment field, or a dropped file). They live in their own collection
+`exam_feedback_photos` (migration `1790800009_exam_feedback_photos.js`); the student reads them only once the exam is
+checked (`assignment.checked > 0`), and sees them under "Мой комментарий". Upload and delete reuse the existing
+`POST/DELETE /api/ege/exams/{id}/photos` routes (a teacher token takes the feedback branch), so the Caddy 12 MB rule
+and `exams.pb.js` need no change. Rollout: backup, then the migration and `exams.js`, then the site:
+
+    ssh root@185.249.154.78 'systemctl start ege-api-backup.service'
+    scp backend/pb_migrations/1790800009_exam_feedback_photos.js root@185.249.154.78:/opt/ege-api/pb_migrations/
+    scp backend/pb_hooks/exams.js root@185.249.154.78:/opt/ege-api/pb_hooks/
+    ssh root@185.249.154.78 'chown egeapi: /opt/ege-api/pb_migrations/1790800009_exam_feedback_photos.js /opt/ege-api/pb_hooks/exams.js && systemctl restart ege-api && sleep 2 && systemctl is-active ege-api'
+
+A migration runs on restart. Before it, the panel's request for the new collection fails softly (no photos, the check page still works).
+
 ### Rollout of the trainer screens
 
 Precondition: the "Photos through the bot" rollout (migration `1790800008_exam_tg_photos.js`, `exams.pb.js`,

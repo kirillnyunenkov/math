@@ -677,7 +677,8 @@
     const known = tasks.filter((t) => t.kind === 'long').map((t) => String(t.n));
     return { id: id, s: null, known: known, server: C.wellFormedPhotos(list, known), pending: [], local: new Map(), urls: new Set(), msgs: new Map(),
       deleting: new Set(), ro: false, ctls: new Set(), timers: new Set(), ftoken: '', ftokenAt: 0, tokP: null, rev: 0, seq: 0, busy: null,
-      polling: false, pollT: 0, pollFails: 0, polledAt: 0, gen: 0, guard: null, listGone: false, dead: false };
+      polling: false, pollT: 0, pollFails: 0, polledAt: 0, gen: 0, guard: null, listGone: false, dead: false,
+      fb: [] };                                                           // the teacher's photos for the comments (result screen only)
   }
   const phLive = (P) => !!P && !P.dead && !!P.s && live(P.s);
   const uploadingP = (P) => !!P && P.pending.some((x) => x.state !== 'err');
@@ -764,8 +765,8 @@
     P.tokP = p;
     return p;
   }
-  const thumbUrl = (tok, p) => API + '/files/exam_photos/' + encodeURIComponent(p.id) + '/' + encodeURIComponent(p.file) + '?token=' + encodeURIComponent(tok);
-  const needsToken = (P) => P.server.some((p) => !P.local.has(p.id)) && (!P.ftoken || Date.now() - P.ftokenAt >= 60000);
+  const thumbUrl = (tok, p, coll) => API + '/files/' + (coll || 'exam_photos') + '/' + encodeURIComponent(p.id) + '/' + encodeURIComponent(p.file) + '?token=' + encodeURIComponent(tok);
+  const needsToken = (P) => (P.server.some((p) => !P.local.has(p.id)) || P.fb.length > 0) && (!P.ftoken || Date.now() - P.ftokenAt >= 60000);
 
   // ---- drawing ----
   // The block of a task (n = '13'), found through dataset, never through a selector built from n; n = '' is the bot's block.
@@ -818,6 +819,20 @@
     if (!P || P.dead) return;
     P.known.forEach((n) => drawBlock(P, n));
     drawBlock(P, '');
+    drawFb(P);
+  }
+  // The teacher's photos under the comment of a task; found through dataset like the student's blocks.
+  function drawFb(P) {
+    if (!P.fb.length) return;
+    const roots = appEl.querySelectorAll('[data-ex-fb]');
+    for (let i = 0; i < roots.length; i++) {
+      const n = roots[i].dataset.exFb, box = roots[i].querySelector('.ex-thumbs');
+      const html = P.fb.filter((p) => p.n === n).map((p) => '<figure class="ex-thumb' + (P.ftoken ? ' ex-z' : '') + '">' + (P.ftoken
+        ? '<img data-ex-fbimg="' + esc(p.id) + '" src="' + esc(thumbUrl(P.ftoken, p, 'exam_feedback_photos')) + '" alt="Фото к комментарию, задание ' + esc(n) + '" loading="lazy" decoding="async">'
+        : '<span class="ex-nopic" aria-hidden="true"></span>') + '</figure>').join('');
+      const sig = P.ftoken ? 'T' + html.length : '';
+      if (box && box._exSig !== sig) { box.innerHTML = html; box._exSig = sig; }
+    }
   }
   // The line under a block. A problem stays until the next success or the next try; a `keep` notice (some of the chosen
   // files were left out) also survives the uploads that follow, until the student acts on that block again.
@@ -830,14 +845,15 @@
   // A thumbnail that does not load (the token ran out while the page stayed open) gets one more try with a new token.
   appEl.addEventListener('error', (e) => {
     const img = e.target;
-    if (!img || img.tagName !== 'IMG' || !img.hasAttribute('data-ex-img')) return;
+    if (!img || img.tagName !== 'IMG' || !(img.hasAttribute('data-ex-img') || img.hasAttribute('data-ex-fbimg'))) return;
     const P = st.save && st.save.ph;
     if (!phLive(P)) return;
     if (img.dataset.exTried) { img.classList.add('ex-broken'); return; }
     img.dataset.exTried = '1';
-    const p = P.server.find((x) => x.id === img.dataset.exImg);
+    const fb = img.hasAttribute('data-ex-fbimg');
+    const p = fb ? P.fb.find((x) => x.id === img.dataset.exFbimg) : P.server.find((x) => x.id === img.dataset.exImg);
     if (!p) return;
-    freshFileToken(P, 10000).then((tok) => { if (phLive(P) && tok && img.isConnected) img.src = thumbUrl(tok, p); });
+    freshFileToken(P, 10000).then((tok) => { if (phLive(P) && tok && img.isConnected) img.src = thumbUrl(tok, p, fb ? 'exam_feedback_photos' : undefined); });
   }, true);
 
   // The server list became the truth: show it (the token is looked at next, so that new thumbnails can load).
@@ -1166,7 +1182,9 @@
     const photos = P.server.some((p) => p.n === String(n)) ? '<div class="ex-photos" data-ex-ph="' + n + '"><div class="ex-thumbs"></div></div>' : '';
     return '<div class="vcard ' + CARD[it.state] + '" data-n="' + n + '">' + head +
       '<div class="answer long tex">Ответ: ' + (it.answer ? safeHtml(it.answer) : 'не указан') + '</div>' + photos +
-      (it.comment ? '<div class="ex-comment"><div class="ex-comment-h">Мой комментарий</div>' + esc(it.comment) + '</div>' : '') + '</div>';   // part 2 never shows a solution
+      (it.comment ? '<div class="ex-comment"><div class="ex-comment-h">Мой комментарий</div>' + esc(it.comment) + '</div>' : '') +
+      (P.fb.some((p) => p.n === String(n)) ? '<div class="ex-fbph" data-ex-fb="' + n + '"><div class="ex-comment-h">Фото к комментарию</div><div class="ex-thumbs"></div></div>' : '') +
+      '</div>';   // part 2 never shows a solution
   }
 
   function paintResult(v) {
@@ -1180,6 +1198,7 @@
     const s = st.save = makeSession(id, v, tasks);
     s.result = true; s.closed = true;
     const P = s.ph = newPhotos(id, tasks, v.photos); P.s = s; P.ro = true;
+    P.fb = C.wellFormedPhotos(v.fb, P.known).filter((p) => p.n !== '');
     const tiles = tile('Часть 1', frac(R.p1, R.max1)) +
       (R.hasLong ? tile('Часть 2', R.checked ? frac(R.part2, R.max2) : '<span class="vv-txt">на проверке</span>') : '') +
       (R.checked ? tile('Первичный балл', frac(R.total.pts, R.total.max)) : '') +
