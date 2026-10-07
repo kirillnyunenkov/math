@@ -275,7 +275,11 @@
     // missing) is never reused as a deadline: back off 30 s, then 60 s. Without a known server clock: no timer.
     const stale = !(numOk(v.until) && v.until * 1000 > serverNowMs());
     st.schedMiss = stale ? (again ? st.schedMiss + 1 : 1) : 0;
-    if (st.synced) later(() => { if (st.id === id) renderExam(id); }, C.refreshDelay(v.until, serverNowMs(), st.schedMiss, 1200));
+    // The server marks the exam as opened by the first read inside its window, so a page left in a background tab must not
+    // read it at the start: it asks when the student looks at it (this also picks up a start that was moved meanwhile).
+    const refetch = () => { if (st.id === id) renderExam(id); };
+    if (st.synced) later(() => { if (document.visibilityState !== 'hidden') refetch(); }, C.refreshDelay(v.until, serverNowMs(), st.schedMiss, 1200));
+    listen(document, 'visibilitychange', () => { if (document.visibilityState === 'visible') refetch(); });
   }
 
   // A phase change on screen (the scheduled page becoming the exam) eases in instead of a hard cut.
@@ -528,6 +532,14 @@
   }
 
   // ---- finishing early ----
+  // /finish or /done was refused or got no answer: the advice depends on why (no connection, signed out, exam gone).
+  function endFailed(r, btn, title, tail) {
+    const kind = r ? C.classifyStatus(r.status) : 'retry';
+    if (kind === 'auth') note('Нужно войти заново', 'Войди через ссылку из Telegram и открой пробник снова.' + tail);
+    else if (kind === 'gone') note('Пробник недоступен', 'Сервер не нашёл этот пробник. Напиши мне.');
+    else note(title, 'Проверь интернет и нажми «' + btn + '» ещё раз.' + tail);
+  }
+
   async function finishNow(s) {
     if (s.finishing || s.dead || s.result) return;
     if (s.fatal) {
@@ -560,7 +572,7 @@
       }
       const r = await xapi('/' + s.id + '/finish', { method: 'POST', token: s.token }).catch(() => null);
       if (s.dead) return;
-      if (!r || (r.status !== 200 && r.status !== 409)) { note('Не получилось завершить', 'Проверь интернет и нажми «Завершить» ещё раз. Ответы сохранены.'); return; }
+      if (!r || (r.status !== 200 && r.status !== 409)) { endFailed(r, 'Завершить', 'Не получилось завершить', ' Ответы сохранены.'); return; }
       s.closed = true; forgetPending(s); syncAnswerGuard();  // finished: whatever was refused is dropped, nothing is sent after this
       afterFinish(s);                                      // the server says which screen is next; photos on their way go with it
     } finally {
@@ -1137,7 +1149,11 @@
       const failed = P.pending.length > 0;
       const have = new Set(P.server.map((p) => p.n).concat(P.pending.filter((x) => x.state !== 'err').map((x) => x.n)));
       const bare = P.known.filter((n) => !have.has(n));
-      const warn = bare.length === P.known.length ? 'Ни к одному заданию не прикреплено фото. '
+      // photos sent to the bot belong to no task: they count, the teacher sees them with the rest
+      const bot = P.server.filter((p) => p.n === '').length;
+      const warn = bot ? 'Фото, присланные боту (' + bot + '), я тоже посмотрю. ' +
+          (bare.length && bare.length < P.known.length ? 'На сайте нет фото к ' + (bare.length === 1 ? 'заданию ' : 'заданиям ') + bare.join(', ') + '. ' : '')
+        : bare.length === P.known.length ? 'Ни к одному заданию не прикреплено фото. '
         : bare.length ? 'Без фото: ' + (bare.length === 1 ? 'задание ' : 'задания ') + bare.join(', ') + '. ' : '';
       const ok = await askHere({ title: 'Всё прикреплено?',
         text: warn + 'После этого фото добавить уже нельзя.' + (failed ? ' Фото, которые не загрузились, пропадут.' : ''), ok: 'Готово', cancel: 'Ещё добавлю' });
@@ -1149,7 +1165,7 @@
     try {
       const r = await xapi('/' + encodeURIComponent(s.id) + '/done', { method: 'POST', token: tokOf(s) }).catch(() => null);
       if (!live(s)) return;
-      if (!r || (r.status !== 200 && r.status !== 409)) { note('Не получилось', 'Проверь интернет и нажми «Готово» ещё раз.'); return; }
+      if (!r || (r.status !== 200 && r.status !== 409)) { endFailed(r, 'Готово', 'Не получилось', ''); return; }
       s.closed = true;
       renderExam(s.id);                                                 // the server says which screen is next
     } finally {
