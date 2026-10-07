@@ -20,6 +20,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 const Core = require(join(ROOT, 'exam-core.js'));
 const P = require(join(ROOT, 'exam-panel-core.js'));
+const Hist = require(join(ROOT, 'exam-history-core.js'));
 
 const die = (msg, code = 1) => { console.error(msg); process.exit(code); };
 // Whatever goes wrong below, no stack trace or raw error text reaches the terminal.
@@ -27,9 +28,10 @@ process.on('uncaughtException', () => die('Непредвиденная ошиб
 process.on('unhandledRejection', () => die('Непредвиденная ошибка инструмента (подробности скрыты, чтобы не показать секреты).'));
 
 // ---- arguments: unknown options are refused (a typo must never silently fall back to production) ----
-const VALUE_OPTS = ['api', 'link-file', 'student', 'exam', 'at', 'minutes'], FLAG_OPTS = ['yes'];
-const COMMANDS = ['exams', 'students', 'status', 'upload', 'assign', 'delete'];
+const VALUE_OPTS = ['api', 'link-file', 'student', 'exam', 'at', 'minutes', 'date', 'title', 'scores', 'test', 'id'], FLAG_OPTS = ['yes'];
+const COMMANDS = ['exams', 'students', 'status', 'upload', 'assign', 'delete', 'history'];
 const USAGE = 'Команды: exams | students | status | upload <exam.json> | assign --student --exam --at [--minutes] [--yes] | delete --exam [--yes]\n'
+  + '| history add --student --date ГГГГ-ММ-ДД --title --scores "<20 значений>" --test [--yes] | history list --student | history delete --student --id [--yes]\n'
   + 'Адрес сервера по умолчанию — боевой. Для проверок всегда указывай --api http://127.0.0.1:8090/api';
 const raw = process.argv.slice(2), cmd = raw.shift();
 const opts = {}, pos = [];
@@ -45,6 +47,7 @@ for (let i = 0; i < raw.length; i++) {
   } else die('Неизвестный параметр ' + a + '.\n' + USAGE, 2);
 }
 if (!COMMANDS.includes(cmd)) die(USAGE, 2);
+if (cmd === 'history' && (!['add', 'list', 'delete'].includes(pos[0]) || pos.length > 1)) die('Укажи: history add | history list | history delete\n' + USAGE, 2);
 const opt = (name, dflt) => (opts[name] === undefined ? dflt : opts[name]);
 const flag = (name) => !!opts[name];
 
@@ -64,6 +67,7 @@ const LINK = opt('link-file', join(homedir(), 'ege-teacher-link.txt'));
 
 const WRITES = ['upload', 'assign', 'delete'];
 if (WRITES.includes(cmd)) console.log('Сервер: ' + HOST + (IS_LOCAL ? ' (локальный, для проверки)' : ' (БОЕВОЙ)'));
+if (cmd === 'history' && pos[0] !== 'list') console.log('Сервер: ' + HOST + (IS_LOCAL ? ' (локальный, для проверки)' : ' (БОЕВОЙ)'));
 
 let token = '';
 async function call(method, path, body) {
@@ -157,4 +161,38 @@ if (cmd === 'exams') {
   const r = await call('DELETE', '/collections/exams/records/' + e.item.id);
   if (r.status !== 204 && r.status !== 200) die('Сервер не принял удаление (ответ ' + r.status + '). Подробности скрыты; проверь `status`: возможно, этот пробник уже назначали ученикам.');
   console.log('Удалено.');
+} else if (cmd === 'history') {
+  const sub = pos[0];
+  const ppl = await people(), s = pickOne(ppl, opt('student'), (p) => p.name);
+  if (s.error) die('Ученик: ' + s.error);
+  if (sub === 'list') {
+    const r = await call('GET', '/ege/exams/history?user=' + encodeURIComponent(s.item.id));
+    if (r.status !== 200 || !r.json || !Array.isArray(r.json.items)) die('Сервер ответил ' + r.status + '.');
+    r.json.items.forEach((x) => { const it = { scores: x.scores, na: x.na }; console.log('• ' + x.date + ' · ' + x.title + ' · ' + Hist.primaryOf(it) + ' из ' + Hist.maxOfItem(it) + ' · тест ' + x.test + ' · id ' + x.id); });
+    if (!r.json.items.length) console.log('У ' + s.item.name + ' нет записанных вручную пробников.');
+  } else if (sub === 'add') {
+    const date = String(opt('date', '')), title = String(opt('title', '')).trim();
+    if (!Hist.validDate(date)) die('Дата в виде 2025-10-21 (такой даты не бывает или она записана иначе).');
+    if (!title || title.length > 80) die('Название: от 1 до 80 символов.');
+    const sc = Hist.parseScores(opt('scores', ''));
+    if (sc.error) die(sc.error);
+    const testRaw = opt('test'), test = testRaw === undefined || !/^[0-9]+$/.test(testRaw) ? NaN : Number(testRaw), testBad = Hist.checkTest(test);
+    if (testBad) die(testBad + ' Укажи --test, например --test 52 (итоговый балл этого пробника из твоей таблицы).');
+    const item = { scores: sc.scores, na: sc.na }, primary = Hist.primaryOf(item), max = Hist.maxOfItem(item);
+    console.log('Запишу: ' + s.item.name + ' · ' + title + ' · ' + date);
+    Hist.NUMS.forEach((n) => console.log('  №' + n + ': ' + (sc.na.includes(n) ? '— (не было в варианте)' : sc.scores[n] === null ? 'не решал' : sc.scores[n])));
+    console.log('Первичный балл: ' + primary + ' из ' + max + '. Тестовый балл: ' + test + ' (как ты указал).');
+    if (!flag('yes')) die('Ничего не сделано. Проверь таблицу и добавь --yes.', 3);
+    const r = await call('POST', '/ege/exams/history', { user: s.item.id, date, title, scores: sc.scores, na: sc.na, test });
+    if (r.status !== 200) die('Сервер не принял запись (ответ ' + r.status + '). Возможно, такой пробник у этого ученика уже записан: проверь `history list`.');
+    console.log('Записано.' + (r.json && r.json.id ? ' id ' + r.json.id : ''));
+  } else {
+    const id = String(opt('id', ''));
+    if (!/^[A-Za-z0-9]{15}$/.test(id)) die('Укажи --id записи из `history list`.');
+    console.log('Удалю запись ' + id + ' у ' + s.item.name + '.');
+    if (!flag('yes')) die('Ничего не сделано. Подтверди и добавь --yes.', 3);
+    const r = await call('DELETE', '/ege/exams/history/' + id);
+    if (r.status !== 200) die('Сервер не принял удаление (ответ ' + r.status + ').');
+    console.log('Удалено.');
+  }
 }

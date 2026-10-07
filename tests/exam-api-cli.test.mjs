@@ -104,3 +104,43 @@ test('delete: a refused request reports the status code, not a guessed reason', 
     assert.doesNotMatch(d.out, /internal detail|StubSecret1|stub-token/);
   } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('history add without --yes prints the check table, exit 3 and writes nothing', async () => {
+  const hits = [];
+  const srv = createServer((q, s) => {
+    hits.push(q.method + ' ' + q.url.split('?')[0]);
+    q.resume();
+    s.setHeader('content-type', 'application/json');
+    const u = q.url.split('?')[0];
+    if (u.endsWith('/auth-with-password')) return s.end(JSON.stringify({ token: 'stub-token', record: { role: 'teacher' } }));
+    if (u.endsWith('/collections/users/records')) return s.end(JSON.stringify({ items: [{ id: 'u1', name: 'Тест Ученик', login: 'stud1', active: true }] }));
+    if (u.endsWith('/ege/leads')) return s.end(JSON.stringify({ items: [] }));
+    s.statusCode = 500; s.end('{}');
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const dir = mkdtempSync(join(tmpdir(), 'exam-api-test-'));
+  try {
+    const link = join(dir, 'link.txt');
+    writeFileSync(link, 'http://localhost:3456/teacher.html#/login/teacher.StubSecret1\n');
+    const base = ['--api', 'http://127.0.0.1:' + srv.address().port + '/api', '--link-file', link];
+    const row = '1,1,,1,1,-,1,,,1,0,1,,,,2,,,,';
+    const a = await run(['history', 'add', '--student', 'тест', '--date', '2025-10-21', '--title', 'Вариант 1', '--scores', row, '--test', '52', ...base]);
+    assert.equal(a.code, 3, a.out);
+    assert.match(a.out, /Тест Ученик · Вариант 1 · 2025-10-21/);
+    assert.match(a.out, /Первичный балл: 9 из 32/);
+    assert.match(a.out, /Тестовый балл: 52 \(как ты указал\)/);
+    assert.match(a.out, /№6: —/);
+    const bad = await run(['history', 'add', '--student', 'тест', '--date', '2025-02-30', '--title', 'Х', '--scores', row, '--test', '52', ...base]);
+    assert.equal(bad.code, 1); assert.match(bad.out, /Дата/);
+    const short = await run(['history', 'add', '--student', 'тест', '--date', '2025-10-21', '--title', 'Х', '--scores', '1,2', '--test', '52', ...base]);
+    assert.equal(short.code, 1); assert.match(short.out, /ровно 20/);
+    const noTest = await run(['history', 'add', '--student', 'тест', '--date', '2025-10-21', '--title', 'Х', '--scores', row, ...base]);
+    assert.equal(noTest.code, 1); assert.match(noTest.out, /Тестовый балл/);
+    const noSub = await run(['history', ...base]);
+    assert.equal(noSub.code, 2); assert.match(noSub.out, /history add/);
+    const noId = await run(['history', 'delete', '--student', 'тест', '--id', 'x', ...base]);
+    assert.equal(noId.code, 1);
+    assert.ok(!hits.some((h) => h.startsWith('POST /api/ege') || h.startsWith('DELETE')), 'wrote: ' + hits.join(', '));
+    assert.doesNotMatch(a.out + bad.out + short.out + noTest.out + noSub.out + noId.out, /StubSecret1|stub-token/);
+  } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});
