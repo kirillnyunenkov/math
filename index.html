@@ -1611,6 +1611,11 @@
   .hub-prog-slim .hps-legend>span{display:inline-flex;align-items:center;gap:var(--s2);}
   .hub-prog-slim .hps-legend b{margin-left:4px;color:var(--ink);}
   @media (max-width:560px){.hub-prog-slim{padding:var(--s4);}.hub-prog-slim .hps-top{flex-direction:column;align-items:stretch;}.hub-prog-slim .hub-go{width:100%;}.hub-prog-slim .hub-go .hg-body{text-align:left;}.hub-prog-slim .hps-bottom .btn{width:100%;}}
+  /* Телефон: «от Кирилла» уходит из заголовка, иначе кнопка «Пробники» сдвигает бургер на вторую строку. */
+  @media (max-width:560px){
+    .title .by{display:none;}
+    .head-inner{gap:var(--s2);}
+  }
 </style>
 <script defer src="katex/katex.min.js"></script>
 <script defer src="katex/auto-render.min.js"></script>
@@ -3160,6 +3165,7 @@ function render(){
   guideEl.style.display=(r.view==='help')?'none':'';
   accountEl.style.display=auth||guest?'':'none';
   examsBtn.style.display=auth?'':'none';exUI('paintDot');
+  if(auth&&r.view!=='exam')exUI('warm');
   accountEl.classList.toggle('guest',!auth&&guest);
   if(auth){accountEl.querySelector('.acc-label').textContent=auth.name;accountEl.title=auth.name;}
   else if(guest){accountEl.querySelector('.acc-label').textContent='Войти';accountEl.title='Войти через Telegram';}

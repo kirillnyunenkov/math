@@ -1372,6 +1372,7 @@
     if (r.status !== 200 || !r.json || !Array.isArray(r.json.items)) { fail('Не получилось загрузить пробники.'); return; }
     appEl.innerHTML = shell(window.ExamMyView.pageHtml(r.json.items, { seen: seen() }));
     appEl.querySelectorAll('[data-my-scroll]').forEach((el) => { el.scrollLeft = el.scrollWidth; });   // the newest exams are on the right
+    paintDot();
   }
 
   // The dot on the header button: an unseen result, or an exam to take now.
@@ -1381,5 +1382,14 @@
   }
   function paintDot() { const b = document.getElementById('exams-btn'); if (b) b.classList.toggle('has-dot', dot()); }
 
-  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, renderMy: renderMy, leave: leave, safeHtml: safeHtml, reset: reset, dot: dot, paintDot: paintDot };
+  // Keeps the dot fresh on every screen except the exam itself (loadMine is throttled to once per 30 s and never throws).
+  function warm() {
+    try {
+      if (!auth || !C) return;
+      if (st.user !== String(auth.userId || '')) { const had = st.user; resetCache(); if (had) forgetUser(); st.user = String(auth.userId || ''); }
+      loadMine(); paintDot();
+    } catch (e) {}
+  }
+
+  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, renderMy: renderMy, leave: leave, safeHtml: safeHtml, reset: reset, dot: dot, paintDot: paintDot, warm: warm };
 })();
