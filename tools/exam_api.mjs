@@ -51,6 +51,20 @@ if (cmd === 'history' && (!['add', 'list', 'delete'].includes(pos[0]) || pos.len
 const opt = (name, dflt) => (opts[name] === undefined ? dflt : opts[name]);
 const flag = (name) => !!opts[name];
 
+// history: everything that can be checked without the server is checked before login.
+let hist = null;
+if (cmd === 'history' && pos[0] === 'add') {
+  const date = String(opt('date', '')), title = String(opt('title', '')).trim();
+  if (!Hist.validDate(date)) die('Дата в виде 2025-10-21 (такой даты не бывает или она записана иначе).');
+  if (!title || title.length > 80) die('Название: от 1 до 80 символов.');
+  const sc = Hist.parseScores(opt('scores', ''));
+  if (sc.error) die(sc.error);
+  const testRaw = opt('test'), test = testRaw === undefined || !/^[0-9]+$/.test(testRaw) ? NaN : Number(testRaw), testBad = Hist.checkTest(test);
+  if (testBad) die(testBad + ' Укажи --test, например --test 52 (итоговый балл этого пробника из твоей таблицы).');
+  hist = { date, title, sc, test };
+}
+if (cmd === 'history' && pos[0] === 'delete' && !/^[A-Za-z0-9]{15}$/.test(String(opt('id', '')))) die('Укажи --id записи из `history list`.');
+
 let API = String(opt('api', 'https://api.kirillnyun.space/api')).replace(/\/+$/, ''), HOST = '';
 const LOOPBACK = /^(127\.0\.0\.1|localhost|\[::1\])$/;
 try {
@@ -171,13 +185,7 @@ if (cmd === 'exams') {
     r.json.items.forEach((x) => { const it = { scores: x.scores, na: x.na }; console.log('• ' + x.date + ' · ' + x.title + ' · ' + Hist.primaryOf(it) + ' из ' + Hist.maxOfItem(it) + ' · тест ' + x.test + ' · id ' + x.id); });
     if (!r.json.items.length) console.log('У ' + s.item.name + ' нет записанных вручную пробников.');
   } else if (sub === 'add') {
-    const date = String(opt('date', '')), title = String(opt('title', '')).trim();
-    if (!Hist.validDate(date)) die('Дата в виде 2025-10-21 (такой даты не бывает или она записана иначе).');
-    if (!title || title.length > 80) die('Название: от 1 до 80 символов.');
-    const sc = Hist.parseScores(opt('scores', ''));
-    if (sc.error) die(sc.error);
-    const testRaw = opt('test'), test = testRaw === undefined || !/^[0-9]+$/.test(testRaw) ? NaN : Number(testRaw), testBad = Hist.checkTest(test);
-    if (testBad) die(testBad + ' Укажи --test, например --test 52 (итоговый балл этого пробника из твоей таблицы).');
+    const { date, title, sc, test } = hist;
     const item = { scores: sc.scores, na: sc.na }, primary = Hist.primaryOf(item), max = Hist.maxOfItem(item);
     console.log('Запишу: ' + s.item.name + ' · ' + title + ' · ' + date);
     Hist.NUMS.forEach((n) => console.log('  №' + n + ': ' + (sc.na.includes(n) ? '— (не было в варианте)' : sc.scores[n] === null ? 'не решал' : sc.scores[n])));
@@ -188,8 +196,11 @@ if (cmd === 'exams') {
     console.log('Записано.' + (r.json && r.json.id ? ' id ' + r.json.id : ''));
   } else {
     const id = String(opt('id', ''));
-    if (!/^[A-Za-z0-9]{15}$/.test(id)) die('Укажи --id записи из `history list`.');
-    console.log('Удалю запись ' + id + ' у ' + s.item.name + '.');
+    const own = await call('GET', '/ege/exams/history?user=' + encodeURIComponent(s.item.id));
+    if (own.status !== 200 || !own.json || !Array.isArray(own.json.items)) die('Сервер ответил ' + own.status + '.');
+    const row = own.json.items.find((x) => x.id === id);
+    if (!row) die('У ' + s.item.name + ' нет записи с таким id. Ничего не удалено; смотри `history list`.');
+    console.log('Удалю: ' + row.date + ' · ' + row.title + ' · тест ' + row.test + ' у ' + s.item.name + '.');
     if (!flag('yes')) die('Ничего не сделано. Подтверди и добавь --yes.', 3);
     const r = await call('DELETE', '/ege/exams/history/' + id);
     if (r.status !== 200) die('Сервер не принял удаление (ответ ' + r.status + ').');
