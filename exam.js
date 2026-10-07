@@ -20,7 +20,7 @@
     shownPhase: '', shownId: '', fade: false, sheets: 0 };   // sheets: confirmation sheets of this module that are open
 
   const seen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || []; } catch (e) { return []; } };
-  const markSeen = (id) => { try { const s = seen(); if (s.indexOf(id) < 0) { s.push(id); localStorage.setItem(SEEN_KEY, JSON.stringify(s.slice(-50))); } } catch (e) {} };
+  const markSeen = (id) => { try { const s = seen(); if (s.indexOf(id) < 0) { s.push(id); localStorage.setItem(SEEN_KEY, JSON.stringify(s.slice(-50))); } } catch (e) {} paintDot(); };
 
   // A request that hangs (a connection that went away without an error) is cut after `opt.timeout` ms (default 20 s,
   // 120 s for an upload) and fails like any other network error: nothing waits on it for ever, the save queue backs off
@@ -93,8 +93,10 @@
   function math(root) { if (root && typeof typeset === 'function') typeset(root); }
 
   // ---- hub banner ----
-  const shown = (it) => it.phase === 'scheduled' || it.phase === 'open' || it.phase === 'photos' || it.phase === 'submitted' ||
-    (it.phase === 'checked' && seen().indexOf(it.id) < 0);
+  // The hub keeps only what needs the student now: a running exam, the photo phase, a start within a day.
+  // Everything else (further scheduled, waiting for a check, checked) lives on #/exams.
+  const shown = (it) => it.phase === 'open' || it.phase === 'photos' ||
+    (it.phase === 'scheduled' && it.start - (Date.now() + st.offset) / 1000 < 86400);
   // What needs the student first: a running exam, then one that is coming, then results.
   const PRIO = { open: 0, photos: 0, scheduled: 1, submitted: 2, checked: 3 };
   // Only well-formed items are kept: the page never trusts the shape of the server answer.
@@ -153,7 +155,7 @@
       if (!auth || !C) return '';
       if (st.user !== String(auth.userId || '')) { const had = st.user; resetCache(); if (had) forgetUser(); st.user = String(auth.userId || ''); }
       loadMine();
-      return (st.mine || []).filter(shown).sort((a, b) => PRIO[a.phase] - PRIO[b.phase]).slice(0, 3).map(bannerOf).join('');
+      return (st.mine || []).filter(shown).sort((a, b) => PRIO[a.phase] - PRIO[b.phase]).slice(0, 2).map(bannerOf).join('');
     } catch (e) { return ''; }
   }
 
@@ -179,6 +181,7 @@
     if (next !== undefined && st.synced && uid === st.user) {
       st.hubTimer = setTimeout(() => loadMine(true), C.refreshDelay(next, serverNowMs(), st.hubMiss, 1500));
     }
+    paintDot();
     if (JSON.stringify(st.mine) !== before && parseRoute().view === 'hub') render();
   }
   document.addEventListener('visibilitychange', () => {
@@ -1371,5 +1374,12 @@
     appEl.querySelectorAll('[data-my-scroll]').forEach((el) => { el.scrollLeft = el.scrollWidth; });   // the newest exams are on the right
   }
 
-  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, renderMy: renderMy, leave: leave, safeHtml: safeHtml, reset: reset };
+  // The dot on the header button: an unseen result, or an exam to take now.
+  function dot() {
+    try { return !!(st.mine || []).some((it) => (it.phase === 'checked' && seen().indexOf(it.id) < 0) || it.phase === 'open' || it.phase === 'photos'); }
+    catch (e) { return false; }
+  }
+  function paintDot() { const b = document.getElementById('exams-btn'); if (b) b.classList.toggle('has-dot', dot()); }
+
+  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, renderMy: renderMy, leave: leave, safeHtml: safeHtml, reset: reset, dot: dot, paintDot: paintDot };
 })();
