@@ -29,7 +29,7 @@ const TEXT = {
   botOkAlbum: (title) => "Принял фото к пробнику «" + title + "». Все присланные фото видны в тренажёре.",
   botOk: (title, k) => "Принял фото к пробнику «" + title + "» (всего " + k + ").",
 };
-const MAX_PHOTOS = 5, MAX_BOT_PHOTOS = 15, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
+const MAX_PHOTOS = 5, MAX_FB_PHOTOS = 5, MAX_BOT_PHOTOS = 15, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
 const OPEN_NEWS = 900;   // "открыт" is sent only this long after the start, and only if not opened yet
 const DAYS = ["в воскресенье", "в понедельник", "во вторник", "в среду", "в четверг", "в пятницу", "в субботу"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -225,6 +225,12 @@ function meta(rec, exam, t) {
   return m;
 }
 
+// The teacher's photos for the comments (shown to the student once the exam is checked).
+function fbOf(rec) {
+  return each($app.findRecordsByFilter("exam_feedback_photos", "assignment = {:a}", "created", 200, 0, { a: rec.id }),
+    (p) => ({ id: p.id, n: p.getString("n"), file: p.getString("file") }));
+}
+
 function photosOf(rec) {
   return each($app.findRecordsByFilter("exam_photos", "assignment = {:a}", "created", 200, 0, { a: rec.id }),
     (p) => ({ id: p.id, n: p.getString("n"), file: p.getString("file") }));
@@ -262,7 +268,7 @@ function viewOf(rec, exam, t) {
     const g = Ans.gradePart1(tasks, {}, {});
     v.tasks = tasks; v.answers = J(rec, "answers", {}); v.photos = photosOf(rec);
     v.key = J(exam, "key", {}); v.p1 = rec.getInt("p1"); v.max1 = g.max1; v.ok = J(rec, "ok", {});
-    if (v.phase === "checked") { v.part2 = J(rec, "part2", {}); v.total = Core.total(tasks, v.p1, v.part2); }
+    if (v.phase === "checked") { v.part2 = J(rec, "part2", {}); v.total = Core.total(tasks, v.p1, v.part2); v.fb = fbOf(rec); }
   }
   return v;
 }
@@ -397,7 +403,27 @@ function viaTg(e) {
   return e.json(200, { ok: true });
 }
 
+// The teacher adds a photo to the comment of a long task: only once the work is submitted (the same moment the
+// scores can be set), up to MAX_FB_PHOTOS per task. The student sees it after the check.
+function addFeedback(e) {
+  const rec0 = byId("exam_assignments", e.request.pathValue("id"));
+  if (!rec0) return fail(e, 404, "not found");
+  const exam = $app.findRecordById("exams", rec0.getString("exam")), rec = settle(rec0, exam, nowS());
+  if (!rec.getInt("settled")) return fail(e, 409, "not submitted");
+  const n = String(e.request.formValue("n") || "");
+  const task = J(exam, "tasks", []).filter((x) => String(x.n) === n && x.kind === "long")[0];
+  if (!task) return fail(e, 400, "bad task");
+  const files = e.findUploadedFiles("file");
+  if (!files || files.length !== 1) return fail(e, 400, "one file expected");
+  if ($app.countRecords("exam_feedback_photos", $dbx.hashExp({ assignment: rec.id, n: n })) >= MAX_FB_PHOTOS) return fail(e, 400, "too many");
+  const p = new Record($app.findCollectionByNameOrId("exam_feedback_photos"));
+  p.set("user", rec.getString("user")); p.set("assignment", rec.id); p.set("n", n); p.set("file", files[0]);
+  try { $app.save(p); } catch (_) { return fail(e, 400, "bad file"); }
+  return e.json(200, { id: p.id, n: n, file: p.getString("file") });
+}
+
 function addPhoto(e) {
+  if (isTeacher(e)) return addFeedback(e);
   const a = during(e, ["open", "photos"]);
   if (a.res) return;
   const n = String(e.request.formValue("n") || "");
@@ -412,7 +438,15 @@ function addPhoto(e) {
   return e.json(200, { id: p.id, n: n, file: p.getString("file") });
 }
 
+function delFeedback(e) {
+  const p = byId("exam_feedback_photos", e.request.pathValue("pid"));
+  if (!p || p.getString("assignment") !== e.request.pathValue("id")) return fail(e, 404, "not found");
+  $app.delete(p);
+  return e.json(200, { ok: true });
+}
+
 function delPhoto(e) {
+  if (isTeacher(e)) return delFeedback(e);
   const a = during(e, ["open", "photos"]);
   if (a.res) return;
   const p = byId("exam_photos", e.request.pathValue("pid"));

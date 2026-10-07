@@ -874,3 +874,56 @@ test('meta.until is the end of the current phase', async () => {
   assert.equal(v.phase, 'submitted');
   assert.equal(v.until, 0);
 });
+
+// ---- the teacher's photos for the comment of a task ----
+const fileStatus = async (token, id, file, coll = 'exam_feedback_photos') => {
+  const ft = (await req('POST', '/files/token', token)).json.token;
+  return (await fetch(`${B}/files/${coll}/${id}/${file}?token=${encodeURIComponent(ft)}`)).status;
+};
+
+test('teacher photos: only the teacher adds them, to a long task, once the work is submitted', async () => {
+  const { id, s } = await started(7000000100);
+  assert.equal((await upload(id, tok.teacher, 13)).status, 409);                 // not submitted yet
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  assert.equal((await upload(id, tok.teacher, 1)).status, 400);                  // a short task takes no photo
+  assert.equal((await upload(id, tok.teacher, 99)).status, 400);
+  const ok = await upload(id, tok.teacher, 13);
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  assert.equal(ok.json.n, '13');
+  for (let i = 0; i < 4; i++) assert.equal((await upload(id, tok.teacher, 13)).status, 200);
+  assert.equal((await upload(id, tok.teacher, 13)).status, 400);                 // five per task
+});
+
+test('teacher photos stay hidden from the student until the check, then show up in the view and can be fetched', async () => {
+  const { id, s } = await started(7000000101);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  const up = (await upload(id, tok.teacher, 13)).json;
+  assert.equal((await view(id, s.token)).json.fb, undefined);                    // submitted: not in the view
+  const list = await req('GET', '/collections/exam_feedback_photos/records', s.token);
+  assert.equal(list.json.items.length, 0);                                       // nor through the collection
+  assert.equal(await fileStatus(s.token, up.id, up.file), 404);
+  assert.equal(await fileStatus(tok.teacher, up.id, up.file), 200);
+  await post(id, 'check', tok.teacher, { part2: { 13: { pts: 1, comment: 'см. фото' } } });
+  const v = (await view(id, s.token)).json;
+  assert.equal(v.phase, 'checked');
+  assert.deepEqual(v.fb, [{ id: up.id, n: '13', file: up.file }]);
+  assert.equal(await fileStatus(s.token, up.id, up.file), 200);
+  const other = await student(7000000102);
+  assert.notEqual(await fileStatus(other.token, up.id, up.file), 200);           // someone else's feedback
+});
+
+test('teacher photos: only the teacher removes them; a removed one is gone from the view', async () => {
+  const { id, s } = await started(7000000103);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  const up = (await upload(id, tok.teacher, 13)).json;
+  await post(id, 'check', tok.teacher, { part2: { 13: { pts: 2, comment: '' } } });
+  const del = (token, pid) => req('DELETE', `/ege/exams/${id}/photos/${pid}`, token);
+  assert.notEqual((await del(s.token, up.id)).status, 200);                      // the student cannot
+  assert.equal((await view(id, s.token)).json.fb.length, 1);
+  assert.equal((await del(tok.teacher, 'nosuchid')).status, 404);
+  assert.equal((await del(tok.teacher, up.id)).status, 200);
+  assert.deepEqual((await view(id, s.token)).json.fb, []);
+});
