@@ -497,10 +497,10 @@ function summary(e) {
     const exam = $app.findRecordById("exams", rec.getString("exam"));
     const ns = each(photosOf(rec), (p) => p.n).filter((n) => n !== "");
     const ts = Hist.taskScores(J(exam, "tasks", []), J(rec, "answers", {}), J(rec, "ok", {}), J(rec, "part2", {}), ns);
-    items.push({ kind: "exam", id: rec.id, title: exam.getString("title"), date: rec.getInt("start"), scores: ts.scores, na: ts.na, maxes: ts.maxes });
+    items.push({ kind: "exam", id: rec.id, title: exam.getString("title"), full: exam.getBool("full"), date: rec.getInt("start"), scores: ts.scores, na: ts.na, maxes: ts.maxes });
   });
   each($app.findRecordsByFilter("exam_history", "user = {:u}", "date", 200, 0, { u: e.auth.id }), (r) => {
-    items.push({ kind: "manual", id: r.id, title: r.getString("title"), date: Hist.dateToTs(r.getString("date")),
+    items.push({ kind: "manual", id: r.id, title: r.getString("title"), full: true, date: Hist.dateToTs(r.getString("date")),
       scores: J(r, "scores", {}), na: J(r, "na", []), maxes: Hist.MAXES, test: r.getInt("test") });
   });
   items.sort((a, b) => a.date - b.date);

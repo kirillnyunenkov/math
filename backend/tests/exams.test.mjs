@@ -1010,6 +1010,7 @@ test('summary: own checked exams only, per task, nothing from the statements or 
   assert.equal(r.json.items.length, 1);
   const it = r.json.items[0];
   assert.equal(it.kind, 'exam'); assert.equal(it.id, id);
+  assert.equal(it.full, false);                                                     // mkExam makes a drill: the page keeps it out of the table
   assert.equal(it.scores[1], 1); assert.equal(it.scores[2], null); assert.equal(it.scores[13], 2);
   assert.ok(it.na.indexOf(3) >= 0 && it.na.indexOf(1) < 0 && it.na.indexOf(13) < 0);
   const text = JSON.stringify(r.json);
@@ -1027,6 +1028,7 @@ test('manual exams: only the teacher writes, the student reads own rows through 
   const mine = (await summary(s.token)).json.items;
   assert.equal(mine.length, 1);
   assert.equal(mine[0].kind, 'manual'); assert.equal(mine[0].title, 'Вариант 1');
+  assert.equal(mine[0].full, true);
   assert.deepEqual(mine[0].na, [6]);
   assert.equal(mine[0].scores[14], 2);
   assert.equal(mine[0].test, 52);                                                   // the fixed score, never recomputed

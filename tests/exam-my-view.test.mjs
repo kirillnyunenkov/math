@@ -48,3 +48,35 @@ test('titles are escaped', () => {
   const h = V.listHtml([{ ...A, title: '<b>x</b>' }], []);
   assert.doesNotMatch(h, /<b>x/);
 });
+
+// Drills (full: false) may be numbered 1..40: they are listed, but never mapped onto the 20 task rows.
+const D = mk('d', Date.UTC(2025, 11, 1, 9) / 1000, 1, { full: false });
+
+test('drills stay out of the table, solvability and chart; the list shows them with the primary score only', () => {
+  const full = { ...A, full: true };
+  const t = V.tableHtml([full, D]);
+  assert.match(t, /01\.12|21\.10/);
+  assert.doesNotMatch(t, /01\.12/);                                          // no column for the drill
+  assert.match(t, />100%</);                                                 // task 1: 1 of 1 over the full exam only
+  assert.equal(V.chartHtml([full, D]), '');                                  // one full exam is not a chart
+  assert.match(V.chartHtml([full, { ...B, full: true }, D]), /<svg/);
+  assert.doesNotMatch(V.chartHtml([full, { ...B, full: true }, D]), /01\.12/);
+  const l = V.listHtml([full, D], []);
+  assert.match(l, /Вариант d/);
+  const row = l.split('my-row').filter((x) => x.includes('Вариант d'))[0];
+  assert.doesNotMatch(row, /тест/);
+  assert.match(row, / из /);
+  assert.match(l, /тест 11/);                                                // the full exam keeps its test score
+});
+
+test('only drills: the list stays, the chart and the table cards are skipped', () => {
+  const h = V.pageHtml([D], { seen: [] });
+  assert.match(h, /data-exam="d"/);
+  assert.doesNotMatch(h, /my-tbl|<svg|Баллы по заданиям|Тестовый балл/);
+});
+
+test('top block (exams still ahead) is placed under the title, also in the empty state', () => {
+  const top = '<section class="my-card"><h3>Ждут тебя</h3></section>';
+  assert.match(V.pageHtml([A, B], { seen: [], top }), /Мои пробники[\s\S]*Ждут тебя[\s\S]*Тестовый балл/);
+  assert.match(V.pageHtml([], { seen: [], top }), /Здесь появятся[\s\S]*Ждут тебя/);
+});

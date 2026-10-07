@@ -11,7 +11,11 @@
   const dmy = (ts) => { const d = moscow(ts); return dm(ts) + '.' + d.getUTCFullYear(); };
   const wellFormed = (it) => !!it && typeof it === 'object' && typeof it.id === 'string' && typeof it.date === 'number' && it.scores && typeof it.scores === 'object';
 
-  function tableHtml(items) {
+  // Drills (full === false) may be numbered 1..40 and hold any tasks: they do not fit the 20 rows of an exam.
+  const isFull = (it) => it.full !== false;
+
+  function tableHtml(all) {
+    const items = all.filter(isFull);
     if (!items.length) return '';
     const head = '<tr><th class="my-n"></th>' + items.map((it) => '<th title="' + esc(it.title) + '">' + dm(it.date) + '</th>').join('') + '<th class="my-sol">Решаем.</th></tr>';
     const rows = H.NUMS.map((n) => {
@@ -26,8 +30,8 @@
   }
 
   // Test score by exam, inline SVG. Wide enough that the labels stay readable: a phone scrolls it sideways.
-  function chartHtml(items) {
-    const pts = items.map((it) => ({ it: it, t: H.testOf(it) })).filter((p) => p.t !== null);
+  function chartHtml(all) {
+    const pts = all.filter(isFull).map((it) => ({ it: it, t: H.testOf(it) })).filter((p) => p.t !== null);
     if (pts.length < 2) return '';
     const L = 34, R = 18, T = 20, B = 30, Hh = 210, W = Math.max(340, pts.length * 56 + L + R);
     const x = (i) => L + i * (W - L - R) / (pts.length - 1), y = (t) => T + (100 - t) / 100 * (Hh - T - B);
@@ -43,7 +47,7 @@
   function listHtml(items, seen) {
     return items.slice().reverse().map((it) => {
       const prim = H.primaryOf(it), max = H.maxOfItem(it), test = H.testOf(it);
-      const score = prim + ' из ' + max + (test === null ? '' : ' · тест ' + test);
+      const score = prim + ' из ' + max + (test === null || !isFull(it) ? '' : ' · тест ' + test);
       const isExam = it.kind === 'exam', fresh = isExam && (seen || []).indexOf(it.id) < 0;
       const body = '<span class="my-r-body"><span class="my-r-t">' + esc(it.title) + (fresh ? ' <span class="my-new">новое</span>' : '') + '</span>' +
         '<span class="my-r-s">' + dmy(it.date) + ' · ' + score + (isExam ? '' : ' · записан вручную') + '</span></span>';
@@ -54,13 +58,15 @@
 
   function pageHtml(list, opt) {
     const items = (Array.isArray(list) ? list : []).filter(wellFormed);
+    // opt.top: ready HTML (the exams that are still ahead) shown right under the title.
+    const top = (opt && opt.top) || '';
     if (!items.length) return '<div class="vintro"><h2>Мои пробники</h2><p class="lead my-empty">Здесь появятся твои пробники после проверки. Когда я проверю работу, она останется здесь, и её можно будет открыть в любой момент.</p>' +
-      '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>';
-    const chart = chartHtml(items);
-    return '<div class="vintro"><h2>Мои пробники</h2><p class="lead">Все проверенные работы: баллы, разбор и мои комментарии.</p></div>' +
+      '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>' + top;
+    const chart = chartHtml(items), table = tableHtml(items);
+    return '<div class="vintro"><h2>Мои пробники</h2><p class="lead">Все проверенные работы: баллы, разбор и мои комментарии.</p></div>' + top +
       (chart ? '<section class="my-card"><h3>Тестовый балл</h3>' + chart + '</section>' : '') +
-      '<section class="my-card"><h3>Баллы по заданиям</h3>' + tableHtml(items) +
-      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте.</p></section>' +
+      (table ? '<section class="my-card"><h3>Баллы по заданиям</h3>' + table +
+      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте.</p></section>' : '') +
       '<section class="my-card"><h3>Все пробники</h3><div class="my-list">' + listHtml(items, (opt && opt.seen) || []) + '</div></section>';
   }
 

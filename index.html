@@ -3171,7 +3171,7 @@ function render(){
   if(r.view==='help'||isStandalone()){installEl.style.setProperty('display','none','important');}else{installEl.style.removeProperty('display');}
   if(r.view==='help')renderHelp();
   else if(r.view==='exam'&&window.ExamUI)exUI('render',r.id);
-  else if(r.view==='exams'&&window.ExamUI)exUI('renderMy');
+  else if(r.view==='exams'&&window.ExamUI&&typeof window.ExamUI.renderMy==='function')exUI('renderMy');
   else if(r.view==='variant')renderVariant();
   else if(r.view==='task')renderTask(r.n);
   else renderHub();

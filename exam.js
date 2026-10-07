@@ -1361,17 +1361,28 @@
     leave(); st.id = null;
     const my = ++st.req;
     setBack(true); statsEl.innerHTML = '';
-    if (!C || !window.ExamMyView) { fail('Не получилось загрузить страницу.'); return; }
+    if (!C || !window.ExamMyView || !window.ExamHistoryCore) { fail('Не получилось загрузить страницу.'); return; }
     if (!auth) { fail('Чтобы увидеть свои пробники, войди в тренажёр через Telegram.'); return; }
     appEl.innerHTML = '<div class="vbox"><div class="vwait" role="status"><div class="vwait-ring" aria-hidden="true"></div><p>Загружаю пробники…</p></div></div>';
-    let r;
-    try { r = await xapi('/summary'); }
-    catch (e) { if (my === st.req && parseRoute().view === 'exams') fail('Нет связи с сервером. Проверь интернет.'); return; }
-    if (my !== st.req || parseRoute().view !== 'exams') return;
+    // Opened straight from a link, the hub never ran: the cache must belong to this user before /mine is stored in it.
+    if (st.user !== String(auth.userId || '')) { const had = st.user; resetCache(); if (had) forgetUser(); st.user = String(auth.userId || ''); }
+    const gen = st.gen;
+    let r, m = null;
+    try {
+      // /mine feeds the "Ждут тебя" block (exams still ahead); the page works without it.
+      [r, m] = await Promise.all([xapi('/summary'), xapi('/mine').catch(() => null)]);
+    } catch (e) { if (my === st.req && parseRoute().view === 'exams') fail('Нет связи с сервером. Проверь интернет.'); return; }
+    if (my !== st.req || parseRoute().view !== 'exams' || gen !== st.gen) return;
+    if (m && m.status === 200 && m.json && Array.isArray(m.json.items)) { st.mine = m.json.items.filter(wellFormed); setOffset(m.json.now); }
     if (r.status === 401 || r.status === 403) { fail('Чтобы увидеть свои пробники, войди в тренажёр через Telegram.'); return; }
     if (r.status !== 200 || !r.json || !Array.isArray(r.json.items)) { fail('Не получилось загрузить пробники.'); return; }
-    appEl.innerHTML = shell(window.ExamMyView.pageHtml(r.json.items, { seen: seen() }));
-    appEl.querySelectorAll('[data-my-scroll]').forEach((el) => { el.scrollLeft = el.scrollWidth; });   // the newest exams are on the right
+    try {
+      const ahead = (st.mine || []).filter((it) => it.phase === 'scheduled' || it.phase === 'submitted' || it.phase === 'open' || it.phase === 'photos')
+        .sort((a, b) => PRIO[a.phase] - PRIO[b.phase]);
+      const top = ahead.length ? '<section class="my-card"><h3>Ждут тебя</h3>' + ahead.map(bannerOf).join('') + '</section>' : '';
+      appEl.innerHTML = shell(window.ExamMyView.pageHtml(r.json.items, { seen: seen(), top: top }));
+      appEl.querySelectorAll('[data-my-scroll]').forEach((el) => { el.scrollLeft = el.scrollWidth; });   // the newest exams are on the right
+    } catch (e) { fail('Не получилось показать пробники.'); return; }
     paintDot();
   }
 
