@@ -3,6 +3,10 @@
 // handler in an isolated scope.
 routerAdd("POST", "/api/ege/exams/assign", (e) => require(`${__hooks}/exams.js`).assign(e));
 routerAdd("GET", "/api/ege/exams/mine", (e) => require(`${__hooks}/exams.js`).mine(e));
+routerAdd("GET", "/api/ege/exams/summary", (e) => require(`${__hooks}/exams.js`).summary(e));
+routerAdd("POST", "/api/ege/exams/history", (e) => require(`${__hooks}/exams.js`).histAdd(e));
+routerAdd("GET", "/api/ege/exams/history", (e) => require(`${__hooks}/exams.js`).histList(e));
+routerAdd("DELETE", "/api/ege/exams/history/{id}", (e) => require(`${__hooks}/exams.js`).histDel(e));
 routerAdd("GET", "/api/ege/exams/{id}", (e) => require(`${__hooks}/exams.js`).get(e));
 routerAdd("POST", "/api/ege/exams/{id}/move", (e) => require(`${__hooks}/exams.js`).move(e));
 routerAdd("POST", "/api/ege/exams/{id}/cancel", (e) => require(`${__hooks}/exams.js`).cancel(e));

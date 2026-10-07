@@ -231,3 +231,32 @@ there too. The tool logs in with `~/ege-teacher-link.txt` and prints no secrets.
 
 The nightly backup archives `pb_data`, which now includes the photos in
 `pb_data/storage/`; watch the size of `/opt/ege-api/backups/`.
+
+## Exam history (Мои пробники)
+
+The collection `exam_history` holds exams a student wrote before the trainer existed. One row = one exam:
+per-task points (`scores`, null = not solved), the task numbers that were not in the variant (`na`) and the
+fixed test score (`test`, 0..100) entered by the teacher; no scale converts these. The student may read own
+rows, nobody writes through the collection API: every write goes through the teacher routes of `exams.js`.
+
+Routes:
+
+- `GET /api/ege/exams/summary` (student): checked trainer exams with per-task points, plus own manual rows, by date.
+- `POST /api/ege/exams/history` (teacher): `{user, date: "YYYY-MM-DD", title, scores, na, test}` -> `{id}`.
+- `GET /api/ege/exams/history?user=<id>` (teacher): the manual rows of one student.
+- `DELETE /api/ege/exams/history/{id}` (teacher): `{ok: true}`.
+
+`lib/exam-history-core.js` is a copy of the shared `exam-history-core.js` at the repository root (the site and
+the tools use the root one). After editing the shared core, refresh the copy:
+
+    cp exam-history-core.js backend/pb_hooks/lib/
+
+Rollout (hooks and the migration; take the backup first):
+
+    ssh root@185.249.154.78 'systemctl start ege-api-backup.service'
+    scp backend/pb_migrations/1790800010_exam_history.js root@185.249.154.78:/opt/ege-api/pb_migrations/
+    scp backend/pb_hooks/exams.js backend/pb_hooks/exams.pb.js root@185.249.154.78:/opt/ege-api/pb_hooks/
+    scp -r backend/pb_hooks/lib root@185.249.154.78:/opt/ege-api/pb_hooks/
+    ssh root@185.249.154.78 'chown -R egeapi: /opt/ege-api/pb_hooks /opt/ege-api/pb_migrations && systemctl restart ege-api && sleep 2 && systemctl is-active ege-api'
+
+Verify: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/summary` must print `403`.

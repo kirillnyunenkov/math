@@ -992,3 +992,71 @@ test('a student without a Telegram chat: the bot messages are not retried', asyn
   await tick();
   assert.ok((await rowOf(id)).m_open > 0);
 });
+
+// ---- "Мои пробники": summary and manual exams ----
+
+const summary = (token) => req('GET', '/ege/exams/summary', token);
+const histPost = (token, body) => req('POST', '/ege/exams/history', token, body);
+const ROW = (o = {}) => ({ scores: { 1: 1, 2: 0, 14: 2, 15: 0 }, na: [6], test: 52, ...o });
+
+test('summary: own checked exams only, per task, nothing from the statements or the key', async () => {
+  const { id, s } = await started(7000000120);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  assert.equal((await summary(s.token)).json.items.length, 0);                    // submitted, not checked yet
+  await post(id, 'check', tok.teacher, { part2: { 13: { pts: 2, comment: '' } } });
+  const r = await summary(s.token);
+  assert.equal(r.status, 200);
+  assert.equal(r.json.items.length, 1);
+  const it = r.json.items[0];
+  assert.equal(it.kind, 'exam'); assert.equal(it.id, id);
+  assert.equal(it.scores[1], 1); assert.equal(it.scores[2], null); assert.equal(it.scores[13], 2);
+  assert.ok(it.na.indexOf(3) >= 0 && it.na.indexOf(1) < 0 && it.na.indexOf(13) < 0);
+  const text = JSON.stringify(r.json);
+  assert.ok(!text.includes('Сколько будет') && !text.includes('0,5') && !text.includes('x = 1'));
+  const other = await student(7000000121);
+  assert.equal((await summary(other.token)).json.items.length, 0);
+  assert.equal((await summary(null)).status, 403);
+});
+
+test('manual exams: only the teacher writes, the student reads own rows through summary', async () => {
+  const s = await student(7000000122), o = await student(7000000123);
+  assert.equal((await histPost(s.token, { user: s.id, date: '2025-10-21', title: 'Вариант 1', ...ROW() })).status, 403);
+  const ok = await histPost(tok.teacher, { user: s.id, date: '2025-10-21', title: 'Вариант 1', ...ROW() });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  const mine = (await summary(s.token)).json.items;
+  assert.equal(mine.length, 1);
+  assert.equal(mine[0].kind, 'manual'); assert.equal(mine[0].title, 'Вариант 1');
+  assert.deepEqual(mine[0].na, [6]);
+  assert.equal(mine[0].scores[14], 2);
+  assert.equal(mine[0].test, 52);                                                   // the fixed score, never recomputed
+  assert.equal(mine[0].date, Date.UTC(2025, 9, 21, 9, 0, 0) / 1000);
+  assert.equal((await summary(o.token)).json.items.length, 0);
+  // the collection API does not write
+  const api = await req('POST', '/collections/exam_history/records', tok.teacher, { user: s.id, date: '2025-10-22', title: 'Х', scores: {}, na: [] });
+  assert.ok([400, 403].includes(api.status), String(api.status));
+});
+
+test('manual exams: validation, duplicates, listing and delete', async () => {
+  const s = await student(7000000124);
+  const add = (o) => histPost(tok.teacher, { user: s.id, date: '2025-11-15', title: 'Вариант 2', ...ROW(), ...o });
+  assert.equal((await add({ user: 'nope' })).status, 400);
+  assert.equal((await add({ date: '2025-02-30' })).status, 400);
+  assert.equal((await add({ title: '   ' })).status, 400);
+  assert.equal((await add({ scores: { 1: 5 } })).status, 400);                     // task 1 allows 0..1
+  assert.equal((await add({ scores: { 6: 1 }, na: [6] })).status, 400);            // points on a task that was not there
+  assert.equal((await add({ scores: {} })).status, 400);                            // nothing solved at all
+  assert.equal((await add({ test: undefined })).status, 400);                       // an archive exam needs its test score
+  assert.equal((await add({ test: 101 })).status, 400);
+  assert.equal((await add({ test: 52.5 })).status, 400);
+  const id = (await add({})).json.id;
+  assert.equal((await add({})).status, 400);                                        // same student, date and title
+  const list = await req('GET', `/ege/exams/history?user=${s.id}`, tok.teacher);
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.json.items.map((x) => x.title), ['Вариант 2']);
+  assert.equal((await req('GET', `/ege/exams/history?user=${s.id}`, s.token)).status, 403);
+  assert.equal((await req('DELETE', `/ege/exams/history/${id}`, s.token)).status, 403);
+  assert.equal((await req('DELETE', `/ege/exams/history/${id}`, tok.teacher)).status, 200);
+  assert.equal((await req('DELETE', `/ege/exams/history/${id}`, tok.teacher)).status, 404);
+  assert.equal((await summary(s.token)).json.items.length, 0);
+});
