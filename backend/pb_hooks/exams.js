@@ -37,6 +37,7 @@ const MONTHS = ["января", "февраля", "марта", "апреля", 
 const env = (k) => $os.getenv(k);
 const site = () => env("SITE_URL") || "https://kirillnyunenkov.github.io/math/";
 const nowS = () => Math.floor(Date.now() / 1000);
+const START_WAIT = 5;   // seconds: a run this close before a start holds on until the start
 const fail = (e, code, msg) => e.json(code, { message: msg });
 const inUsers = (e) => e.auth && e.auth.collection().name === "users";
 const isTeacher = (e) => inUsers(e) && e.auth.get("role") === "teacher";
@@ -451,7 +452,15 @@ function check(e) {
 // and another try for any bot message Telegram refused earlier (its flag is
 // still 0) while it still makes sense: within a week of the start.
 function tick() {
-  const t = nowS();
+  let t = nowS();
+  // The cron may fire a fraction of a second before the minute turns, when the exam
+  // is not yet open: waiting here is better than a message a whole minute late.
+  const near = $app.findRecordsByFilter("exam_assignments", "start > {:a} && start <= {:b} && settled = 0 && m_open = 0",
+    "start", 1, 0, { a: t, b: t + START_WAIT });
+  if (near.length) {
+    while (Date.now() < near[0].getInt("start") * 1000) { /* goja has no sleep; at most START_WAIT s */ }
+    t = nowS();
+  }
   const rows = $app.findRecordsByFilter("exam_assignments",
     "start > {:old} && ((checked = 0 && settled = 0 && start < {:soon}) || (settled > 0 && m_done = 0) || (checked > 0 && m_checked = 0))",
     "start", 500, 0, { soon: t + 3600, old: t - 7 * 86400 });
