@@ -3,6 +3,7 @@
 // clock and the phase from lib/exam-core.js. Runs on goja: plain ES6 only.
 const Core = require(`${__hooks}/lib/exam-core.js`);
 const Ans = require(`${__hooks}/lib/answers-core.js`);
+const Hist = require(`${__hooks}/lib/exam-history-core.js`);
 const tg = require(`${__hooks}/tg.js`);
 
 // Texts the bot sends. Edit here; no other code depends on the wording.
@@ -486,6 +487,74 @@ function check(e) {
   return e.json(200, { ok: true });
 }
 
+// ---- "Мои пробники": the caller's checked exams and the manual ones, per task ----
+
+function summary(e) {
+  if (!isStudent(e)) return fail(e, 403, "forbidden");
+  const items = [];
+  const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u} && checked > 0", "start", 200, 0, { u: e.auth.id });
+  each(rows, (rec) => {
+    const exam = $app.findRecordById("exams", rec.getString("exam"));
+    const ns = each(photosOf(rec), (p) => p.n).filter((n) => n !== "");
+    const ts = Hist.taskScores(J(exam, "tasks", []), J(rec, "answers", {}), J(rec, "ok", {}), J(rec, "part2", {}), ns);
+    items.push({ kind: "exam", id: rec.id, title: exam.getString("title"), full: exam.getBool("full"), date: rec.getInt("start"), scores: ts.scores, na: ts.na, maxes: ts.maxes });
+  });
+  each($app.findRecordsByFilter("exam_history", "user = {:u}", "date", 200, 0, { u: e.auth.id }), (r) => {
+    items.push({ kind: "manual", id: r.id, title: r.getString("title"), full: true, date: Hist.dateToTs(r.getString("date")),
+      scores: J(r, "scores", {}), na: J(r, "na", []), maxes: Hist.MAXES, test: r.getInt("test") });
+  });
+  items.sort((a, b) => a.date - b.date);
+  return e.json(200, { now: nowS(), items: items });
+}
+
+// The teacher enters an old exam. The body is read by key and by index (Go values), then checked as plain JS.
+function histAdd(e) {
+  if (!isTeacher(e)) return fail(e, 403, "forbidden");
+  const b = e.requestInfo().body || {};
+  const user = byId("users", String(b.user || ""));
+  const date = String(b.date || ""), title = String(b.title || "").trim();
+  if (!user || user.get("role") !== "student") return fail(e, 400, "bad user");
+  if (!Hist.validDate(date)) return fail(e, 400, "bad date");
+  if (title === "" || title.length > 80) return fail(e, 400, "bad title");
+  const incoming = b.scores || {}, scores = {}, na = [];
+  for (let i = 0; i < Hist.NUMS.length; i++) {
+    const n = Hist.NUMS[i], v = incoming[String(n)];
+    scores[n] = v == null ? null : (intOf(v) === null ? -1 : v);
+  }
+  const arr = b.na == null ? [] : b.na;
+  if (typeof arr === "string" || typeof arr.length !== "number") return fail(e, 400, "bad na");
+  for (let i = 0; i < arr.length; i++) {
+    const n = intOf(arr[i]);
+    if (n === null || na.indexOf(n) >= 0) return fail(e, 400, "bad na");
+    na.push(n);
+  }
+  const bad = Hist.checkManual(scores, na) || (intOf(b.test) === null ? "Тестовый балл: целое число от 0 до 100." : Hist.checkTest(b.test));
+  if (bad) return fail(e, 400, bad);
+  const rec = new Record($app.findCollectionByNameOrId("exam_history"));
+  rec.set("user", user.id); rec.set("date", date); rec.set("title", title); rec.set("scores", scores); rec.set("na", na); rec.set("test", b.test);
+  try { $app.save(rec); } catch (err) {
+    // only the unique index (same student, date and title) is the teacher's mistake; anything else is ours
+    return /unique/i.test(String(err)) ? fail(e, 400, "already added") : fail(e, 500, "could not save");
+  }
+  return e.json(200, { id: rec.id });
+}
+
+function histList(e) {
+  if (!isTeacher(e)) return fail(e, 403, "forbidden");
+  const user = String(e.request.url.query().get("user") || "");
+  const rows = $app.findRecordsByFilter("exam_history", "user = {:u}", "date", 200, 0, { u: user });
+  return e.json(200, { items: each(rows, (r) => ({ id: r.id, date: r.getString("date"), title: r.getString("title"),
+    scores: J(r, "scores", {}), na: J(r, "na", []), test: r.getInt("test") })) });
+}
+
+function histDel(e) {
+  if (!isTeacher(e)) return fail(e, 403, "forbidden");
+  const rec = byId("exam_history", e.request.pathValue("id"));
+  if (!rec) return fail(e, 404, "not found");
+  $app.delete(rec);
+  return e.json(200, { ok: true });
+}
+
 // Every minute: reminders, the opening message, settling of finished work,
 // and another try for any bot message Telegram refused earlier (its flag is
 // still 0) while it still makes sense: within a week of the start.
@@ -620,4 +689,5 @@ function botPhoto(msg) {
 
 module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get,
   answers: answers, away: away, finish: finish, done: done, viaTg: viaTg,
-  addPhoto: addPhoto, delPhoto: delPhoto, photoList: photoList, botPhoto: botPhoto, check: check, tick: tick };
+  addPhoto: addPhoto, delPhoto: delPhoto, photoList: photoList, botPhoto: botPhoto, check: check, tick: tick,
+  summary: summary, histAdd: histAdd, histList: histList, histDel: histDel };

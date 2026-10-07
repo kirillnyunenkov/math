@@ -20,7 +20,7 @@
     shownPhase: '', shownId: '', fade: false, sheets: 0 };   // sheets: confirmation sheets of this module that are open
 
   const seen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || []; } catch (e) { return []; } };
-  const markSeen = (id) => { try { const s = seen(); if (s.indexOf(id) < 0) { s.push(id); localStorage.setItem(SEEN_KEY, JSON.stringify(s.slice(-50))); } } catch (e) {} };
+  const markSeen = (id) => { try { const s = seen(); if (s.indexOf(id) < 0) { s.push(id); localStorage.setItem(SEEN_KEY, JSON.stringify(s.slice(-50))); } } catch (e) {} paintDot(); };
 
   // A request that hangs (a connection that went away without an error) is cut after `opt.timeout` ms (default 20 s,
   // 120 s for an upload) and fails like any other network error: nothing waits on it for ever, the save queue backs off
@@ -93,8 +93,10 @@
   function math(root) { if (root && typeof typeset === 'function') typeset(root); }
 
   // ---- hub banner ----
-  const shown = (it) => it.phase === 'scheduled' || it.phase === 'open' || it.phase === 'photos' || it.phase === 'submitted' ||
-    (it.phase === 'checked' && seen().indexOf(it.id) < 0);
+  // The hub keeps only what needs the student now: a running exam, the photo phase, a start within a day.
+  // Everything else (further scheduled, waiting for a check, checked) lives on #/exams.
+  const shown = (it) => it.phase === 'open' || it.phase === 'photos' ||
+    (it.phase === 'scheduled' && it.start - (Date.now() + st.offset) / 1000 < 86400);
   // What needs the student first: a running exam, then one that is coming, then results.
   const PRIO = { open: 0, photos: 0, scheduled: 1, submitted: 2, checked: 3 };
   // Only well-formed items are kept: the page never trusts the shape of the server answer.
@@ -153,7 +155,7 @@
       if (!auth || !C) return '';
       if (st.user !== String(auth.userId || '')) { const had = st.user; resetCache(); if (had) forgetUser(); st.user = String(auth.userId || ''); }
       loadMine();
-      return (st.mine || []).filter(shown).sort((a, b) => PRIO[a.phase] - PRIO[b.phase]).slice(0, 3).map(bannerOf).join('');
+      return (st.mine || []).filter(shown).sort((a, b) => PRIO[a.phase] - PRIO[b.phase]).slice(0, 2).map(bannerOf).join('');
     } catch (e) { return ''; }
   }
 
@@ -179,6 +181,7 @@
     if (next !== undefined && st.synced && uid === st.user) {
       st.hubTimer = setTimeout(() => loadMine(true), C.refreshDelay(next, serverNowMs(), st.hubMiss, 1500));
     }
+    paintDot();
     if (JSON.stringify(st.mine) !== before && parseRoute().view === 'hub') render();
   }
   document.addEventListener('visibilitychange', () => {
@@ -1353,5 +1356,51 @@
     if (phLive(P) && files.length) addFiles(P, f.dataset.exFile, files);
   });
 
-  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, leave: leave, safeHtml: safeHtml, reset: reset };
+  // ---- "Мои пробники": the dashboard and the list of every checked exam ----
+  async function renderMy() {
+    leave(); st.id = null;
+    const my = ++st.req;
+    setBack(true); statsEl.innerHTML = '';
+    if (!C || !window.ExamMyView || !window.ExamHistoryCore) { fail('Не получилось загрузить страницу.'); return; }
+    if (!auth) { fail('Чтобы увидеть свои пробники, войди в тренажёр через Telegram.'); return; }
+    appEl.innerHTML = '<div class="vbox"><div class="vwait" role="status"><div class="vwait-ring" aria-hidden="true"></div><p>Загружаю пробники…</p></div></div>';
+    // Opened straight from a link, the hub never ran: the cache must belong to this user before /mine is stored in it.
+    if (st.user !== String(auth.userId || '')) { const had = st.user; resetCache(); if (had) forgetUser(); st.user = String(auth.userId || ''); }
+    const gen = st.gen;
+    let r, m = null;
+    try {
+      // /mine feeds the "Ждут тебя" block (exams still ahead); the page works without it.
+      [r, m] = await Promise.all([xapi('/summary'), xapi('/mine').catch(() => null)]);
+    } catch (e) { if (my === st.req && parseRoute().view === 'exams') fail('Нет связи с сервером. Проверь интернет.'); return; }
+    if (my !== st.req || parseRoute().view !== 'exams' || gen !== st.gen) return;
+    if (m && m.status === 200 && m.json && Array.isArray(m.json.items)) { st.mine = m.json.items.filter(wellFormed); setOffset(m.json.now); }
+    if (r.status === 401 || r.status === 403) { fail('Чтобы увидеть свои пробники, войди в тренажёр через Telegram.'); return; }
+    if (r.status !== 200 || !r.json || !Array.isArray(r.json.items)) { fail('Не получилось загрузить пробники.'); return; }
+    try {
+      const ahead = (st.mine || []).filter((it) => it.phase === 'scheduled' || it.phase === 'submitted' || it.phase === 'open' || it.phase === 'photos')
+        .sort((a, b) => PRIO[a.phase] - PRIO[b.phase]);
+      const top = ahead.length ? '<section class="my-card"><h3>Ждут тебя</h3>' + ahead.map(bannerOf).join('') + '</section>' : '';
+      appEl.innerHTML = shell(window.ExamMyView.pageHtml(r.json.items, { seen: seen(), top: top }));
+      appEl.querySelectorAll('[data-my-scroll]').forEach((el) => { el.scrollLeft = el.scrollWidth; });   // the newest exams are on the right
+    } catch (e) { fail('Не получилось показать пробники.'); return; }
+    paintDot();
+  }
+
+  // The dot on the header button: an unseen result, or an exam to take now.
+  function dot() {
+    try { return !!(st.mine || []).some((it) => (it.phase === 'checked' && seen().indexOf(it.id) < 0) || it.phase === 'open' || it.phase === 'photos'); }
+    catch (e) { return false; }
+  }
+  function paintDot() { const b = document.getElementById('exams-btn'); if (b) b.classList.toggle('has-dot', dot()); }
+
+  // Keeps the dot fresh on every screen except the exam itself (loadMine is throttled to once per 30 s and never throws).
+  function warm() {
+    try {
+      if (!auth || !C) return;
+      if (st.user !== String(auth.userId || '')) { const had = st.user; resetCache(); if (had) forgetUser(); st.user = String(auth.userId || ''); }
+      loadMine(); paintDot();
+    } catch (e) {}
+  }
+
+  window.ExamUI = { bannerHTML: bannerHTML, render: renderExam, renderMy: renderMy, leave: leave, safeHtml: safeHtml, reset: reset, dot: dot, paintDot: paintDot, warm: warm };
 })();
