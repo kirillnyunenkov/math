@@ -7,13 +7,13 @@ const tg = require(`${__hooks}/tg.js`);
 
 // Texts the bot sends. Edit here; no other code depends on the wording.
 const TEXT = {
-  assigned: (title, at) => "Тебе назначен пробник «" + title + "».\nНачало: " + at + " (по Москве).\n\nВ это время он откроется в тренажёре. Напомню за час.",
+  assigned: (title, at, remind) => "Тебе назначен пробник «" + title + "».\nНачало: " + at + " (по Москве).\n\nВ это время он откроется в тренажёре." + (remind ? " Напомню за час." : ""),
   moved: (title, at) => "Пробник «" + title + "» перенесён.\nНовое начало: " + at + " (по Москве).",
   canceled: (title) => "Пробник «" + title + "» отменён.",
   hour: (title, at) => "Через час пробник «" + title + "»: начало " + at + " (по Москве).\nПриготовь черновики и ручку.",
   open: (title, mins) => "Пробник «" + title + "» открыт. На работу " + mins + " мин, время уже идёт.",
-  checked: (title, pts, max) => "Пробник «" + title + "» проверен: " + pts + " из " + max + ".\nБаллы и комментарии по второй части — в тренажёре.",
-  done: (name, title, p1, max1, how) => name + " сдал(а) пробник «" + title + "».\nПервая часть: " + p1 + " из " + max1 + ".\nВторая часть: " + how + ".",
+  checked: (title, pts, max, long) => "Пробник «" + title + "» проверен: " + pts + " из " + max + ".\n" + (long ? "Баллы и комментарии по второй части — в тренажёре." : "Результат — в тренажёре."),
+  done: (name, title, p1, max1, how) => name + " сдал(а) пробник «" + title + "».\nПервая часть: " + p1 + " из " + max1 + "." + (how ? "\nВторая часть: " + how + "." : ""),
   howPhotos: (k) => "фото — " + k,
   howTg: "решения пришлёт в Telegram",
   howNone: "фото нет",
@@ -30,6 +30,7 @@ const TEXT = {
   botOk: (title, k) => "Принял фото к пробнику «" + title + "» (всего " + k + ").",
 };
 const MAX_PHOTOS = 5, MAX_FB_PHOTOS = 5, MAX_BOT_PHOTOS = 15, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
+const BOT_PHOTO_AGE = 86400;   // a photo to the bot is taken for an exam that ended at most this long ago
 const OPEN_NEWS = 900;   // "открыт" is sent only this long after the start, and only if not opened yet
 const DAYS = ["в воскресенье", "в понедельник", "во вторник", "в среду", "в четверг", "в пятницу", "в субботу"];
 const MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -56,10 +57,11 @@ function when(ts) {
   const d = new Date((ts + 10800) * 1000), m = d.getUTCMinutes();
   return DAYS[d.getUTCDay()] + ", " + d.getUTCDate() + " " + MONTHS[d.getUTCMonth()] + ", в " + d.getUTCHours() + ":" + (m < 10 ? "0" : "") + m;
 }
-// Sends to the student's Telegram; false if the account has none or it failed.
+// Sends to the student's Telegram. false = Telegram refused it (the caller may try again);
+// true = sent, or the account has no Telegram chat, so there is nothing to wait for.
 function tell(userId, text, url, label) {
   let chat = "";
-  try { chat = $app.findFirstRecordByData("tg_profiles", "user", userId).getString("tg_id"); } catch (_) { return false; }
+  try { chat = $app.findFirstRecordByData("tg_profiles", "user", userId).getString("tg_id"); } catch (_) { return true; }
   return tg.send(chat, text, url, label);
 }
 const examUrl = (id) => site() + "#/exam/" + id;
@@ -117,7 +119,8 @@ function doneMsg(id, exam, tasks, t) {
     if (!chat) return true;
     return () => {
       const k = photosOf(r).length;
-      const how = k ? TEXT.howPhotos(k) : r.getBool("via_tg") ? TEXT.howTg : TEXT.howNone;
+      // an exam without part 2 has nothing to say about it
+      const how = !hasLongIn(tasks) ? "" : k ? TEXT.howPhotos(k) : r.getBool("via_tg") ? TEXT.howTg : TEXT.howNone;
       const name = $app.findRecordById("users", r.getString("user")).getString("name");
       return tg.send(chat, TEXT.done(name, exam.getString("title"), r.getInt("p1"), max1, how),
         site() + "teacher.html#/check/" + id, TEXT.btnCheck);
@@ -131,7 +134,7 @@ function checkedMsg(id, exam, tasks, t) {
     if (!r.getInt("checked")) return null;
     return () => {
       const sum = Core.total(tasks, r.getInt("p1"), J(r, "part2", {}));
-      return tell(r.getString("user"), TEXT.checked(exam.getString("title"), sum.pts, sum.max), examUrl(id), TEXT.btnResult);
+      return tell(r.getString("user"), TEXT.checked(exam.getString("title"), sum.pts, sum.max, hasLongIn(tasks)), examUrl(id), TEXT.btnResult);
     };
   });
 }
@@ -147,7 +150,7 @@ function assign(e) {
   rec.set("user", user.id); rec.set("exam", exam.id); rec.set("start", start); rec.set("duration", duration);
   rec.set("m_hour", start - t < 3600 ? t : 0);   // too close for a "one hour before"
   try { $app.save(rec); } catch (_) { return fail(e, 400, "already assigned"); }   // a new row: nothing to overwrite
-  tell(user.id, TEXT.assigned(exam.getString("title"), when(start)), examUrl(rec.id), TEXT.btnOpen);
+  tell(user.id, TEXT.assigned(exam.getString("title"), when(start), start - t >= 3600), examUrl(rec.id), TEXT.btnOpen);
   return e.json(200, { id: rec.id });
 }
 
@@ -215,7 +218,8 @@ function untilOf(a, phase) {
   if (phase === "photos") return t.photoUntil;
   return 0;
 }
-function hasLong(exam) { return J(exam, "tasks", []).some((x) => x.kind === "long"); }
+function hasLongIn(tasks) { return tasks.some((x) => x.kind === "long"); }
+function hasLong(exam) { return hasLongIn(J(exam, "tasks", [])); }
 
 function meta(rec, exam, t) {
   const a = shape(rec), phase = Core.phase(a, t);
@@ -562,6 +566,8 @@ function botPhoto(msg) {
     say(TEXT.botNoExam); return true;
   }
   const a = rows[0];
+  // An exam that ended long ago is not what this photo is for (homework, a screenshot...): the ordinary bot answer follows.
+  if (t > a.getInt("start") + a.getInt("duration") + BOT_PHOTO_AGE) return false;
 
   // mark the album first, so every refusal below is also said once per album;
   // the phase is read from the fresh row

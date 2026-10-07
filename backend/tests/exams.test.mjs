@@ -938,3 +938,57 @@ test('teacher photos: only the teacher removes them; a removed one is gone from 
   assert.equal((await del(tok.teacher, up.id)).status, 200);
   assert.deepEqual((await view(id, s.token)).json.fb, []);
 });
+
+// ---- Review round 2: texts, old bot photos, students without Telegram ----
+
+test('the "assigned" text promises an hour reminder only when there is time for one', async () => {
+  const exam = await mkExam('Пробник Н'), s = await student(7000000110), s2 = await student(7000000111);
+  await assign(s.id, exam, nowS() + 7200);
+  const far = sent.find(m => String(m.chat_id) === String(s.chat) && m.text.includes('Тебе назначен пробник «Пробник Н»'));
+  assert.ok(far.text.includes('Напомню за час'));
+  await assign(s2.id, exam, nowS() + 900);
+  const near = sent.find(m => String(m.chat_id) === String(s2.chat) && m.text.includes('Тебе назначен пробник «Пробник Н»'));
+  assert.ok(!near.text.includes('Напомню за час'));
+});
+
+test('an exam without part 2: the teacher and the student hear nothing about it', async () => {
+  const exam = await mkExam('Без второй', TASKS.slice(0, 2)), s = await student(7000000112);
+  const id = (await assign(s.id, exam, nowS() - 10, 600)).json.id;
+  await view(id, s.token);
+  await post(id, 'answers', s.token, { answers: { 1: '5', 2: '0,5' } });
+  await post(id, 'finish', s.token);
+  await tick();
+  await until(() => said(TEACHER_CHAT, 'сдал(а) пробник «Без второй»') >= 1);
+  const m = sent.find(x => String(x.chat_id) === TEACHER_CHAT && x.text.includes('сдал(а) пробник «Без второй»'));
+  assert.ok(m.text.includes('Первая часть: 2 из 2'));
+  assert.ok(!m.text.includes('Вторая часть'));
+  assert.equal((await post(id, 'check', tok.teacher, { part2: {} })).status, 200);
+  await until(() => said(s.chat, 'пробник «Без второй» проверен') >= 1);
+  const c = sent.find(x => String(x.chat_id) === String(s.chat) && x.text.includes('«Без второй» проверен'));
+  assert.ok(!c.text.includes('второй части'));
+});
+
+test('a photo to the bot long after the exam gets the ordinary bot answer, not "время вышло"', async () => {
+  const s = await student(7000000113), exam = await mkExam('Давний');
+  const id = (await assign(s.id, exam, nowS() - 200000, 600)).json.id;
+  const before = sent.length;
+  await botHook(photoUpdate(7000000113));
+  assert.equal(said(s.chat, 'Время пробника вышло'), 0);
+  assert.equal(said(s.chat, 'Сейчас нет пробника'), 0);
+  assert.equal(sent.slice(before).filter(m => m.chat_id === 7000000113 && m.reply_markup).length, 1);
+  assert.equal((await req('GET', `/collections/exam_photos/records?filter=assignment="${id}"`, tok.teacher)).json.totalItems, 0);
+});
+
+test('a student without a Telegram chat: the bot messages are not retried', async () => {
+  const pw = 'S'.repeat(32), exam = await mkExam('Без чата');
+  const u = await req('POST', '/collections/users/records', tok.su,
+    { login: 'nochat', role: 'student', name: 'Н', active: true, password: pw, passwordConfirm: pw });
+  assert.equal(u.status, 200, JSON.stringify(u.json));
+  const id = (await assign(u.json.id, exam, nowS() + 7200)).json.id;
+  await shift(id, { start: nowS() + 1800 });
+  await tick();
+  assert.ok((await rowOf(id)).m_hour > 0);                                  // marked as sent: nobody to send to
+  await shift(id, { start: nowS() - 5 });
+  await tick();
+  assert.ok((await rowOf(id)).m_open > 0);
+});
