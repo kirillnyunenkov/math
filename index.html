@@ -1594,7 +1594,7 @@
     #exams-btn{order:0;margin-left:auto;}
     #exams-btn:not([style*="none"]) ~ #theme{margin-left:0;}
   }
-  @media (max-width:560px){#exams-btn{padding:0;width:38px;justify-content:center;}#exams-btn .eb-label{display:none;}}
+  @media (max-width:900px){#exams-btn{padding:0;width:38px;justify-content:center;}#exams-btn .eb-label{display:none;}.title .by{display:none;}}
 
   /* ---- компактная сводка хаба: процент, «продолжить», полоса, легенда и «Собрать вариант» в одном блоке ---- */
   .hub-prog-slim{padding:var(--s5) var(--s6);overflow:visible;}
@@ -1611,9 +1611,8 @@
   .hub-prog-slim .hps-legend>span{display:inline-flex;align-items:center;gap:var(--s2);}
   .hub-prog-slim .hps-legend b{margin-left:4px;color:var(--ink);}
   @media (max-width:560px){.hub-prog-slim{padding:var(--s4);}.hub-prog-slim .hps-top{flex-direction:column;align-items:stretch;}.hub-prog-slim .hub-go{width:100%;}.hub-prog-slim .hub-go .hg-body{text-align:left;}.hub-prog-slim .hps-bottom .btn{width:100%;}}
-  /* Телефон: «от Кирилла» уходит из заголовка, иначе кнопка «Пробники» сдвигает бургер на вторую строку. */
+  /* До 900px «от Кирилла» и подпись «Пробники» не помещаются рядом с меню в одну строку; на телефоне ещё и теснее зазор. */
   @media (max-width:560px){
-    .title .by{display:none;}
     .head-inner{gap:var(--s2);}
   }
 </style>
