@@ -30,7 +30,7 @@ Maxima are fixed by task number: tasks 1-13: 1; 14: 2; 15: 3; 16: 2; 17: 2; 18: 
 - 33 primary points: the existing `SEC_SCORE` of the trainer (index.html).
 - 32 primary points (old exams): the owner's table, primary -> test: 0:0, 1:6, 2:11, 3:17, 4:22, 5:27, 6:34, 7:40, 8:46, 9:52, 10:58, 11:64, 12:70, 13:72, 14:74, 15:76, 16:78, 17:80, 18:82, 19:84, 20:86, 21:88, 22:90, 23:92, 24:94, 25:95, 26:96, 27:97, 28:98, 29:99, 30:100, 31:100, 32:100.
 - Any other maximum: no test score is shown (the primary score still is).
-- Both tables live in one pure module `exam-history-core.js` with the scale choice, so they can be tested in node. `SEC_SCORE` in index.html is replaced by a reference to the module (same values).
+- Both tables live in one pure module `exam-history-core.js` with the scale choice, so they can be tested in node. `SEC_SCORE` stays in index.html; the module holds the same numbers and a test fails if the two ever differ.
 
 ### Exams written in the trainer
 
