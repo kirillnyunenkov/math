@@ -474,6 +474,17 @@ test('the tick sends the hour reminder and the opening message once each', async
   assert.ok(open[0].reply_markup.inline_keyboard[0][0].url.endsWith('#/exam/' + id));
 });
 
+test('a tick a moment before the start waits for it and sends the opening message at once', async () => {
+  const exam = await mkExam('Пробник Ж'), s = await student(7000000099);
+  const id = (await assign(s.id, exam, nowS() + 7200)).json.id;
+  const start = nowS() + 3;
+  await shift(id, { start });
+  await tick();                                            // returns only after the start
+  assert.ok(nowS() >= start);
+  await until(() => said(s.chat, '«Пробник Ж» открыт') > 0);
+  assert.equal(said(s.chat, '«Пробник Ж» открыт'), 1);
+});
+
 test('check: teacher only, valid points only, the student is told once', async () => {
   const { id, s } = await started(7000000047);
   const check = (token, part2) => post(id, 'check', token, { part2 });
