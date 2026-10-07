@@ -17,7 +17,7 @@
   function tableHtml(all) {
     const items = all.filter(isFull);
     if (!items.length) return '';
-    const head = '<tr><th class="my-n"></th>' + items.map((it) => '<th title="' + esc(it.title) + '">' + dm(it.date) + '</th>').join('') + '<th class="my-sol">Решаем.</th></tr>';
+    const head = '<tr><th class="my-n"></th>' + items.map((it) => '<th title="' + esc(it.title) + '">' + dm(it.date) + '</th>').join('') + '<th class="my-sol">Решаемость</th></tr>';
     const rows = H.NUMS.map((n) => {
       const sol = H.solvability(items, n);
       return '<tr><th class="my-n">' + n + '</th>' + items.map((it) => {
@@ -26,7 +26,7 @@
       }).join('') + '<td class="my-sol">' + (sol === null ? '-' : sol + '%') + '</td></tr>';
     }).join('');
     const total = (label, f) => '<tr class="my-total"><th class="my-n">' + label + '</th>' + items.map((it) => { const v = f(it); return '<td>' + (v === null ? '' : v) + '</td>'; }).join('') + '<td></td></tr>';
-    return '<div class="my-scroll" data-my-scroll><table class="my-tbl">' + head + rows + total('Перв.', H.primaryOf) + total('Тест.', H.testOf) + '</table></div>';
+    return '<div class="my-scroll" data-my-scroll><table class="my-tbl">' + head + rows + total('Первичный<br>балл', H.primaryOf) + total('Тестовый<br>балл', H.testOf) + '</table></div>';
   }
 
   // Test score by exam, inline SVG. Wide enough that the labels stay readable: a phone scrolls it sideways.
@@ -66,7 +66,7 @@
     return '<div class="vintro"><h2>Мои пробники</h2><p class="lead">Все проверенные работы: баллы, разбор и мои комментарии.</p></div>' + top +
       (chart ? '<section class="my-card"><h3>Тестовый балл</h3>' + chart + '</section>' : '') +
       (table ? '<section class="my-card"><h3>Баллы по заданиям</h3>' + table +
-      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте.</p></section>' : '') +
+      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте. Решаемость: какую долю баллов за это задание ты набрал по всем пробникам.</p></section>' : '') +
       '<section class="my-card"><h3>Все пробники</h3><div class="my-list">' + listHtml(items, (opt && opt.seen) || []) + '</div></section>';
   }
 

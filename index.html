@@ -1558,13 +1558,15 @@
     .lnk .chev{transition:none;}
     .hub-go:hover .hg-act .ic{transform:none;}
   }
+  .vintro + .my-card{margin-top:var(--s4);}
   .my-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5);margin:0 0 var(--s4);}
   .my-card h3{margin:0 0 var(--s3);font-size:var(--fs-md);}
   .my-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .my-tbl{border-collapse:collapse;font-size:var(--fs-sm);font-variant-numeric:tabular-nums;}
   .my-tbl th,.my-tbl td{border:1px solid var(--line);min-width:42px;height:30px;padding:0 4px;text-align:center;font-weight:500;}
   .my-tbl th.my-n{position:sticky;left:0;background:var(--surface);min-width:34px;z-index:1;}
-  .my-tbl td.my-sol,.my-tbl th.my-sol{min-width:64px;background:var(--surface-2);}
+  .my-tbl .my-total th.my-n{min-width:78px;line-height:1.15;font-size:var(--fs-xs);}
+  .my-tbl td.my-sol,.my-tbl th.my-sol{min-width:92px;background:var(--surface-2);}
   .my-full{background:var(--ok-soft);color:var(--ok-text);}
   .my-part{background:var(--warn-soft);color:var(--warn-text);}
   .my-zero{background:var(--err-soft);color:var(--err-text);}
@@ -1600,9 +1602,14 @@
   .hub-prog-slim{padding:var(--s5) var(--s6);overflow:visible;}
   .hub-prog-slim::before{display:none;}
   .hub-prog-slim .hps-top{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);flex-wrap:wrap;margin-bottom:var(--s3);}
-  .hub-prog-slim .hps-main{display:flex;align-items:baseline;gap:var(--s3);flex-wrap:wrap;min-width:0;}
-  .hub-prog-slim .hps-pct{font-family:'Literata',Georgia,serif;font-weight:700;font-size:var(--fs-2xl);line-height:1;color:var(--ok-text);font-variant-numeric:tabular-nums;-webkit-text-fill-color:initial;}
-  .hub-prog-slim .hps-sub{font-size:var(--fs-sm);color:var(--ink-2);}
+  .hub-prog-slim .hps-main{display:flex;align-items:center;gap:var(--s5);min-width:0;}
+  /* the big gradient number of the old hero card, kept in the compact card */
+  .hub-prog-slim .hps-pct{font-family:'Literata',Georgia,serif;font-weight:700;font-size:clamp(56px,11vw,88px);line-height:.92;
+    letter-spacing:-.045em;font-variant-numeric:tabular-nums;color:var(--ok-text);
+    background:linear-gradient(150deg,var(--ok) 8%,var(--accent) 108%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;padding-bottom:.04em;}
+  .hub-prog-slim .hps-sub{font-size:var(--fs-base);color:var(--ink-2);line-height:1.4;}
+  .hub-prog-slim .hps-sub b{display:block;color:var(--ink);font-size:var(--fs-md);font-weight:600;}
   .hub-prog-slim .hub-go{position:static;z-index:auto;width:auto;max-width:none;flex-direction:row;align-items:center;margin:0;padding:0;border:0;gap:var(--s4);}
   .hub-prog-slim .hub-go .hg-body{text-align:right;}
   .hub-prog-slim .hub-prog-bar{height:10px;margin-bottom:0;}
@@ -1610,6 +1617,9 @@
   .hub-prog-slim .hps-legend{display:flex;flex-wrap:wrap;gap:var(--s2) var(--s4);font-size:var(--fs-xs);color:var(--ink-2);}
   .hub-prog-slim .hps-legend>span{display:inline-flex;align-items:center;gap:var(--s2);}
   .hub-prog-slim .hps-legend b{margin-left:4px;color:var(--ink);}
+  .hub-prog-slim .hps-bottom{margin-top:var(--s4);}
+  .hub-prog-slim .hps-cta{min-height:52px;padding:0 var(--s6);font-size:var(--fs-md);font-weight:600;color:var(--accent-on);gap:var(--s2);}
+  .hub-prog-slim .hps-cta:hover{color:var(--accent-on);}
   @media (max-width:560px){.hub-prog-slim{padding:var(--s4);}.hub-prog-slim .hps-top{flex-direction:column;align-items:stretch;}.hub-prog-slim .hub-go{width:100%;}.hub-prog-slim .hub-go .hg-body{text-align:left;}.hub-prog-slim .hps-bottom .btn{width:100%;}}
   /* До 900px «от Кирилла» и подпись «Пробники» не помещаются рядом с меню в одну строку; на телефоне ещё и теснее зазор. */
   @media (max-width:560px){
@@ -2807,7 +2817,7 @@ function renderHub(){
     </button>`;})():'';
   const progHTML=`<div class="hub-prog hub-prog-slim">
     <div class="hps-top">
-      <div class="hps-main"><span class="hps-pct">${Math.round(gp)}%</span><span class="hps-sub">освоено ${allG} из ${total} · первая часть</span></div>
+      <div class="hps-main"><span class="hps-pct">${Math.round(gp)}%</span><span class="hps-sub"><b>освоено</b>${allG} из ${total} · первая часть</span></div>
       ${goHTML}
     </div>
     <div class="hub-prog-bar">
@@ -2817,7 +2827,7 @@ function renderHub(){
     </div>
     <div class="hps-bottom">
       <span class="hps-legend"><span><i class="dot g"></i>Умею <b>${allG}</b></span><span><i class="dot o"></i>Повторить <b>${allO}</b></span><span><i class="dot b"></i>Разобраться <b>${allB}</b></span><span><i class="dot n"></i>Осталось <b>${left}</b></span></span>
-      <button class="btn" data-variant>Собрать вариант</button>
+      <button class="btn primary hps-cta" data-variant>Собрать вариант <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5 18.5 12 13 17.5"/></svg></button>
     </div>
   </div>`;
   const noteHTML=resetNote?`<div class="hub-note">
