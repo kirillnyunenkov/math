@@ -352,6 +352,7 @@
     bindOpen(s);
     stageAndMount(shell(barHTML() +
         '<p class="ex-note ex-savehint" id="ex-savehint" role="alert" hidden>Ответы пока не сохранились. Проверь интернет и не закрывай страницу, пока не появится «Сохранено».</p>' +
+        '<p class="ex-note">Решаем честно и самостоятельно: без калькулятора, подсказок, интернета и тетради с формулами.</p>' +
         (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши мне.</p>' : '') +
         (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') +
         (rej ? '<p class="ex-note">' + esc(rej) + '</p>' : '') +
