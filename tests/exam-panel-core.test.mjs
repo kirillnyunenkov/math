@@ -71,3 +71,33 @@ test('activitySummary does not touch Object.prototype for a hostile task key', (
     assert.equal(s.tasks.constructor.changes, 1);
   } finally { delete Object.prototype.changes; delete Object.prototype.firstSec; delete Object.prototype.lastSec; }
 });
+
+const mem = () => { const m = new Map(); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k) }; };
+
+test('draft: written, read back, removed', () => {
+  const s = mem(), k = P.draftKey('abc');
+  assert.equal(k, 'ck-draft:abc');
+  P.writeDraft(s, k, { pts: { 13: 2 }, note: { 13: 'Не хватает обоснования' } });
+  assert.deepEqual(P.readDraft(s, k), { pts: { 13: 2 }, note: { 13: 'Не хватает обоснования' } });
+  P.writeDraft(s, k, null);
+  assert.equal(P.readDraft(s, k), null);
+});
+
+test('draft: garbage in storage is dropped, never thrown on', () => {
+  const s = mem(), k = P.draftKey('x');
+  s.setItem(k, '{"pts":{"13":"2","__proto__":5,"99999":1,"14":-1,"15":101,"16":1.5},"note":{"13":7,"14":"ok"}}');
+  assert.deepEqual(P.readDraft(s, k), { pts: {}, note: { 14: 'ok' } });
+  s.setItem(k, 'not json');
+  assert.equal(P.readDraft(s, k), null);
+  assert.equal(P.readDraft({ getItem() { throw new Error('blocked'); } }, k), null);
+  assert.doesNotThrow(() => P.writeDraft({ setItem() { throw new Error('full'); }, removeItem() {} }, k, { pts: { 1: 1 }, note: {} }));
+});
+
+test('draftDiffers: equal to the server is not a draft', () => {
+  const server = { 13: { pts: 2, comment: 'a' } };
+  assert.equal(P.draftDiffers({ pts: { 13: 2 }, note: { 13: 'a' } }, server), false);
+  assert.equal(P.draftDiffers({ pts: { 13: 3 }, note: { 13: 'a' } }, server), true);
+  assert.equal(P.draftDiffers({ pts: {}, note: { 13: 'b' } }, server), true);
+  assert.equal(P.draftDiffers({ pts: { 14: 0 }, note: {} }, {}), false);   // nothing saved yet: 0 points and empty text is the blank form
+  assert.equal(P.draftDiffers(null, server), false);
+});

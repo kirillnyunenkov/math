@@ -17,6 +17,7 @@
     save: null, leaving: null, det: {}, listeners: [], saveTimer: 0, retryTimer: 0,
     picker: 0, carry: null,            // picker: when the file dialog was opened; carry: photos handed from the open to the photo screen
     lostBy: Object.create(null),   // photos lost on leaving, per exam, until the note is shown
+    rejectedBy: Object.create(null),   // answers refused after the window closed, per exam, until the note is shown
     shownPhase: '', shownId: '', fade: false, sheets: 0 };   // sheets: confirmation sheets of this module that are open
 
   const seen = () => { try { return JSON.parse(localStorage.getItem(SEEN_KEY)) || []; } catch (e) { return []; } };
@@ -129,10 +130,13 @@
     Object.keys(drawnPhase).forEach((k) => { delete drawnPhase[k]; });
   }
   // What the page remembers about one user's exams (not shown to the next user).
-  function forgetUser() { st.lostBy = Object.create(null); }
+  function forgetUser() { st.lostBy = Object.create(null); st.rejectedBy = Object.create(null); }
   // Photos that were on their way when the student left an exam: the next time that exam is opened a note says so, once.
   const addLost = (id, n) => { if (n > 0 && typeof id === 'string') st.lostBy[id] = (st.lostBy[id] || 0) + n; };
   function takeLost(id) { const n = st.lostBy[id] || 0; delete st.lostBy[id]; return n; }
+  // Answers the server refused because the window had closed: shown once on the next screen of that exam.
+  function addRejected(id, text) { if (text && typeof id === 'string') st.rejectedBy[id] = text; }
+  function takeRejected(id) { const t = st.rejectedBy[id] || ''; delete st.rejectedBy[id]; return t; }
   // Sign-out, expiry or a login: the exam screen and the cached list both go.
   function reset() {
     leave();
@@ -340,7 +344,7 @@
     const dropped = !Array.isArray(v.tasks) || v.tasks.length !== tasks.length;
     const s = st.save = makeSession(id, v, tasks);
     s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s;
-    const lost = takeLost(id);
+    const lost = takeLost(id), rej = takeRejected(id);
     if (pendSnap) tasks.forEach((t) => {
       const k = String(t.n);
       if (t.kind === 'short' && Object.prototype.hasOwnProperty.call(pendSnap, k) && typeof pendSnap[k] === 'string') s.q.set(k, pendSnap[k]);
@@ -350,6 +354,7 @@
         '<p class="ex-note ex-savehint" id="ex-savehint" role="alert" hidden>Ответы пока не сохранились. Проверь интернет и не закрывай страницу, пока не появится «Сохранено».</p>' +
         (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши мне.</p>' : '') +
         (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') +
+        (rej ? '<p class="ex-note">' + esc(rej) + '</p>' : '') +
         tasks.map((t) => cardHTML(t, typed)).join('') +
         (hasLong ? tgBlockHTML() : '') +
         '<div style="text-align:center;margin-top:8px"><button class="btn primary" data-ex-finish>Завершить пробник</button></div>'),
@@ -363,7 +368,7 @@
     const s = { id: id, phase: v.phase, q: new C.SaveQueue(), busy: null, fails: 0, nextAt: 0, dead: false, closed: false,
       syncing: false, finishing: false, away: new C.AwayTracker(2), until: v.until, tick: null,
       token: (auth && auth.token) || '', uid: auth ? String(auth.userId || '') : '', hasLong: tasks.some((t) => t.kind === 'long'),
-      fatal: '', lastKind: '', inflight: null, noRetry: false, stop: false, ph: null };
+      fatal: '', lastKind: '', inflight: null, noRetry: false, stop: false, ph: null, tasks: tasks };
     s.q.onChange = () => C.writePending(localStorage, C.pendKey(s.uid, id), s.q.snapshot());   // survives a tab that the phone unloads
     return s;
   }
@@ -401,7 +406,7 @@
       try { r = await xapi('/' + encodeURIComponent(s.id)); } catch (e) { r = null; }
       if (s.dead) return;
       if (r && r.status === 200 && r.json && typeof r.json.phase === 'string') {
-        if (r.json.phase !== s.phase) { s.closed = true; adopt(s.id, r.json); return; }   // this phase is over: the server takes no more answers, nothing is kept for later
+        if (r.json.phase !== s.phase) { addRejected(s.id, C.rejectedNote(s.q.snapshot(), s.tasks)); s.closed = true; adopt(s.id, r.json); return; }   // this phase is over: the server takes no more answers, nothing is kept for later
         setOffset(r.json.now);
         if (typeof r.json.until === 'number' && Number.isFinite(r.json.until)) s.until = r.json.until;
         if (timeLeft(s) > 0) { s.syncing = false; s.closed = false; if (s.q.has()) flush(s, { force: true }); return; }   // the server says there is time left after all
@@ -1127,14 +1132,15 @@
       doneNow(s0);                                                       // nothing to wait for: hand it in without another tap
       return;
     }
-    const lost = takeLost(id);
+    const lost = takeLost(id), rej = takeRejected(id);
     const s = st.save = makeSession(id, v, tasks);
     if (carry && !carry.dead) { attachPhotos(carry, s, tasks, v.photos); st.carry = null; } else { s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s; st.carry = null; }
     bindOpen(s);
     appEl.innerHTML = shell(bar +
-      '<div class="vintro ex-pintro"><p class="lead">' + (v.early === false ? '<b>Время вышло.</b> ' : '') + 'Ответы первой части сохранены. Сфотографируй решения второй части и прикрепи к заданиям — ' +
+      '<div class="vintro ex-pintro"><p class="lead">' + (v.early === false ? '<b>Время вышло.</b> ' : '') + (rej ? 'Остальные ответы первой части сохранены. ' : 'Ответы первой части сохранены. ') + 'Сфотографируй решения второй части и прикрепи к заданиям — ' +
       'или отправь фото боту. Сколько времени осталось на фото, показывает таймер вверху.</p>' +
-      (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') + '</div>' +
+      (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') +
+      (rej ? '<p class="ex-note">' + esc(rej) + '</p>' : '') + '</div>' +
       tasks.map((t) => '<div class="vcard" data-n="' + t.n + '" data-exn="' + t.n + '"><div class="vlabel">Задание ' + t.n +
         (t.max ? '<span class="vlabel-art"> · максимум ' + t.max + ' ' + ballWordOf(t.max) + '</span>' : '') + '</div>' +
         photoBlockHTML(t.n) + '</div>').join('') + tgBlockHTML() +
@@ -1211,7 +1217,7 @@
     if (!tasks.length) { fail('Не получилось загрузить задания пробника.', true); return; }
     const R = C.resultOf(v, tasks, { secondary: typeof secondaryScore === 'function' ? secondaryScore : null });
     const dropped = !Array.isArray(v.tasks) || v.tasks.length !== tasks.length;
-    const lost = takeLost(id);
+    const lost = takeLost(id), rej = takeRejected(id);
     // A session of its own so that the file token, the thumbnails and the stale-screen checks work as on the other screens;
     // `result` keeps the finish / done buttons of a screen being replaced from acting on it.
     const s = st.save = makeSession(id, v, tasks);
@@ -1230,6 +1236,7 @@
       ? '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div></div>' : '';
     stageAndMount(shell('<div class="vresult"><h2>' + titleOf(v) + '</h2><div class="vscores">' + tiles + '</div>' + waits +
         (lost && !R.checked ? '<p class="ex-note">Часть фото не успела загрузиться и в работу не попала.</p>' : '') +
+        (rej ? '<p class="ex-note">' + esc(rej) + '</p>' : '') +
         (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши мне.</p>' : '') +
         '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>' +
         tasks.map((t, i) => resultCard(t, R.items[i], P)).join('') + bot),

@@ -49,6 +49,8 @@ const isStudent = (e) => inUsers(e) && e.auth.get("active") === true;
 function J(rec, field, fallback) {
   try { const v = JSON.parse(rec.getString(field)); return v == null ? fallback : v; } catch (_) { return fallback; }
 }
+// Numbers of the short-answer tasks, as strings: what the autosave route needs to know about an exam.
+function shortsOf(tasks) { return tasks.filter((x) => x && x.kind === "short").map((x) => String(x.n)); }
 function shape(rec) {
   return { start: rec.getInt("start"), duration: rec.getInt("duration"), opened: rec.getInt("opened"),
     finished: rec.getInt("finished"), photos_done: rec.getInt("photos_done"), checked: rec.getInt("checked") };
@@ -150,6 +152,7 @@ function assign(e) {
   const rec = new Record($app.findCollectionByNameOrId("exam_assignments"));
   rec.set("user", user.id); rec.set("exam", exam.id); rec.set("start", start); rec.set("duration", duration);
   rec.set("m_hour", start - t < 3600 ? t : 0);   // too close for a "one hour before"
+  rec.set("shorts", shortsOf(J(exam, "tasks", [])));
   try { $app.save(rec); } catch (_) { return fail(e, 400, "already assigned"); }   // a new row: nothing to overwrite
   tell(user.id, TEXT.assigned(exam.getString("title"), when(start), start - t >= 3600), examUrl(rec.id), TEXT.btnOpen);
   return e.json(200, { id: rec.id });
@@ -203,11 +206,11 @@ function cancel(e) {
   return e.json(200, { ok: true });
 }
 
-// The caller's own assignment with its exam, or null.
-function own(e) {
+// The caller's own assignment with its exam, or null. `light`: the row only, the exam (up to 5 MB) is not loaded.
+function own(e, light) {
   const rec = byId("exam_assignments", e.request.pathValue("id"));
   if (!rec || rec.getString("user") !== e.auth.id) return null;
-  return { rec: rec, exam: $app.findRecordById("exams", rec.getString("exam")) };
+  return light ? { rec: rec } : { rec: rec, exam: $app.findRecordById("exams", rec.getString("exam")) };
 }
 
 // The moment the current phase ends, for the page's countdown: the start while
@@ -320,9 +323,9 @@ function get(e) {
 // If refused, the error answer is already written here and `res` is true: the
 // handler must then just `return` (e.json gives back nothing under goja, so
 // it cannot be passed on). Otherwise a.rec is the row as written.
-function during(e, phases, fn, prep) {
+function during(e, phases, fn, prep, light) {
   if (!isStudent(e)) { fail(e, 403, "forbidden"); return { res: true }; }
-  const a = own(e);
+  const a = own(e, light);
   if (!a) { fail(e, 404, "not found"); return { res: true }; }
   a.t = nowS();
   const check = (r) => {
@@ -366,7 +369,12 @@ function answers(e) {
     });
     if (!added.length) return false;
     r.set("answers", cur); logPush(r, added);
-  }, (a) => { J(a.exam, "tasks", []).forEach((x) => { if (x.kind === "short") short[String(x.n)] = true; }); });
+  }, (a) => {
+    // the row knows its short tasks; a row from before that column falls back to the exam
+    const s = J(a.rec, "shorts", []);
+    if (s.length) { s.forEach((n) => { short[String(n)] = true; }); return; }
+    J($app.findRecordById("exams", a.rec.getString("exam")), "tasks", []).forEach((x) => { if (x && x.kind === "short") short[String(x.n)] = true; });
+  }, true);
   if (a.res) return;
   return e.json(200, { ok: true });
 }
@@ -376,7 +384,7 @@ function away(e) {
   const a = during(e, ["open"], (r, a) => {
     if (sec === null || sec < 1 || sec > r.getInt("duration")) return [400, "bad input"];
     logPush(r, [[a.t, "w", n, sec]]);
-  });
+  }, null, true);
   if (a.res) return;
   return e.json(200, { ok: true });
 }
