@@ -837,10 +837,12 @@ function freshToken(maxAgeMs){
     catch(e){}finally{ckTokP=null;}
     return ckTok.v;})());
 }
-const phUrl=(path,tok,coll)=>`${API}/files/${coll||'exam_photos'}/${path.split('/').map(encodeURIComponent).join('/')}?token=${encodeURIComponent(tok)}`;
+// `thumb` asks for the server's small copy; PH_THUMB must equal the size in backend/pb_migrations/1790800012_photo_thumbs.js
+const PH_THUMB='600x0';
+const phUrl=(path,tok,coll,thumb)=>`${API}/files/${coll||'exam_photos'}/${path.split('/').map(encodeURIComponent).join('/')}?token=${encodeURIComponent(tok)}${thumb?'&thumb='+PH_THUMB:''}`;
 const phPath=p=>`${p.id}/${p.file}`;
 function phThumb(p,tok,alt,coll){
-  return `<a href="${esc(phUrl(phPath(p),tok,coll))}" data-ph="${esc(phPath(p))}" ${coll?`data-phc="${esc(coll)}" `:''}target="_blank" rel="noopener"><img data-phi loading="lazy" src="${esc(phUrl(phPath(p),tok,coll))}" alt="${esc(alt)}"></a>`;
+  return `<a href="${esc(phUrl(phPath(p),tok,coll))}" data-ph="${esc(phPath(p))}" ${coll?`data-phc="${esc(coll)}" `:''}target="_blank" rel="noopener"><img data-phi loading="lazy" src="${esc(phUrl(phPath(p),tok,coll,true))}" alt="${esc(alt)}"></a>`;
 }
 function setPhotoLinks(tok){app.querySelectorAll('a[data-ph]').forEach(a=>{a.href=phUrl(a.dataset.ph,tok,a.dataset.phc);});}
 // an image that fails to load gets one more try with a new token (the page may have been open for a while)
@@ -849,7 +851,7 @@ app.addEventListener('error',async e=>{
   img.dataset.retried='1';
   const tok=await freshToken(10000);if(!tok||!img.isConnected)return;
   setPhotoLinks(tok);
-  const a=img.closest('a[data-ph]');if(a)img.src=phUrl(a.dataset.ph,tok,a.dataset.phc);
+  const a=img.closest('a[data-ph]');if(a)img.src=phUrl(a.dataset.ph,tok,a.dataset.phc,true);
 },true);
 /* ---- the teacher's photos for a task's comment: kept on the page, uploaded at once, shown to the student after the check ---- */
 const FB_COLL='exam_feedback_photos',FB_MAX=5;

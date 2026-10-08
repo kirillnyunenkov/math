@@ -6,7 +6,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, readFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -436,6 +436,40 @@ test('photos: long tasks only, five per task, owner and teacher can read the fil
   assert.equal((await req('DELETE', `/ege/exams/${id}/photos/${up.json.id}`, other.token)).status, 404);
   assert.equal((await req('DELETE', `/ege/exams/${id}/photos/${up.json.id}`, s.token)).status, 200);
   assert.equal((await view(id, s.token)).json.photos.length, 4);
+});
+
+test('photo file fields list the 600x0 thumbnail, and the server makes a smaller copy of a big picture', async () => {
+  for (const c of ['exam_photos', 'exam_feedback_photos']) {
+    const r = await req('GET', `/collections/${c}`, tok.su);
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.json.fields.find(f => f.name === 'file').thumbs, ['600x0'], c);
+  }
+  // a real 2000x1500 JPEG made with macOS sips; skipped where sips is missing
+  const dirT = mkdtempSync(join(tmpdir(), 'thumb-'));
+  let big;
+  try {
+    const src = join(dirT, 'a.png'), out = join(dirT, 'a.jpg');
+    // a noisy picture so that the JPEG is not tiny: write raw BMP-free PNG through sips from a generated PPM-like buffer
+    const w = 2000, h = 1500, px = Buffer.alloc(w * h * 3);
+    for (let i = 0; i < px.length; i++) px[i] = (i * 2654435761 >>> 24) & 255;
+    writeFileSync(join(dirT, 'a.ppm'), Buffer.concat([Buffer.from(`P6\n${w} ${h}\n255\n`), px]));
+    execFileSync('sips', ['-s', 'format', 'jpeg', join(dirT, 'a.ppm'), '--out', out], { stdio: 'ignore' });
+    big = readFileSync(out);
+  } catch { big = null; }
+  rmSync(dirT, { recursive: true, force: true });
+  if (!big) return;
+  const { id, s } = await started(7000000090);
+  const up = await upload(id, s.token, 13, big, 'image/jpeg', 'big.jpg');
+  assert.equal(up.status, 200, JSON.stringify(up.json));
+  const ft = (await req('POST', '/files/token', s.token)).json.token;
+  const base = `${B}/files/exam_photos/${up.json.id}/${up.json.file}?token=${ft}`;
+  const full = await fetch(base), thumb = await fetch(base + '&thumb=600x0');
+  const fb = Buffer.from(await full.arrayBuffer()), tb = Buffer.from(await thumb.arrayBuffer());
+  assert.equal(full.status, 200); assert.equal(thumb.status, 200);
+  assert.equal(fb.length, big.length);
+  assert.match(thumb.headers.get('content-type'), /^image\//);
+  assert.ok(tb.length < fb.length, `thumb ${tb.length} < original ${fb.length}`);
+  console.log('thumb bytes', tb.length, 'original bytes', fb.length);
 });
 
 test('photos are accepted in the photo phase and refused after it', async () => {

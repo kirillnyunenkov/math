@@ -592,3 +592,11 @@ test('rejectedNote lists the unsent short answers, nothing for empty or long tas
   assert.equal(C.rejectedNote(null, tasks), '');
   assert.ok(C.rejectedNote({ 3: 'x'.repeat(100) }, tasks).includes('«' + 'x'.repeat(40) + '»'));
 });
+
+test('photoUrl builds the protected file address, with a thumbnail only when asked', () => {
+  const p = { id: 'ab12', file: 'my photo_x1.jpg' };
+  assert.equal(C.photoUrl('https://h/api', 'exam_photos', p, 'a.b/c'), 'https://h/api/files/exam_photos/ab12/my%20photo_x1.jpg?token=a.b%2Fc');
+  assert.equal(C.photoUrl('https://h/api', 'exam_feedback_photos', p, 't', true), 'https://h/api/files/exam_feedback_photos/ab12/my%20photo_x1.jpg?token=t&thumb=600x0');
+  assert.equal(C.photoUrl('/api', 'exam_photos', p, 't', false).includes('thumb'), false);
+  assert.equal(C.THUMB, '600x0');
+});

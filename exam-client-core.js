@@ -383,7 +383,15 @@
       second: total ? secondaryOf(v.full, total.pts, opts && opts.secondary) : null };
   }
 
-  const api = { mergePhotoLists: mergePhotoLists, ownGet: ownGet, pointsOf: pointsOf, secondaryOf: secondaryOf, resultOf: resultOf, canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
+  // The size of a photo preview. It MUST equal the size listed in `thumbs` of the file field in
+  // backend/pb_migrations/1790800012_photo_thumbs.js: a size the field does not list makes PocketBase return the original.
+  const THUMB = '600x0';
+  // Address of a protected photo file; with `thumb` the server sends its small copy instead of the full picture.
+  function photoUrl(api, coll, p, tok, thumb) {
+    return api + '/files/' + coll + '/' + encodeURIComponent(p.id) + '/' + encodeURIComponent(p.file) + '?token=' + encodeURIComponent(tok) + (thumb ? '&thumb=' + THUMB : '');
+  }
+
+  const api = { THUMB: THUMB, photoUrl: photoUrl, mergePhotoLists: mergePhotoLists, ownGet: ownGet, pointsOf: pointsOf, secondaryOf: secondaryOf, resultOf: resultOf, canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
     classifyStatus: classifyStatus, durationText: durationText, pendKey: pendKey, readPending: readPending, writePending: writePending, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, rejectedNote: rejectedNote, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, nextChangeAt: nextChangeAt, minutesText: minutesText, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;

@@ -785,7 +785,9 @@
     P.tokP = p;
     return p;
   }
-  const thumbUrl = (tok, p, coll) => API + '/files/' + (coll || 'exam_photos') + '/' + encodeURIComponent(p.id) + '/' + encodeURIComponent(p.file) + '?token=' + encodeURIComponent(tok);
+  // The preview shows the server's small copy; the full address goes to the lightbox through data-ex-full.
+  const thumbUrl = (tok, p, coll) => C.photoUrl(API, coll || 'exam_photos', p, tok, true);
+  const fullUrl = (tok, p, coll) => C.photoUrl(API, coll || 'exam_photos', p, tok, false);
   const needsToken = (P) => (P.server.some((p) => !P.local.has(p.id)) || P.fb.length > 0) && (!P.ftoken || Date.now() - P.ftokenAt >= 60000);
 
   // ---- drawing ----
@@ -800,8 +802,8 @@
   // `tok` is what goes into the thumbnail address; the screen compares tiles with a stand-in token, so a new token alone
   // never redraws (and so never reloads) a tile that is on screen.
   function serverFig(P, p, tok) {
-    const src = P.local.get(p.id) || (tok ? thumbUrl(tok, p) : '');
-    return '<figure class="ex-thumb' + (src ? ' ex-z' : '') + '">' + (src ? '<img data-ex-img="' + esc(p.id) + '" src="' + esc(src) + '" alt="' + esc(altOf(p.n)) + '" loading="lazy" decoding="async">'
+    const local = P.local.get(p.id), src = local || (tok ? thumbUrl(tok, p) : '');
+    return '<figure class="ex-thumb' + (src ? ' ex-z' : '') + '">' + (src ? '<img data-ex-img="' + esc(p.id) + '" src="' + esc(src) + '"' + (local ? '' : ' data-ex-full="' + esc(fullUrl(tok, p)) + '"') + ' alt="' + esc(altOf(p.n)) + '" loading="lazy" decoding="async">'
         : '<span class="ex-nopic" aria-hidden="true"></span>') +
       (P.ro ? '' : '<button type="button" class="ex-del" data-ex-del="' + esc(p.id) + '" aria-label="Удалить фото"' + (P.deleting.has(p.id) ? ' disabled' : '') + '>×</button>') + '</figure>';
   }
@@ -848,7 +850,7 @@
     for (let i = 0; i < roots.length; i++) {
       const n = roots[i].dataset.exFb, box = roots[i].querySelector('.ex-thumbs');
       const html = P.fb.filter((p) => p.n === n).map((p) => '<figure class="ex-thumb' + (P.ftoken ? ' ex-z' : '') + '">' + (P.ftoken
-        ? '<img data-ex-fbimg="' + esc(p.id) + '" src="' + esc(thumbUrl(P.ftoken, p, 'exam_feedback_photos')) + '" alt="Фото к комментарию, задание ' + esc(n) + '" loading="lazy" decoding="async">'
+        ? '<img data-ex-fbimg="' + esc(p.id) + '" src="' + esc(thumbUrl(P.ftoken, p, 'exam_feedback_photos')) + '" data-ex-full="' + esc(fullUrl(P.ftoken, p, 'exam_feedback_photos')) + '" alt="Фото к комментарию, задание ' + esc(n) + '" loading="lazy" decoding="async">'
         : '<span class="ex-nopic" aria-hidden="true"></span>') + '</figure>').join('');
       const sig = P.ftoken ? 'T' + html.length : '';
       if (box && box._exSig !== sig) { box.innerHTML = html; box._exSig = sig; }
@@ -873,7 +875,11 @@
     const fb = img.hasAttribute('data-ex-fbimg');
     const p = fb ? P.fb.find((x) => x.id === img.dataset.exFbimg) : P.server.find((x) => x.id === img.dataset.exImg);
     if (!p) return;
-    freshFileToken(P, 10000).then((tok) => { if (phLive(P) && tok && img.isConnected) img.src = thumbUrl(tok, p, fb ? 'exam_feedback_photos' : undefined); });
+    freshFileToken(P, 10000).then((tok) => { if (phLive(P) && tok && img.isConnected) {
+      const coll = fb ? 'exam_feedback_photos' : undefined;
+      img.src = thumbUrl(tok, p, coll);
+      if (img.hasAttribute('data-ex-full')) img.setAttribute('data-ex-full', fullUrl(tok, p, coll));
+    } });
   }, true);
 
   // The server list became the truth: show it (the token is looked at next, so that new thumbnails can load).
@@ -1286,9 +1292,9 @@
   function openZoom(img) {
     closeZoom();
     const group = img.closest('.ex-thumbs') || img.parentNode;
-    const all = [].slice.call(group.querySelectorAll('.ex-z img')).filter((x) => !x.classList.contains('ex-broken') && x.src);
+    const all = [].slice.call(group.querySelectorAll('.ex-z img')).filter((x) => !x.classList.contains('ex-broken') && x.src);   // the lightbox shows the full picture, not the preview copy
     const z = zoomSt;
-    z.pics = all.map((x) => ({ src: x.src, alt: x.alt || 'Фото' }));
+    z.pics = all.map((x) => ({ src: x.dataset.exFull || x.src, alt: x.alt || 'Фото' }));
     if (!z.pics.length) return;
     const el = document.createElement('div');
     el.className = 'ex-lb'; el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); el.setAttribute('aria-label', 'Фото');
