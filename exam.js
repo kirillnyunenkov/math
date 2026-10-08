@@ -1228,13 +1228,13 @@
     s.result = true; s.closed = true;
     const P = s.ph = newPhotos(id, tasks, v.photos); P.s = s; P.ro = true;
     P.fb = C.wellFormedPhotos(v.fb, P.known).filter((p) => p.n !== '');
-    const tiles = tile('Часть 1', frac(R.p1, R.max1)) +
+    const tiles = (R.max1 > 0 ? tile('Часть 1', frac(R.p1, R.max1)) : '') +   // an exam of long tasks only has no part 1 to show
       (R.hasLong ? tile('Часть 2', R.checked ? frac(R.part2, R.max2) : '<span class="vv-txt">на проверке</span>') : '') +
       (R.checked ? tile('Первичный балл', frac(R.total.pts, R.total.max)) : '') +
       (R.second !== null ? tile('Тестовый балл', Number(R.second)) : '');
     // Nothing updates by itself: the student is told to come back when the Telegram message arrives.
     const waits = R.checked ? '' : R.hasLong
-      ? '<p class="lead">Первая часть проверена. Вторую часть посмотрю я. Когда проверю, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будут баллы и комментарии.</p>'
+      ? '<p class="lead">' + (R.max1 > 0 ? 'Первая часть проверена. ' : '') + 'Вторую часть посмотрю я. Когда проверю, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будут баллы и комментарии.</p>'
       : '<p class="lead">Работа сдана. Когда я её проверю, тебе придёт сообщение в Telegram: открой этот пробник снова, и здесь будет итог.</p>';
     const bot = P.server.some((p) => p.n === '')
       ? '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div></div>' : '';
@@ -1337,7 +1337,7 @@
     const t = e.target, s = st.save;
     const open = t.closest('[data-exam]');
     if (open) { go('#/exam/' + open.dataset.exam); return; }
-    if (t.closest('[data-ex-retry]') && st.id) { renderExam(st.id); return; }
+    if (t.closest('[data-ex-retry]')) { if (st.id) renderExam(st.id); else if (parseRoute().view === 'exams') renderMy(); return; }
     if (t.closest('[data-ex-finish]') && s) { finishNow(s); return; }
     if (t.closest('[data-ex-done]') && s) { doneNow(s); return; }
     const pic = t.closest('.ex-z img');
@@ -1382,11 +1382,11 @@
     try {
       // /mine feeds the "Ждут тебя" block (exams still ahead); the page works without it.
       [r, m] = await Promise.all([xapi('/summary'), xapi('/mine').catch(() => null)]);
-    } catch (e) { if (my === st.req && parseRoute().view === 'exams') fail('Нет связи с сервером. Проверь интернет.'); return; }
+    } catch (e) { if (my === st.req && parseRoute().view === 'exams') fail('Нет связи с сервером. Проверь интернет.', true); return; }
     if (my !== st.req || parseRoute().view !== 'exams' || gen !== st.gen) return;
     if (m && m.status === 200 && m.json && Array.isArray(m.json.items)) { st.mine = m.json.items.filter(wellFormed); setOffset(m.json.now); }
     if (r.status === 401 || r.status === 403) { fail('Чтобы увидеть свои пробники, войди в тренажёр через Telegram.'); return; }
-    if (r.status !== 200 || !r.json || !Array.isArray(r.json.items)) { fail('Не получилось загрузить пробники.'); return; }
+    if (r.status !== 200 || !r.json || !Array.isArray(r.json.items)) { fail('Не получилось загрузить пробники.', true); return; }
     try {
       const ahead = (st.mine || []).filter((it) => it.phase === 'scheduled' || it.phase === 'submitted' || it.phase === 'open' || it.phase === 'photos')
         .sort((a, b) => PRIO[a.phase] - PRIO[b.phase]);

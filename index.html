@@ -677,6 +677,7 @@
   .card-top .proto-num{font-size:var(--fs-2xs);}
   .cond img:not(.fig),.sol-body img{max-width:760px;height:auto;display:block;border-radius:var(--r-sm);}
   .cond img:not(.fig):not([width]),.sol-body img{width:100%;}
+  .sol-body img{border-radius:0;}   /* a drawing reaches its corners: rounding them cut the lines */
   /* An exam picture is cropped to its ink: without the white margin the rounded corners cut the vertex labels. */
   .cond img:not(.fig){padding:8px;box-sizing:border-box;background:#fff;}
   /* The width written into the exam (260, 360, 520 as in the trainer) is the size on a wide screen; without it the picture fills the column. */
@@ -835,6 +836,7 @@
      край прокруткой было бы не достать. */
   .tex .katex-display{margin:.5em 0;overflow-x:auto;overflow-y:hidden;padding:.15em 0;}
   .tex .katex-display>.katex>.katex-html{width:max-content;margin:0 auto;}
+  .tex .katex-display.fit-more:not(.fit-end){-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);}
   .tex img{max-width:100%;height:auto;filter:var(--img-filter);}
   .tex img:not(.fig):not([width]){width:auto;}   /* a width attribute (exam pictures) is kept */
   html[data-theme="dark"] .tex,html[data-theme="dark"] .tex *{color:var(--ink)!important;}
@@ -1153,6 +1155,12 @@
     /* есть возврат — заголовок уходит: оба ведут на хаб, а вместе
        они не влезают в строку */
     header.has-back .title{display:none;}
+    /* 320px: the back button with three icons wrapped the header into two rows */
+    /* the same width: the logo row, the mode switch of the variant builder and the 0..4 score switch did not fit */
+    @media (max-width:350px){.title{font-size:var(--fs-base);} .head-inner{gap:6px;}
+      .mode-seg .seg{padding:0 var(--s3);} .vpts-seg .seg{min-width:40px;padding:0 var(--s2);}}
+    @media (max-width:350px){header.has-back .back{padding-left:var(--s2);padding-right:var(--s2);font-size:var(--fs-xs);}
+      header.has-back .head-inner{gap:6px;}}
     #theme{order:0;margin-left:auto;}
     .nav-menu{display:none;position:absolute;top:calc(100% + 6px);right:var(--s4);
       background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
@@ -1717,7 +1725,29 @@ function typeset(root){
     {left:'$',right:'$',display:false}
   ],throwOnError:false});}catch(e){}
   glueMath(root);
+  root.querySelectorAll('.katex-display').forEach(d=>{if(fitWatch)fitWatch.observe(d);if(fitSeen)fitSeen.observe(d);});
 }
+/* A display formula wider than the card was cut at the right edge on a phone ("≤ 1" of an inequality out of sight,
+   with nothing to say it scrolls). It now shrinks to fit, down to FIT_MIN of its size; only a longer one still scrolls.
+   Measured again whenever it can have changed: the formula comes into view (cards are typeset off-screen and are not
+   laid out until then), the column changes width, the KaTeX fonts arrive. */
+const FIT_MIN=.7;
+function fitDisplay(d){
+  const have=d.clientWidth;
+  if(!have)return;
+  const was=d.style.fontSize;
+  d.style.fontSize='';
+  const need=d.scrollWidth,now=need>have+1?Math.max(FIT_MIN,have/need*.985).toFixed(3)+'em':'';
+  d.style.fontSize=now===was?was:now;
+  /* still too long at the smallest size: it scrolls, and a fade at the right edge says so until the end is reached */
+  const more=d.scrollWidth>d.clientWidth+1;
+  d.classList.toggle('fit-more',more);
+  if(more&&!d._fitScroll){d._fitScroll=true;
+    d.addEventListener('scroll',()=>d.classList.toggle('fit-end',d.scrollLeft+d.clientWidth>=d.scrollWidth-2),{passive:true});}
+}
+const fitWatch=typeof ResizeObserver==='function'?new ResizeObserver(es=>es.forEach(e=>fitDisplay(e.target))):null;
+const fitSeen=typeof IntersectionObserver==='function'?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)fitDisplay(e.target);}),{rootMargin:'400px 0px'}):null;
+if(document.fonts&&document.fonts.addEventListener)document.fonts.addEventListener('loadingdone',()=>document.querySelectorAll('.katex-display').forEach(fitDisplay));
 /* A dash must not start a line: make the spaces before it non-breaking
    (the bank writes "space, thin space, dash"). Runs before the formulas
    are rendered, while each paragraph is still plain text. */
@@ -3683,7 +3713,8 @@ document.addEventListener('keydown',e=>{
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
-  if(inp){e.preventDefault();const b=appEl.querySelector('[data-check="'+inp.dataset.id+'"]');if(b)b.click();}});
+  /* the button next to the field: the task list marks it data-check, the training variant data-tcheck */
+  if(inp){e.preventDefault();const w=inp.closest('.answer-check'),b=w&&w.querySelector('.check');if(b)b.click();}});
 backEl.addEventListener('click',()=>go('#/'));
 document.getElementById('share').addEventListener('click',e=>{
   /* Клик по обычному пункту меню (справка, сброс) уводит на другой экран
