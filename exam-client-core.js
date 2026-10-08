@@ -209,6 +209,18 @@
     return out;
   }
 
+  // Unsent answers of a phase the server has already closed, as a sentence for the next screen ('' when there is nothing to say).
+  function rejectedNote(snap, tasks) {
+    if (!snap || typeof snap !== 'object') return '';
+    const parts = [];
+    (Array.isArray(tasks) ? tasks : []).slice().sort(function (a, b) { return a.n - b.n; }).forEach(function (t) {
+      if (t.kind !== 'short' || !Object.prototype.hasOwnProperty.call(snap, String(t.n))) return;
+      const v = snap[String(t.n)];
+      if (typeof v === 'string' && v.trim() && parts.length < 10) parts.push(t.n + ' — «' + v.trim().slice(0, 40) + '»');
+    });
+    return parts.length ? 'Время вышло, эти ответы не успели сохраниться: ' + parts.join(', ') + '.' : '';
+  }
+
   /* ---- photos of part 2 ---- */
   // Limits of the server (backend/pb_hooks/exams.js, migration exam_photos); the page keeps to them before sending.
   const PHOTO = { PER_TASK: 5, BOT_MAX: 15, SIDE: 2000, SERVER_MAX: 10485760, SRC_MAX: 83886080, PIXELS_MAX: 150000000, LIST_MAX: 200, MANUAL_MAX: 3, PICKER_MS: 90000 };
@@ -372,7 +384,7 @@
   }
 
   const api = { mergePhotoLists: mergePhotoLists, ownGet: ownGet, pointsOf: pointsOf, secondaryOf: secondaryOf, resultOf: resultOf, canRetry: canRetry, fileRefusal: fileRefusal, pickerActive: pickerActive, dimsOk: dimsOk, wellFormedPhotos: wellFormedPhotos, photoSig: photoSig, photoRoom: photoRoom, pollDelay: pollDelay, uploadRetryDelay: uploadRetryDelay, uploadVerdict: uploadVerdict, PHOTO: PHOTO,
-    classifyStatus: classifyStatus, durationText: durationText, pendKey: pendKey, readPending: readPending, writePending: writePending, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, nextChangeAt: nextChangeAt, minutesText: minutesText, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
+    classifyStatus: classifyStatus, durationText: durationText, pendKey: pendKey, readPending: readPending, writePending: writePending, detachedDelay: detachedDelay, unsentOf: unsentOf, pickToken: pickToken, mergePending: mergePending, rejectedNote: rejectedNote, wellFormedTasks: wellFormedTasks, answersOf: answersOf, retryDelay: retryDelay, MAX_COND: MAX_COND, clampDelay: clampDelay, refreshDelay: refreshDelay, nextChangeAt: nextChangeAt, minutesText: minutesText, MAX_DELAY: MAX_DELAY, whenText: whenText, offsetOf: offsetOf, leftSec: leftSec, fmtLeft: fmtLeft, fitSize: fitSize,
     AwayTracker: AwayTracker, SaveQueue: SaveQueue };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamClientCore = api;

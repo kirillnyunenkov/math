@@ -582,3 +582,13 @@ test('a stored copy is read back only as short answers under task numbers', () =
   assert.equal(C.readPending(broken, key), null);
   C.writePending(broken, key, { 1: '5' });                      // must not throw
 });
+
+test('rejectedNote lists the unsent short answers, nothing for empty or long tasks', () => {
+  const tasks = [{ n: 3, kind: 'short' }, { n: 5, kind: 'short' }, { n: 13, kind: 'long' }];
+  assert.equal(C.rejectedNote({ 5: '7', 3: '12' }, tasks), 'Время вышло, эти ответы не успели сохраниться: 3 — «12», 5 — «7».');
+  assert.equal(C.rejectedNote({ 3: '' }, tasks), '');
+  assert.equal(C.rejectedNote({ 13: 'x' }, tasks), '');
+  assert.equal(C.rejectedNote({}, tasks), '');
+  assert.equal(C.rejectedNote(null, tasks), '');
+  assert.ok(C.rejectedNote({ 3: 'x'.repeat(100) }, tasks).includes('«' + 'x'.repeat(40) + '»'));
+});
