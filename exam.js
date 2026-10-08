@@ -65,7 +65,11 @@
   // The offset is only trusted after the server told us its time; until then nothing is shown or scheduled from it.
   function setOffset(serverNow) {
     if (typeof serverNow !== 'number' || !Number.isFinite(serverNow)) return;
-    st.offset = C.offsetOf(serverNow, Date.now()); st.synced = true;
+    // The server stamps its time before the answer travels (an exam with pictures downloads for seconds on a phone), so a
+    // measured offset is always late by that much and never early: a late one would show more time than there is. The
+    // largest measurement is the closest; a gap of a minute or more means the device clock was changed, then start anew.
+    const o = C.offsetOf(serverNow, Date.now());
+    st.offset = st.synced && st.offset > o && st.offset - o < 60000 ? st.offset : o; st.synced = true;
   }
   const serverNowMs = () => Date.now() + st.offset;
   // Time left until `untilSec` as "mm:ss" / "h:mm:ss"; '' (never "NaN:NaN") when the server clock is not known yet.

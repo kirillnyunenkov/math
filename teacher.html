@@ -252,6 +252,13 @@
   details summary{cursor:pointer;color:var(--accent);font-size:var(--fs-sm);}
   details[open] summary{margin-bottom:var(--s2);}
   .ic-sun{display:none;} html[data-theme="dark"] .ic-moon{display:none;} html[data-theme="dark"] .ic-sun{display:block;}
+  /* On a phone the header stays one row (it used to wrap in two and eat the screen): the title shortens to "Панель". */
+  @media (max-width:480px){
+    .head-inner{flex-wrap:nowrap;gap:var(--s2);}
+    .title{white-space:nowrap;}
+    .title span{display:none;}
+    .head-inner .ghost{flex:none;}
+  }
   @media (max-width:760px){
     .head-inner{padding:var(--s2) var(--s4);}
     main{padding:var(--s6) var(--s4) var(--s12);}

@@ -2,7 +2,7 @@
    При выкладке новой версии сайта поднимай VERSION (любое изменение этого файла
    заставит браузер установить новый SW и удалить старый кеш). HTML грузится
    network-first, поэтому онлайн-пользователи всегда получают свежую версию. */
-const VERSION = 'v97';
+const VERSION = 'v98';
 const CACHE = 'ege-' + VERSION;
 const SHELL = ['./', './index.html', './sync-core.js', './config.js', './stats-core.js', './exam-core.js', './exam-panel-core.js', './exam-validate.js', './exam-client-core.js', './exam-history-core.js', './exam-my-view.js', './exam.js', './teacher.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
@@ -40,7 +40,8 @@ self.addEventListener('fetch', e => {
       try {
         const net = await fetch(req);
         const c = await caches.open(CACHE);
-        if (net.ok) c.put(page, net.clone());
+        // only a real page: a picture opened in its own tab is a navigation too and must not replace the trainer offline
+        if (net.ok && (net.headers.get('content-type') || '').includes('text/html')) c.put(page, net.clone());
         return net;
       } catch (err) {
         const c = await caches.open(CACHE);

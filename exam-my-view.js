@@ -29,18 +29,20 @@
     return '<div class="my-scroll" data-my-scroll><table class="my-tbl">' + head + rows + total('Первичный<br>балл', H.primaryOf) + total('Тестовый<br>балл', H.testOf) + '</table></div>';
   }
 
-  // Test score by exam, inline SVG. Wide enough that the labels stay readable: a phone scrolls it sideways.
+  // Test score by exam, inline SVG. Many exams: wide enough that the labels stay readable, a phone scrolls it sideways.
   function chartHtml(all) {
     const pts = all.filter(isFull).map((it) => ({ it: it, t: H.testOf(it) })).filter((p) => p.t !== null);
     if (pts.length < 2) return '';
-    const L = 34, R = 18, T = 20, B = 30, Hh = 210, W = Math.max(340, pts.length * 56 + L + R);
+    const L = 34, R = 18, T = 20, B = 30, Hh = 210, need = pts.length * 56 + L + R, W = Math.max(340, need);
+    // A few points fit any phone: the chart then shrinks with the card instead of scrolling (the axis labels stay in view).
+    const fit = need <= 340;
     const x = (i) => L + i * (W - L - R) / (pts.length - 1), y = (t) => T + (100 - t) / 100 * (Hh - T - B);
     const grid = [0, 50, 100].map((g) => '<line class="my-gl" x1="' + L + '" x2="' + (W - R) + '" y1="' + y(g) + '" y2="' + y(g) + '"/><text class="my-gt" x="' + (L - 6) + '" y="' + (y(g) + 4) + '" text-anchor="end">' + g + '</text>').join('');
     const line = pts.map((p, i) => (i ? 'L' : 'M') + x(i).toFixed(1) + ' ' + y(p.t).toFixed(1)).join(' ');
     const dots = pts.map((p, i) => '<circle class="my-dot" cx="' + x(i).toFixed(1) + '" cy="' + y(p.t).toFixed(1) + '" r="4.5"/>' +
       '<text class="my-vt" x="' + x(i).toFixed(1) + '" y="' + (y(p.t) - 9).toFixed(1) + '" text-anchor="middle">' + p.t + '</text>' +
       '<text class="my-dt" x="' + x(i).toFixed(1) + '" y="' + (Hh - 8) + '" text-anchor="middle">' + dm(p.it.date) + '</text>').join('');
-    return '<div class="my-scroll" data-my-scroll><svg class="my-ch" width="' + W + '" height="' + Hh + '" viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="Тестовый балл по пробникам">' +
+    return '<div class="my-scroll" data-my-scroll><svg class="my-ch' + (fit ? ' my-fit' : '') + '" width="' + W + '" height="' + Hh + '" viewBox="0 0 ' + W + ' ' + Hh + '" role="img" aria-label="Тестовый балл по пробникам">' +
       grid + '<path class="my-line" d="' + line + '"/>' + dots + '</svg></div>';
   }
 
