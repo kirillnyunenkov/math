@@ -315,6 +315,7 @@
   .ex-comment-h{font-size:var(--fs-xs);font-weight:600;color:var(--ink-3);margin-bottom:var(--s2);}
   /* the save note may be two lines on a phone; it shrinks and wraps instead of pushing the button to a second row */
   .vbar #ex-save{flex:1 1 0;min-width:0;}
+  @media (min-width:350px){.vbar #ex-save:not(.bad){white-space:nowrap;}}
   .vbar #ex-save.bad{line-height:1.25;}
   @media (prefers-reduced-motion:reduce){.ex-banner.ex-fresh,.ex-banner.ex-fresh .ex-b-body,.ex-banner.ex-fresh .btn,.ex-screen-in,.vbar #ex-save.ok{animation:none;}}
 
@@ -674,7 +675,13 @@
   .proto-num{font-family:'Golos Text',sans-serif;font-weight:600;font-size:var(--fs-2xs);
     letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);}
   .card-top .proto-num{font-size:var(--fs-2xs);}
-  .cond img:not(.fig),.sol-body img{max-width:760px;width:100%;height:auto;display:block;border-radius:var(--r-sm);}
+  .cond img:not(.fig),.sol-body img{max-width:760px;height:auto;display:block;border-radius:var(--r-sm);}
+  .cond img:not(.fig):not([width]),.sol-body img{width:100%;}
+  .sol-body img{border-radius:0;}   /* a drawing reaches its corners: rounding them cut the lines */
+  /* An exam picture is cropped to its ink: without the white margin the rounded corners cut the vertex labels. */
+  .cond img:not(.fig){padding:8px;box-sizing:border-box;background:#fff;}
+  /* The width written into the exam (260, 360, 520 as in the trainer) is the size on a wide screen; without it the picture fills the column. */
+  .cond img:not(.fig)[width]{max-width:100%;}
 
   /* кнопки действий */
   .btn{font:inherit;font-size:var(--fs-sm);font-weight:500;cursor:pointer;
@@ -829,8 +836,9 @@
      край прокруткой было бы не достать. */
   .tex .katex-display{margin:.5em 0;overflow-x:auto;overflow-y:hidden;padding:.15em 0;}
   .tex .katex-display>.katex>.katex-html{width:max-content;margin:0 auto;}
+  .tex .katex-display.fit-more:not(.fit-end){-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);}
   .tex img{max-width:100%;height:auto;filter:var(--img-filter);}
-  .tex img:not(.fig){width:auto;}
+  .tex img:not(.fig):not([width]){width:auto;}   /* a width attribute (exam pictures) is kept */
   html[data-theme="dark"] .tex,html[data-theme="dark"] .tex *{color:var(--ink)!important;}
   .tex img.math{display:inline;vertical-align:middle;width:auto;}
   .tex img:not(.math){display:block;max-width:100%;margin:.5em auto;}
@@ -1147,6 +1155,12 @@
     /* есть возврат — заголовок уходит: оба ведут на хаб, а вместе
        они не влезают в строку */
     header.has-back .title{display:none;}
+    /* 320px: the back button with three icons wrapped the header into two rows */
+    /* the same width: the logo row, the mode switch of the variant builder and the 0..4 score switch did not fit */
+    @media (max-width:350px){.title{font-size:var(--fs-base);} .head-inner{gap:6px;}
+      .mode-seg .seg{padding:0 var(--s3);} .vpts-seg .seg{min-width:40px;padding:0 var(--s2);}}
+    @media (max-width:350px){header.has-back .back{padding-left:var(--s2);padding-right:var(--s2);font-size:var(--fs-xs);}
+      header.has-back .head-inner{gap:6px;}}
     #theme{order:0;margin-left:auto;}
     .nav-menu{display:none;position:absolute;top:calc(100% + 6px);right:var(--s4);
       background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
@@ -1173,6 +1187,9 @@
        считает syncHeaderH. */
     .vbar{top:var(--header-h,60px);gap:var(--s3);
       border-radius:var(--r-md);padding:var(--s2) var(--s3);}
+    /* "✓ Сохранено" must stay on one line next to the timer (it broke in two at 360px). */
+    .vbar:has(#ex-save){gap:var(--s2);}
+    .vbar:has(#ex-save) .btn{padding-left:var(--s4);padding-right:var(--s4);}
     .vbar .vtimer{font-size:var(--fs-lg);}
     .vhist-row{font-size:var(--fs-xs);padding:var(--s2);}
     .vh-line{gap:var(--s2);}.vh-cols{padding:var(--s1) calc(var(--s2) + 1px);font-size:10px;}
@@ -1563,10 +1580,11 @@
   .my-card h3{margin:0 0 var(--s3);font-size:var(--fs-md);}
   .my-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
   .my-tbl{border-collapse:collapse;font-size:var(--fs-sm);font-variant-numeric:tabular-nums;}
-  .my-tbl th,.my-tbl td{border:1px solid var(--line);min-width:42px;height:30px;padding:0 4px;text-align:center;font-weight:500;}
+  .my-tbl th,.my-tbl td{border:1px solid var(--line);min-width:42px;height:30px;padding:0 2px;text-align:center;font-weight:500;}   /* three exams fit a 360px phone without scrolling */
   .my-tbl th.my-n{position:sticky;left:0;background:var(--surface);min-width:34px;z-index:1;}
-  .my-tbl .my-total th.my-n{min-width:78px;line-height:1.15;font-size:var(--fs-xs);}
-  .my-tbl td.my-sol,.my-tbl th.my-sol{min-width:92px;background:var(--surface-2);}
+  .my-tbl .my-total th.my-n{min-width:60px;line-height:1.15;font-size:11px;}
+  .my-tbl td.my-sol,.my-tbl th.my-sol{min-width:74px;background:var(--surface-2);}
+  .my-tbl th.my-sol{font-size:var(--fs-xs);}
   .my-full{background:var(--ok-soft);color:var(--ok-text);}
   .my-part{background:var(--warn-soft);color:var(--warn-text);}
   .my-zero{background:var(--err-soft);color:var(--err-text);}
@@ -1574,6 +1592,7 @@
   .my-total td,.my-total th{font-weight:700;}
   .my-legend{margin:var(--s3) 0 0;font-size:var(--fs-xs);color:var(--ink-2);}
   .my-ch{display:block;}
+  .my-ch.my-fit{width:100%;max-width:340px;height:auto;}
   .my-gl{stroke:var(--line);stroke-width:1;}
   .my-gt,.my-dt{fill:var(--ink-2);font-size:11px;}
   .my-vt{fill:var(--ink);font-size:12px;font-weight:600;}
@@ -1706,7 +1725,29 @@ function typeset(root){
     {left:'$',right:'$',display:false}
   ],throwOnError:false});}catch(e){}
   glueMath(root);
+  root.querySelectorAll('.katex-display').forEach(d=>{if(fitWatch)fitWatch.observe(d);if(fitSeen)fitSeen.observe(d);});
 }
+/* A display formula wider than the card was cut at the right edge on a phone ("≤ 1" of an inequality out of sight,
+   with nothing to say it scrolls). It now shrinks to fit, down to FIT_MIN of its size; only a longer one still scrolls.
+   Measured again whenever it can have changed: the formula comes into view (cards are typeset off-screen and are not
+   laid out until then), the column changes width, the KaTeX fonts arrive. */
+const FIT_MIN=.7;
+function fitDisplay(d){
+  const have=d.clientWidth;
+  if(!have)return;
+  const was=d.style.fontSize;
+  d.style.fontSize='';
+  const need=d.scrollWidth,now=need>have+1?Math.max(FIT_MIN,have/need*.985).toFixed(3)+'em':'';
+  d.style.fontSize=now===was?was:now;
+  /* still too long at the smallest size: it scrolls, and a fade at the right edge says so until the end is reached */
+  const more=d.scrollWidth>d.clientWidth+1;
+  d.classList.toggle('fit-more',more);
+  if(more&&!d._fitScroll){d._fitScroll=true;
+    d.addEventListener('scroll',()=>d.classList.toggle('fit-end',d.scrollLeft+d.clientWidth>=d.scrollWidth-2),{passive:true});}
+}
+const fitWatch=typeof ResizeObserver==='function'?new ResizeObserver(es=>es.forEach(e=>fitDisplay(e.target))):null;
+const fitSeen=typeof IntersectionObserver==='function'?new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting)fitDisplay(e.target);}),{rootMargin:'400px 0px'}):null;
+if(document.fonts&&document.fonts.addEventListener)document.fonts.addEventListener('loadingdone',()=>document.querySelectorAll('.katex-display').forEach(fitDisplay));
 /* A dash must not start a line: make the spaces before it non-breaking
    (the bank writes "space, thin space, dash"). Runs before the formulas
    are rendered, while each paragraph is still plain text. */
@@ -1760,6 +1801,8 @@ function ensureData(n, cb){
 window.SOLDATA = window.SOLDATA || {};
 const solLoading = {};
 function ensureSol(n, cb){
+  /* A failed download is not final: the next request tries again (the network may be back). */
+  if(window.SOLDATA[n]==='error'&&!solLoading[n])delete window.SOLDATA[n];
   if(n in window.SOLDATA){cb();return;}
   if(solLoading[n]){solLoading[n].push(cb);return;}
   solLoading[n]=[cb];
@@ -1767,7 +1810,7 @@ function ensureSol(n, cb){
   s.src=`img/t${n}/sol.js`;
   const done=()=>{(solLoading[n]||[]).forEach(f=>f());solLoading[n]=null;};
   s.onload=done;
-  s.onerror=()=>{window.SOLDATA[n]='error';done();};
+  s.onerror=()=>{window.SOLDATA[n]='error';s.remove();done();};
   document.head.appendChild(s);
 }
 function solOf(n,id){const d=window.SOLDATA[n];
@@ -2178,7 +2221,8 @@ function revealToggle(btn,box,build,ensureFn){
     if(box.dataset.want!=='1')return;
     box.style.height=box.getBoundingClientRect().height+'px'; // заморозить старт
     box.innerHTML=build();
-    box.dataset.filled='1';
+    /* the "did not load" text is not kept: opening the box again asks for the file once more */
+    if(!box.querySelector('[data-sol-retry]'))box.dataset.filled='1';
     typeset(box);
     armImages(box);
     imagesSettled(box).then(()=>{if(box.dataset.want==='1')setBoxOpen(box,true);});
@@ -2207,7 +2251,7 @@ function revealToggle(btn,box,build,ensureFn){
 const solInner=(ans,html,failed,ansOnly)=>`<div class="sol-inner">`+
   (ans?`<span class="answer">Ответ: ${ans}</span>`:'')+
   (failed
-    ?`<p class="sol-fail">Разбор не загрузился, похоже, пропала связь. Ответ выше верный, решение откроется, когда сеть вернётся.</p>`
+    ?`<p class="sol-fail" data-sol-retry>Разбор не загрузился, похоже, пропала связь. Ответ выше верный. Когда сеть вернётся, закрой и снова открой «Решение».</p>`
     :html
       ?`<div class="sol-body"><div class="tex">${html}</div></div>`
       :ansOnly
@@ -3321,6 +3365,7 @@ function finishVariant(){
   completeVariant();
 }
 function completeVariant(){
+  if(variant.finished)return;   // a second tap while the result screen is being staged must not write the attempt twice
   variant.scoring=false;
   let pts=0,max=0;
   variant.items.forEach(it=>{const mx=itemMax(it.n);pts+=it.pts;max+=mx;
@@ -3668,7 +3713,8 @@ document.addEventListener('keydown',e=>{
 document.getElementById('guide').addEventListener('click',()=>go('#/help'));
 document.getElementById('home').addEventListener('click',e=>{if(e.target.closest('a'))return;go('#/');});
 appEl.addEventListener('keydown',e=>{if(e.key!=='Enter')return;const inp=e.target.closest('.ans-input');
-  if(inp){e.preventDefault();const b=appEl.querySelector('[data-check="'+inp.dataset.id+'"]');if(b)b.click();}});
+  /* the button next to the field: the task list marks it data-check, the training variant data-tcheck */
+  if(inp){e.preventDefault();const w=inp.closest('.answer-check'),b=w&&w.querySelector('.check');if(b)b.click();}});
 backEl.addEventListener('click',()=>go('#/'));
 document.getElementById('share').addEventListener('click',e=>{
   /* Клик по обычному пункту меню (справка, сброс) уводит на другой экран

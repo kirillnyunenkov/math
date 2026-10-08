@@ -40,7 +40,8 @@ self.addEventListener('fetch', e => {
       try {
         const net = await fetch(req);
         const c = await caches.open(CACHE);
-        if (net.ok) c.put(page, net.clone());
+        // only a real page: a picture opened in its own tab is a navigation too and must not replace the trainer offline
+        if (net.ok && (net.headers.get('content-type') || '').includes('text/html')) c.put(page, net.clone());
         return net;
       } catch (err) {
         const c = await caches.open(CACHE);
