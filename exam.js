@@ -275,7 +275,6 @@
     appEl.innerHTML = shell('<div class="vintro"><h2>' + titleOf(v) + '</h2>' +
       '<p class="lead">' + when + 'Когда время придёт, пробник откроется на этой странице.</p>' +
       '<p class="mode-hint">Приготовь черновики и ручку.' + mins + '</p>' +
-      '<p class="mode-hint">Решаем честно и самостоятельно: без калькулятора, подсказок, интернета и тетради с формулами.</p>' +
       '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>');
     appear();
     const id = v.id;
