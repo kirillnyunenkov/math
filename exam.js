@@ -1137,7 +1137,7 @@
     if (carry && !carry.dead) { attachPhotos(carry, s, tasks, v.photos); st.carry = null; } else { s.ph = newPhotos(id, tasks, v.photos); s.ph.s = s; st.carry = null; }
     bindOpen(s);
     appEl.innerHTML = shell(bar +
-      '<div class="vintro ex-pintro"><p class="lead">' + (v.early === false ? '<b>Время вышло.</b> ' : '') + 'Ответы первой части сохранены. Сфотографируй решения второй части и прикрепи к заданиям — ' +
+      '<div class="vintro ex-pintro"><p class="lead">' + (v.early === false ? '<b>Время вышло.</b> ' : '') + (rej ? 'Остальные ответы первой части сохранены. ' : 'Ответы первой части сохранены. ') + 'Сфотографируй решения второй части и прикрепи к заданиям — ' +
       'или отправь фото боту. Сколько времени осталось на фото, показывает таймер вверху.</p>' +
       (lost ? '<p class="ex-note">' + LOST_NOTE + '</p>' : '') +
       (rej ? '<p class="ex-note">' + esc(rej) + '</p>' : '') + '</div>' +
