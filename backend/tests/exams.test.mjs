@@ -276,6 +276,25 @@ test('answers are saved while the window is open and come back on reload', async
   assert.ok(log.every(x => Math.abs(x[0] - nowS()) <= 3));
 });
 
+test('answers are saved for a new assignment without loading the exam (shorts stored on the row)', async () => {
+  const { id, s } = await started(7000000034);
+  assert.deepEqual((await rowOf(id)).shorts, ['1', '2']);
+  assert.equal((await post(id, 'answers', s.token, { answers: { 1: '5', 13: 'text' } })).status, 200);
+  const v = await view(id, s.token);
+  assert.equal(v.json.answers['1'], '5');
+  assert.equal('13' in v.json.answers, false);
+});
+
+test('an old assignment without shorts still saves answers (falls back to the exam)', async () => {
+  const { id, s } = await started(7000000035);
+  await shift(id, { shorts: [] });
+  assert.deepEqual((await rowOf(id)).shorts, []);
+  assert.equal((await post(id, 'answers', s.token, { answers: { 1: '7', 13: 'text' } })).status, 200);
+  const v = await view(id, s.token);
+  assert.equal(v.json.answers['1'], '7');
+  assert.equal('13' in v.json.answers, false);
+});
+
 test('nobody else can write, and a very long answer is cut', async () => {
   const { id, s } = await started(7000000031);
   const other = await student(7000000032);
