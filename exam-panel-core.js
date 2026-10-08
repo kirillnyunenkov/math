@@ -54,8 +54,42 @@
 
   const PHASE_TEXT = { scheduled: 'назначен', open: 'идёт', photos: 'фото', submitted: 'ждёт проверки', checked: 'проверен', missed: 'пропущен' };
 
+  /* A draft of the check form (points and comments typed but not yet sent): kept in the teacher's own browser so that
+     "back", a link, or an expired sign-in does not lose it. Read back defensively: only numeric task keys, whole points
+     0..100, comments up to the 2000 characters the server takes. */
+  const draftKey = function (id) { return 'ck-draft:' + String(id); };
+  function readDraft(storage, key) {
+    try {
+      const raw = JSON.parse(storage.getItem(key));
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+      const out = { pts: {}, note: {} };
+      const pick = function (src, dst, ok) {
+        if (!src || typeof src !== 'object' || Array.isArray(src)) return;
+        Object.keys(src).forEach(function (k) { if (/^\d{1,2}$/.test(k) && ok(src[k])) dst[k] = src[k]; });
+      };
+      pick(raw.pts, out.pts, function (v) { return Number.isInteger(v) && v >= 0 && v <= 100; });
+      pick(raw.note, out.note, function (v) { return typeof v === 'string' && v.length <= 2000; });
+      return Object.keys(out.pts).length || Object.keys(out.note).length ? out : null;
+    } catch (e) { return null; }
+  }
+  function writeDraft(storage, key, draft) {
+    try {
+      if (draft && (Object.keys(draft.pts || {}).length || Object.keys(draft.note || {}).length)) storage.setItem(key, JSON.stringify(draft));
+      else storage.removeItem(key);
+    } catch (e) { /* storage full or blocked: the form still works, only the safety net is gone */ }
+  }
+  // True when the draft holds something the server does not have (an untouched blank form is not a draft).
+  function draftDiffers(draft, server) {
+    if (!draft) return false;
+    const has = function (o, k) { return Object.prototype.hasOwnProperty.call(o || {}, k); };
+    const cur = function (k) { return has(server, k) && server[k] && typeof server[k] === 'object' ? server[k] : {}; };
+    return Object.keys(draft.pts || {}).some(function (k) { return draft.pts[k] !== (Number.isInteger(cur(k).pts) ? cur(k).pts : 0); }) ||
+      Object.keys(draft.note || {}).some(function (k) { return draft.note[k] !== (typeof cur(k).comment === 'string' ? cur(k).comment : ''); });
+  }
+
   const api = { moscowInputToTs: moscowInputToTs, tsToMoscowInput: tsToMoscowInput, activitySummary: activitySummary,
-    fmtSec: fmtSec, PHASE_TEXT: PHASE_TEXT };
+    fmtSec: fmtSec, PHASE_TEXT: PHASE_TEXT,
+    draftKey: draftKey, readDraft: readDraft, writeDraft: writeDraft, draftDiffers: draftDiffers };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamPanelCore = api;
 })(typeof self !== 'undefined' ? self : globalThis);

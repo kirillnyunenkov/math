@@ -923,6 +923,17 @@ app.addEventListener('paste',e=>{
   const files=Array.from((e.clipboardData&&e.clipboardData.files)||[]).filter(f=>/^image\//.test(f.type));
   if(files.length){e.preventDefault();fbUpload(Number(ta.dataset.ckNote),files);}
 });
+// points and comments are kept as a draft in this browser until the check is saved (back / a link / an expired sign-in must not lose them)
+function ckDraftSave(){
+  if(!ck||location.hash!=='#/check/'+ck.id)return;
+  const d={pts:{},note:{}};
+  ck.long.forEach((t,i)=>{const s=document.querySelector(`[data-ck-pts="${i}"]`),c=document.querySelector(`[data-ck-note="${i}"]`);
+    if(s&&!s.disabled)d.pts[t.n]=Number(s.value);
+    if(c&&!c.disabled)d.note[t.n]=c.value;});
+  ExamPanelCore.writeDraft(localStorage,ExamPanelCore.draftKey(ck.id),d);
+}
+app.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('[data-ck-pts],[data-ck-note]'))ckDraftSave();});
+app.addEventListener('change',e=>{if(e.target.closest&&e.target.closest('[data-ck-pts]'))ckDraftSave();});
 app.addEventListener('dragover',e=>{if(e.target.closest&&e.target.closest('[data-ck-fb]')&&e.dataTransfer&&Array.from(e.dataTransfer.types||[]).includes('Files'))e.preventDefault();});
 app.addEventListener('drop',e=>{
   const box=e.target.closest&&e.target.closest('[data-ck-fb]');if(!box||!e.dataTransfer)return;
@@ -1040,6 +1051,14 @@ async function renderCheck(id){
       <button class="btn" data-act="check-send" data-id="${esc(id)}" ${ready?'':'disabled'}>${a.checked?'Сохранить изменения':'Проверено, отправить ученику'}</button></div>
     <p class="muted ck-note">Ученик получит сообщение в Telegram при первой проверке.${a.checked?' Повторное сохранение только обновляет баллы и комментарии.':''}</p>`;
   ck={id,long:long.map(t=>({n:t.n})),checked:!!a.checked,fb:fb.slice()};ckShown=id;
+  const dr=P.readDraft(localStorage,P.draftKey(id));
+  if(dr&&ready&&P.draftDiffers(dr,part2)){
+    long.forEach((t,i)=>{const s=document.querySelector(`[data-ck-pts="${i}"]`),c=document.querySelector(`[data-ck-note="${i}"]`);
+      if(s&&Object.prototype.hasOwnProperty.call(dr.pts,t.n)&&[...s.options].some(o=>o.value===String(dr.pts[t.n])))s.value=String(dr.pts[t.n]);
+      if(c&&Object.prototype.hasOwnProperty.call(dr.note,t.n))c.value=dr.note[t.n];});
+    const m=document.getElementById('ck-msg');
+    if(m&&!(ckNote&&ckNote.id===id)){m.textContent='Восстановлен черновик: баллы и комментарии, которые ты не успел отправить.';m.className='ck-msg grow';}
+  }
   // only the teacher's own HTML is typeset; student answers stay plain text
   if(window.renderMathInElement)app.querySelectorAll('.tex').forEach(el=>{try{renderMathInElement(el,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}],throwOnError:false});}catch(err){}});
   if(keepY!==null){window.scrollTo(0,keepY);keepY=null;}
@@ -1072,6 +1091,7 @@ async function checkSend(id,btn){
     if(r.status===409||r.status===404)refreshKeep().catch(()=>{});   // the state changed: redraw it, the message stays
     else btn.disabled=false;
     return;}
+  ExamPanelCore.writeDraft(localStorage,ExamPanelCore.draftKey(id),null);
   say(`${first?'Готово. Работа проверена, ученик получит сообщение в Telegram.':'Изменения сохранены, новое сообщение ученику не уходит.'} ${mskTime(Date.now())}`);
   try{await refreshKeep();}catch(err){if(err.message!=='401')say('Сохранено, но список не обновился. Обнови страницу.',true);}
 }
