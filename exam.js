@@ -1422,6 +1422,7 @@
         .sort((a, b) => PRIO[a.phase] - PRIO[b.phase]);
       const top = ahead.length ? '<section class="my-card"><h3>Ждут тебя</h3>' + ahead.map(bannerOf).join('') + '</section>' : '';
       appEl.innerHTML = shell(window.ExamMyView.pageHtml(r.json.items, { seen: seen(), top: top }));
+      window.ExamMyView.bindTables(appEl);
       appEl.querySelectorAll('[data-my-scroll]').forEach((el) => { el.scrollLeft = el.scrollWidth; });   // the newest exams are on the right
     } catch (e) { fail('Не получилось показать пробники.'); return; }
     paintDot();

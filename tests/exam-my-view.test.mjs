@@ -21,7 +21,7 @@ test('table: a row per task, coloured cells, "-" for a task that was not there, 
   assert.match(h, /my-tbl/);
   assert.equal((h.match(/<tr/g) || []).length, 1 + 20 + 2);                  // header + 20 tasks + primary + test
   assert.match(h, /my-c my-full">1</);
-  assert.match(h, /my-c my-zero">0</);
+  assert.match(h, /my-c my-zero[^>]*">0</);
   assert.match(h, /my-c my-part">1</);                                       // task 14: 1 of 2
   assert.match(h, /my-c my-na">-</);
   assert.match(h, />50%</);                                                  // task 1: 1 of 2 over two exams
@@ -90,4 +90,19 @@ test('teacher view: the same dashboard, no "Открыть" buttons, the wording
   assert.match(h, /тест 11/);                                              // the final score is in the list
   assert.doesNotMatch(h, /data-exam=|Открыть/);
   assert.match(V.pageHtml([A, B], { seen: [] }), /data-exam="a"/);        // the student page keeps its buttons
+});
+
+test('table polish: second-part divider, shaded partial scores, trend under the test score, latest exam marked', () => {
+  const mkp = (id, date, s15, test) => { const x = mk(id, date, 1, { test }); x.scores[15] = s15; return x; };
+  const C = mkp('c', 1000000, 1, 60), D = mkp('d', 2000000, 2, 70), E = mkp('e', 3000000, 0, 64);
+  const h = V.tableHtml([C, D, E]);
+  assert.match(h, /<tr class="my-p2"><th class="my-n">14</);                  // before task 14
+  assert.match(h, /<tr class="my-total my-p2">/);                              // and before the totals
+  assert.match(h, /my-c my-part my-pl">1</);                       // task 15: 1 of 3 is a small share
+  assert.match(h, /my-c my-part my-ph">2</);                                  // 2 of 3 is most of it
+  assert.match(h, /<small class="my-up">\+10<\/small>/);
+  assert.match(h, /<small class="my-dn">−6<\/small>/);
+  assert.equal((h.match(/my-last/g) || []).length, 1 + 20 + 2);                // header + 20 rows + 2 totals, last column only
+  assert.doesNotMatch(V.tableHtml([C]), /my-last/);                            // one exam: nothing to compare
+  assert.match(h, /my-sol my-sm">50%</);                                      // task 15: 3 of 6 points, a middling task is tinted
 });
