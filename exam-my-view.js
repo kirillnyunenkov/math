@@ -46,16 +46,26 @@
       grid + '<path class="my-line" d="' + line + '"/>' + dots + '</svg></div>';
   }
 
-  function listHtml(items, seen) {
+  // readonly: the teacher's view, no "Открыть" buttons (the exam opens in the check page of the panel instead).
+  function listHtml(items, seen, readonly) {
     return items.slice().reverse().map((it) => {
       const prim = H.primaryOf(it), max = H.maxOfItem(it), test = H.testOf(it);
       const score = prim + ' из ' + max + (test === null || !isFull(it) ? '' : ' · тест ' + test);
-      const isExam = it.kind === 'exam', fresh = isExam && (seen || []).indexOf(it.id) < 0;
+      const isExam = it.kind === 'exam' && !readonly, fresh = isExam && (seen || []).indexOf(it.id) < 0;
       const body = '<span class="my-r-body"><span class="my-r-t">' + esc(it.title) + (fresh ? ' <span class="my-new">новое</span>' : '') + '</span>' +
-        '<span class="my-r-s">' + dmy(it.date) + ' · ' + score + (isExam ? '' : ' · записан вручную') + '</span></span>';
+        '<span class="my-r-s">' + dmy(it.date) + ' · ' + score + (it.kind === 'exam' ? '' : ' · записан вручную') + '</span></span>';
       return isExam ? '<button class="my-row" data-exam="' + esc(it.id) + '">' + body + '<span class="my-r-go">Открыть</span></button>'
         : '<div class="my-row my-manual">' + body + '</div>';
     }).join('');
+  }
+
+  // The chart, the task table and the list of exams: the same cards for the student page and the teacher's student card.
+  function dashboardHtml(items, opt) {
+    const chart = chartHtml(items), table = tableHtml(items);
+    return (chart ? '<section class="my-card"><h3>Тестовый балл</h3>' + chart + '</section>' : '') +
+      (table ? '<section class="my-card"><h3>Баллы по заданиям</h3>' + table +
+      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте. Решаемость: какую долю баллов за это задание ' + ((opt && opt.readonly) ? 'ученик набрал' : 'ты набрал') + ' по всем пробникам.</p></section>' : '') +
+      '<section class="my-card"><h3>Все пробники</h3><div class="my-list">' + listHtml(items, (opt && opt.seen) || [], !!(opt && opt.readonly)) + '</div></section>';
   }
 
   function pageHtml(list, opt) {
@@ -64,15 +74,10 @@
     const top = (opt && opt.top) || '';
     if (!items.length) return '<div class="vintro"><h2>Мои пробники</h2><p class="lead my-empty">Здесь появятся твои пробники после проверки. Когда я проверю работу, она останется здесь, и её можно будет открыть в любой момент.</p>' +
       '<div class="vactions"><button class="btn" data-home>К заданиям</button></div></div>' + top;
-    const chart = chartHtml(items), table = tableHtml(items);
-    return '<div class="vintro"><h2>Мои пробники</h2><p class="lead">Все проверенные работы: баллы, разбор и мои комментарии.</p></div>' + top +
-      (chart ? '<section class="my-card"><h3>Тестовый балл</h3>' + chart + '</section>' : '') +
-      (table ? '<section class="my-card"><h3>Баллы по заданиям</h3>' + table +
-      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте. Решаемость: какую долю баллов за это задание ты набрал по всем пробникам.</p></section>' : '') +
-      '<section class="my-card"><h3>Все пробники</h3><div class="my-list">' + listHtml(items, (opt && opt.seen) || []) + '</div></section>';
+    return '<div class="vintro"><h2>Мои пробники</h2><p class="lead">Все проверенные работы: баллы, разбор и мои комментарии.</p></div>' + top + dashboardHtml(items, opt);
   }
 
-  const api = { pageHtml: pageHtml, chartHtml: chartHtml, tableHtml: tableHtml, listHtml: listHtml };
+  const api = { pageHtml: pageHtml, dashboardHtml: dashboardHtml, chartHtml: chartHtml, tableHtml: tableHtml, listHtml: listHtml };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ExamMyView = api;
 })(typeof self !== 'undefined' ? self : globalThis);

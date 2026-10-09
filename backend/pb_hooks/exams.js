@@ -497,17 +497,24 @@ function check(e) {
 
 // ---- "Мои пробники": the caller's checked exams and the manual ones, per task ----
 
+// A student reads own rows; the teacher reads the rows of the student given in ?user=.
 function summary(e) {
-  if (!isStudent(e)) return fail(e, 403, "forbidden");
+  let uid;
+  if (isTeacher(e)) {
+    uid = String(e.request.url.query().get("user") || "");
+    const u = byId("users", uid);
+    if (!u || u.get("role") !== "student") return fail(e, 400, "bad user");
+  } else if (isStudent(e)) uid = e.auth.id;
+  else return fail(e, 403, "forbidden");
   const items = [];
-  const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u} && checked > 0", "start", 200, 0, { u: e.auth.id });
+  const rows = $app.findRecordsByFilter("exam_assignments", "user = {:u} && checked > 0", "start", 200, 0, { u: uid });
   each(rows, (rec) => {
     const exam = $app.findRecordById("exams", rec.getString("exam"));
     const ns = each(photosOf(rec), (p) => p.n).filter((n) => n !== "");
     const ts = Hist.taskScores(J(exam, "tasks", []), J(rec, "answers", {}), J(rec, "ok", {}), J(rec, "part2", {}), ns);
     items.push({ kind: "exam", id: rec.id, title: exam.getString("title"), full: exam.getBool("full"), date: rec.getInt("start"), scores: ts.scores, na: ts.na, maxes: ts.maxes });
   });
-  each($app.findRecordsByFilter("exam_history", "user = {:u}", "date", 200, 0, { u: e.auth.id }), (r) => {
+  each($app.findRecordsByFilter("exam_history", "user = {:u}", "date", 200, 0, { u: uid }), (r) => {
     items.push({ kind: "manual", id: r.id, title: r.getString("title"), full: true, date: Hist.dateToTs(r.getString("date")),
       scores: J(r, "scores", {}), na: J(r, "na", []), maxes: Hist.MAXES, test: r.getInt("test") });
   });

@@ -222,6 +222,35 @@
     background:var(--input-bg);color:var(--ink);}
   .linkbox{word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:var(--fs-xs);
     background:var(--surface-2);border-radius:var(--r-sm);padding:var(--s3);color:var(--ink-2);}
+  /* the student's exam dashboard (same markup as the trainer's «Мои пробники» page, see exam-my-view.js) */
+  .my-card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--s5);margin:0 0 var(--s4);}
+  .my-card h3{margin:0 0 var(--s3);font-size:var(--fs-md);}
+  .my-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .my-tbl{border-collapse:collapse;font-size:var(--fs-sm);font-variant-numeric:tabular-nums;}
+  .my-tbl th,.my-tbl td{border:1px solid var(--line);min-width:42px;height:30px;padding:0 2px;text-align:center;font-weight:500;}
+  .my-tbl th.my-n{position:sticky;left:0;background:var(--surface);min-width:34px;z-index:1;}
+  .my-tbl .my-total th.my-n{min-width:60px;line-height:1.15;font-size:11px;}
+  .my-tbl td.my-sol,.my-tbl th.my-sol{min-width:74px;background:var(--surface-2);}
+  .my-tbl th.my-sol{font-size:var(--fs-xs);}
+  .my-full{background:var(--ok-soft);color:var(--ok-text);}
+  .my-part{background:var(--warn-soft);color:var(--warn-text);}
+  .my-zero{background:var(--err-soft);color:var(--err-text);}
+  .my-na{color:var(--ink-3);}
+  .my-total td,.my-total th{font-weight:700;}
+  .my-legend{margin:var(--s3) 0 0;font-size:var(--fs-xs);color:var(--ink-2);}
+  .my-ch{display:block;}
+  .my-ch.my-fit{width:100%;max-width:340px;height:auto;}
+  .my-gl{stroke:var(--line);stroke-width:1;}
+  .my-gt,.my-dt{fill:var(--ink-2);font-size:11px;}
+  .my-vt{fill:var(--ink);font-size:12px;font-weight:600;}
+  .my-line{fill:none;stroke:var(--accent);stroke-width:2;stroke-linejoin:round;}
+  .my-dot{fill:var(--accent);}
+  .my-list{display:flex;flex-direction:column;gap:var(--s2);}
+  .my-row{display:flex;align-items:center;gap:var(--s3);width:100%;text-align:left;background:var(--surface-2);
+    border:1px solid var(--line);border-radius:var(--r-md);padding:var(--s3) var(--s4);min-height:52px;}
+  .my-r-t{display:block;font-weight:600;}
+  .my-r-s{display:block;font-size:var(--fs-sm);color:var(--ink-2);margin-top:2px;}
+  .my-r-body{flex:1;min-width:0;}
   /* check page */
   .ex-ph{display:flex;flex-wrap:wrap;gap:var(--s3);margin:var(--s4) 0;}
   .ex-ph a{display:block;max-width:100%;}
@@ -326,6 +355,8 @@
 <script src="exam-core.js"></script>
 <script src="exam-panel-core.js"></script>
 <script src="exam-validate.js"></script>
+<script src="exam-history-core.js"></script>
+<script src="exam-my-view.js"></script>
 <script src="config.js"></script>
 <script>
 /* Панель преподавателя. Данные учеников сюда приходят только с сервера и
@@ -358,7 +389,7 @@ async function all(c,filter,fields,sort){
 /* Signing out (or an expired session) drops everything loaded for the teacher, so that Back
    cannot redraw cached student data without a session. */
 function logout(msg){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
-  data=null;for(const k in summaries)delete summaries[k];
+  data=null;for(const k in summaries)delete summaries[k];for(const k in myExams)delete myExams[k];
   ckGen++;ckShown=null;ck=null;ckNote=null;ckTok={v:'',t:0};ckTokP=null;
   try{closeSheet();}catch(e){}
   render(msg);}
@@ -431,6 +462,7 @@ const cfg={
   count(n){const t=TASKS.find(t=>t.n===n);return t?t.count:0;},
 };
 const summaries={};
+const myExams={};   // student id -> exam summary rows (ExamMyView items)
 function summaryOf(u){
   if(!summaries[u.id]){const d=data.byUser[u.id];
     summaries[u.id]=StatsCore.studentSummary(d.events,d.variants,d.clears,Date.now(),cfg);}
@@ -573,6 +605,7 @@ function renderStudent(id){
       </div>
     </div>
     ${examBlock(id)}
+    <div id="my-exams"></div>
     <div class="grid2">
       <div class="panel"><h3>Пробники</h3>
         ${vs.length?`<div class="list">${vs.map(v=>`<div class="it"><span>${fmtDate(v.t)}</span><span class="vres"><b>${v.s}</b> <span class="muted">тест. · ${v.p} из ${v.m||v.total} перв. · ${Math.round((v.ms||0)/60000)} мин</span></span>
@@ -584,6 +617,20 @@ function renderStudent(id){
           <details><summary>условие</summary><div class="cond" data-c></div></details></div>`).join('')}</div>`:'<p class="muted">Неверных ответов нет.</p>'}</div>
     </div>`;
   fillWrong();
+  fillMyExams(id);
+}
+// The student's exam dashboard: scores per exam and per task, read from the server on the first opening of the card.
+async function fillMyExams(id){
+  const el=document.getElementById('my-exams');if(!el||!window.ExamMyView)return;
+  if(!myExams[id]){
+    el.innerHTML='<p class="muted">Загружаю результаты пробников…</p>';
+    let r;try{r=await api('/ege/exams/summary?user='+encodeURIComponent(id));}catch(e){return;}
+    if(r.status!==200||!r.json||!Array.isArray(r.json.items)){if(location.hash==='#/s/'+id){const e2=document.getElementById('my-exams');if(e2)e2.innerHTML='<p class="muted">Не удалось загрузить результаты пробников'+(/^\d+$/.test(r.status)?' (код '+r.status+')':'')+'.</p>';}return;}
+    myExams[id]=r.json.items;
+  }
+  if(location.hash!=='#/s/'+id)return;
+  const el2=document.getElementById('my-exams');if(!el2)return;
+  el2.innerHTML=myExams[id].length?ExamMyView.dashboardHtml(myExams[id].filter(it=>it&&typeof it.date==='number'&&it.scores),{readonly:true}):'';
 }
 // Условия и ответы берём из тех же data.js, что и тренажёр.
 window.TASKDATA=window.TASKDATA||{};

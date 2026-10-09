@@ -1092,6 +1092,17 @@ test('manual exams: only the teacher writes, the student reads own rows through 
   assert.ok([400, 403].includes(api.status), String(api.status));
 });
 
+test('summary: the teacher reads one student by ?user=, a student cannot read another', async () => {
+  const s = await student(7000000190), o = await student(7000000191);
+  await histPost(tok.teacher, { user: s.id, date: '2025-10-21', title: 'Вариант 1', ...ROW() });
+  const t = await req('GET', '/ege/exams/summary?user=' + s.id, tok.teacher);
+  assert.equal(t.status, 200);
+  assert.equal(t.json.items.length, 1); assert.equal(t.json.items[0].test, 52);
+  assert.equal((await req('GET', '/ege/exams/summary?user=' + s.id, o.token)).json.items.length, 0);   // ?user= means nothing to a student
+  assert.equal((await req('GET', '/ege/exams/summary', tok.teacher)).status, 400);                         // the teacher must name a student
+  assert.equal((await req('GET', '/ege/exams/summary?user=nope', tok.teacher)).status, 400);
+});
+
 test('manual exams: validation, duplicates, listing and delete', async () => {
   const s = await student(7000000124);
   const add = (o) => histPost(tok.teacher, { user: s.id, date: '2025-11-15', title: 'Вариант 2', ...ROW(), ...o });

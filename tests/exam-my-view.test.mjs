@@ -80,3 +80,14 @@ test('top block (exams still ahead) is placed under the title, also in the empty
   assert.match(V.pageHtml([A, B], { seen: [], top }), /Мои пробники[\s\S]*Ждут тебя[\s\S]*Тестовый балл/);
   assert.match(V.pageHtml([], { seen: [], top }), /Здесь появятся[\s\S]*Ждут тебя/);
 });
+
+test('teacher view: the same dashboard, no "Открыть" buttons, the wording is about the student', () => {
+  const E = mk('c', Date.UTC(2025, 11, 1, 9) / 1000, 1, { test: undefined });
+  const h = V.dashboardHtml([A, B, E], { readonly: true });
+  assert.match(h, /my-tbl/);
+  assert.match(h, /<svg/);
+  assert.match(h, /ученик набрал/);
+  assert.match(h, /тест 11/);                                              // the final score is in the list
+  assert.doesNotMatch(h, /data-exam=|Открыть/);
+  assert.match(V.pageHtml([A, B], { seen: [] }), /data-exam="a"/);        // the student page keeps its buttons
+});
