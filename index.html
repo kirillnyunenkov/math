@@ -1596,6 +1596,8 @@
   .my-tbl tr.my-p2 > *{border-top:2px solid var(--line-strong);}   /* second part starts at task 14 */
   .my-tbl td.my-sol.my-sl{background:color-mix(in srgb,var(--c-zero) 55%,var(--surface-2));color:var(--c-zero-t);}
   .my-tbl td.my-sol.my-sm{background:color-mix(in srgb,var(--c-part) 55%,var(--surface-2));color:var(--c-part-t);}
+  .my-tbl tr.my-test > *{background:color-mix(in srgb,var(--accent) 16%,var(--surface));color:var(--accent);border-top:2px solid var(--accent);font-size:var(--fs-md,16px);font-weight:800;height:40px;}   /* the test score: the row that matters most */
+  .my-tbl tr.my-test th.my-n{font-size:12px;}
   .my-tbl th.my-last{background:var(--accent-soft);color:var(--accent);}   /* the newest exam */
   .my-tbl td{transition:opacity .15s;}
   .my-tbl.my-focus td:not(.my-hr):not(.my-hc){opacity:.3;}   /* hover a cell: what is outside its row and column fades */

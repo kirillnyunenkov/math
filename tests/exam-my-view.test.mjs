@@ -97,6 +97,7 @@ test('table polish: second-part divider, tinted weak tasks, only the newest date
   const C = mkp('c', 1000000, 1, 60), D = mkp('d', 2000000, 2, 70), E = mkp('e', 3000000, 0, 64);
   const h = V.tableHtml([C, D, E]);
   assert.match(h, /<tr class="my-p2"><th class="my-n">14</);                  // before task 14
+  assert.match(h, /<tr class="my-total my-test">/);                          // the test score row is marked
   assert.match(h, /<tr class="my-total my-p2">/);                              // and before the totals
   assert.equal((h.match(/my-last/g) || []).length, 1);                         // the date of the newest exam only
   assert.doesNotMatch(V.tableHtml([C]), /my-last/);                            // one exam: nothing to compare
