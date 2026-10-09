@@ -1291,7 +1291,8 @@ async function renderCheck(id){
       ${short.length?`<div class="table-wrap ck-p1"><table><thead><tr><th>Задание</th><th>Ответ ученика</th><th>Верный ответ</th><th></th></tr></thead><tbody>
       ${short.map(t=>{const g=txt(own(answers,t.n));return `<tr><td class="c-n">${esc(t.n)}</td><td class="c-g ck-pre">${g?esc(g):'<span class="muted">—</span>'}</td><td class="c-k ck-pre">${esc(txt(keyOf(t.n).a))}</td>
         <td class="c-v">${ready?(own(ok,t.n)?'<span class="chip ex-checked">верно</span>':'<span class="chip ex-missed">неверно</span>'):''}</td></tr>
-        <tr class="c-cond-row"><td colspan="4"><details${ready&&!own(ok,t.n)?' open':''}><summary>Условие</summary>${examHtml(t.cond,'условии','ck-cond')}</details></td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">В этом пробнике нет заданий с кратким ответом.</p>'}</div>
+        <tr class="c-cond-row"><td colspan="4"><details><summary>Условие</summary>${examHtml(t.cond,'условии','ck-cond')}</details>
+          ${txt(keyOf(t.n).sol)?`<details><summary>Решение</summary>${examHtml(txt(keyOf(t.n).sol),'решении','ck-cond')}</details>`:''}</td></tr>`;}).join('')}</tbody></table></div>`:'<p class="muted">В этом пробнике нет заданий с кратким ответом.</p>'}</div>
     ${long.map((t,i)=>{const g0=own(part2,t.n),g=isObj(g0)?g0:{},ps=photos.filter(p=>String(p.n)===t.n),max=t.max,cur=Math.min(max,Math.max(0,Math.trunc(numOr(g.pts,0))));
       return `<div class="panel" data-ck="${i}"><h3>Задание ${esc(t.n)} <span class="muted">· максимум ${esc(max)}</span></h3>
         <details><summary>Условие и верный ответ</summary>${examHtml(t.cond,'условии','ck-cond')}<p><b>Ответ:</b></p>${examHtml(txt(keyOf(t.n).a),'ответе')}</details>
