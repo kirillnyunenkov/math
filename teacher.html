@@ -245,24 +245,12 @@
   .my-zero{background:var(--c-zero);color:var(--c-zero-t);}
   .my-na{color:var(--ink-3);}
   .my-total td,.my-total th{font-weight:700;}
-  .my-tbl tr:first-child th{position:relative;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--line);}   /* kept under the page header by bindTables */
-  .my-tbl tr:first-child th.my-n{position:sticky;z-index:3;}
-  .my-tbl tr:first-child th.my-sol{background:var(--surface-2);}
   .my-tbl tr.my-p2 > *{border-top:2px solid var(--line-strong);}   /* second part starts at task 14 */
-  .my-tbl{--c-part-lo:#f2c14e;--c-part-hi:#fcefc0;}
-  html[data-theme="dark"] .my-tbl{--c-part-lo:rgba(217,147,47,.66);--c-part-hi:rgba(217,147,47,.26);}
-  .my-part.my-pl{background:var(--c-part-lo);}
-  .my-part.my-ph{background:var(--c-part-hi);}
   .my-tbl td.my-sol.my-sl{background:color-mix(in srgb,var(--c-zero) 55%,var(--surface-2));color:var(--c-zero-t);}
   .my-tbl td.my-sol.my-sm{background:color-mix(in srgb,var(--c-part) 55%,var(--surface-2));color:var(--c-part-t);}
-  .my-tbl .my-last{border-left:2px solid var(--accent);border-right:2px solid var(--accent);}
-  .my-tbl tr:first-child th.my-last{background:var(--accent-soft);color:var(--accent);}
-  .my-tbl .my-total td small{display:block;font-size:11px;line-height:1;font-weight:600;}
-  .my-tbl .my-up{color:var(--ok-text);} .my-tbl .my-dn{color:var(--err-text);}
-  .my-tbl .my-hr{box-shadow:inset 0 2px 0 var(--accent),inset 0 -2px 0 var(--accent);}
-  .my-tbl .my-hc{box-shadow:inset 2px 0 0 var(--accent),inset -2px 0 0 var(--accent);}
-  .my-tbl .my-hr.my-hc{box-shadow:inset 0 0 0 2px var(--accent);}
-  .my-tbl th.my-n.my-hr,.my-tbl tr:first-child th.my-hc{color:var(--accent);}
+  .my-tbl th.my-last{background:var(--accent-soft);color:var(--accent);}   /* the newest exam */
+  .my-tbl td{transition:opacity .15s;}
+  .my-tbl.my-focus td:not(.my-hr):not(.my-hc){opacity:.3;}   /* tap a cell: what is outside its row and column fades */
   .my-legend{margin:var(--s3) 0 0;font-size:var(--fs-xs);color:var(--ink-2);}
   .my-ch{display:block;}
   .my-ch.my-fit{width:100%;max-width:340px;height:auto;}
