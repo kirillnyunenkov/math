@@ -343,6 +343,21 @@
     .ck-p1 td.c-k{grid-area:k;} .ck-p1 td.c-k::before{content:"Верный ответ: ";color:var(--ink-3);}
     .ex-ph img{height:150px;}
   }
+
+  /* full-screen photo viewer */
+  .lb{position:fixed;inset:0;z-index:100;background:rgba(10,10,8,.94);display:none;align-items:center;justify-content:center;touch-action:none;padding-bottom:64px;box-sizing:border-box;}
+  .lb.on{display:flex;}
+  .lb img{display:block;transition:transform .2s ease;user-select:none;-webkit-user-drag:none;}
+  .lb-bar{position:absolute;left:0;right:0;bottom:0;display:flex;gap:var(--s3);justify-content:center;align-items:center;
+    padding:var(--s3) var(--s4) calc(var(--s3) + env(safe-area-inset-bottom));color:#fff;font-size:14px;}
+  .lb-bar button,.lb-nav{background:rgba(255,255,255,.14);color:#fff;border:0;border-radius:999px;min-width:44px;height:44px;
+    display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font:inherit;}
+  .lb-bar button:hover,.lb-nav:hover{background:rgba(255,255,255,.26);}
+  .lb-x{position:absolute;top:calc(var(--s3) + env(safe-area-inset-top));right:var(--s3);background:rgba(255,255,255,.14);color:#fff;border:0;
+    border-radius:999px;width:44px;height:44px;font-size:26px;line-height:1;cursor:pointer;}
+  .lb-nav{position:absolute;top:50%;margin-top:-22px;}
+  .lb-prev{left:var(--s3);} .lb-next{right:var(--s3);}
+  .lb-cnt{min-width:48px;text-align:center;}
 </style>
 <script>
 (function(){try{var t=localStorage.getItem('ege_theme');
@@ -364,6 +379,17 @@
   </div>
 </header>
 <main id="app"></main>
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-label="Фото">
+  <img id="lb-img" alt="">
+  <button type="button" class="lb-x" data-lb="close" aria-label="Закрыть">×</button>
+  <button type="button" class="lb-nav lb-prev" data-lb="prev" aria-label="Предыдущее фото">‹</button>
+  <button type="button" class="lb-nav lb-next" data-lb="next" aria-label="Следующее фото">›</button>
+  <div class="lb-bar">
+    <button type="button" data-lb="left" aria-label="Повернуть влево">⟲</button>
+    <span class="lb-cnt" id="lb-cnt"></span>
+    <button type="button" data-lb="right" aria-label="Повернуть вправо">⟳</button>
+  </div>
+</div>
 <div class="sheet-ov" id="sheet-ov"><div class="sheet" id="sheet"></div></div>
 
 <script src="sync-core.js"></script>
@@ -1117,13 +1143,68 @@ app.addEventListener('change',e=>{
   const f=e.target.closest&&e.target.closest('[data-fbfile]');if(!f)return;
   const files=Array.from(f.files||[]);f.value='';fbUpload(Number(f.dataset.fbfile),files);
 });
-// a link opened long after the page was drawn would carry a dead token: get a new one first
-function openPhoto(e,a){
-  if(Date.now()-ckTok.t<60000)return;
-  e.preventDefault();
-  const w=window.open('','_blank');if(w)w.opener=null;
-  freshToken(0).then(tok=>{const u=phUrl(a.dataset.ph,tok,a.dataset.phc);setPhotoLinks(tok);if(w)w.location.href=u;else window.open(u,'_blank','noopener');});
+/* Full-screen photo viewer: all photos of one task, arrows/swipe to switch, 90-degree rotation (kept per photo on this device).
+   The token is renewed on open, since the page may have been drawn long ago. */
+const lb={el:document.getElementById('lb'),img:document.getElementById('lb-img'),cnt:document.getElementById('lb-cnt'),list:[],i:0};
+const ROT_KEY='ege_ph_rot';
+const rotGet=k=>{try{return Number((JSON.parse(localStorage.getItem(ROT_KEY)||'{}'))[k])||0;}catch(e){return 0;}};
+const rotSet=(k,v)=>{try{const o=JSON.parse(localStorage.getItem(ROT_KEY)||'{}');if(v)o[k]=v;else delete o[k];localStorage.setItem(ROT_KEY,JSON.stringify(o));}catch(e){}};
+function lbFit(){
+  const r=lb.rot,odd=r/90%2!==0,W=innerWidth,H=innerHeight-64;   // 64 px: the bottom bar
+  lb.img.style.maxWidth=(odd?H:W)+'px';lb.img.style.maxHeight=(odd?W:H)+'px';
+  lb.img.style.transform=`rotate(${r}deg)`;
 }
+function lbShow(){
+  const a=lb.list[lb.i],k=a.dataset.phc+'/'+a.dataset.ph;
+  lb.rot=rotGet(k);lb.key=k;lb.img.dataset.retried='';
+  lb.img.src=phUrl(a.dataset.ph,ckTok.v,a.dataset.phc);
+  lb.img.alt=(a.querySelector('img')||{}).alt||'Фото';
+  lb.cnt.textContent=lb.list.length>1?`${lb.i+1} / ${lb.list.length}`:'';
+  lb.el.querySelectorAll('.lb-nav').forEach(b=>{b.style.display=lb.list.length>1?'':'none';});
+  lbFit();
+}
+async function lbOpen(a){
+  await freshToken(60000);
+  if(!ckTok.v)return false;
+  const box=a.closest('.ex-ph');
+  lb.list=box?Array.from(box.querySelectorAll('a[data-ph]')):[a];
+  lb.i=Math.max(0,lb.list.indexOf(a));
+  setPhotoLinks(ckTok.v);
+  lb.el.classList.add('on');document.body.style.overflow='hidden';
+  lbShow();return true;
+}
+function lbClose(){lb.el.classList.remove('on');document.body.style.overflow='';lb.img.removeAttribute('src');}
+function lbStep(d){if(lb.list.length<2)return;lb.i=(lb.i+d+lb.list.length)%lb.list.length;lbShow();}
+function lbRotate(d){lb.rot=((lb.rot+d)%360+360)%360;rotSet(lb.key,lb.rot);lbFit();}
+function openPhoto(e,a){
+  if(e.metaKey||e.ctrlKey||e.shiftKey||e.button===1)return;   // a deliberate new-tab click keeps working
+  e.preventDefault();
+  lbOpen(a).then(ok=>{if(ok===false)window.open(a.href,'_blank','noopener');});
+}
+lb.img.addEventListener('error',async()=>{   // an expired token: one more try with a new one
+  if(lb.img.dataset.retried||!lb.el.classList.contains('on'))return;
+  lb.img.dataset.retried='1';const tok=await freshToken(0);if(!tok)return;
+  const a=lb.list[lb.i];lb.img.src=phUrl(a.dataset.ph,tok,a.dataset.phc);
+});
+lb.el.addEventListener('click',e=>{
+  const b=e.target.closest('[data-lb]');
+  if(b){const x=b.dataset.lb;if(x==='close')lbClose();else if(x==='prev')lbStep(-1);else if(x==='next')lbStep(1);
+    else if(x==='left')lbRotate(-90);else if(x==='right')lbRotate(90);return;}
+  if(e.target===lb.el)lbClose();
+});
+let lbX=null;
+lb.el.addEventListener('touchstart',e=>{lbX=e.touches.length===1?e.touches[0].clientX:null;},{passive:true});
+lb.el.addEventListener('touchend',e=>{
+  if(lbX===null||!e.changedTouches.length)return;
+  const dx=e.changedTouches[0].clientX-lbX;lbX=null;if(Math.abs(dx)>60)lbStep(dx<0?1:-1);
+},{passive:true});
+addEventListener('resize',()=>{if(lb.el.classList.contains('on'))lbFit();});
+document.addEventListener('keydown',e=>{
+  if(!lb.el.classList.contains('on'))return;
+  if(e.key==='Escape'){lbClose();e.stopImmediatePropagation();}
+  else if(e.key==='ArrowLeft')lbStep(-1);else if(e.key==='ArrowRight')lbStep(1);
+  else if(e.key==='r'||e.key==='R'||e.key==='к'||e.key==='К')lbRotate(e.shiftKey?-90:90);
+},true);
 /* Everything read from an exam or a submitted work is untrusted data: the server does not check
    the content of `tasks`, `key`, `answers`, `part2` or `log`. Numbers are coerced, strings are
    escaped on output, objects are looked up by own property only. */
