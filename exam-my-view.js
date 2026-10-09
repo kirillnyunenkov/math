@@ -27,7 +27,7 @@
         return '<td class="my-c my-' + s + '">' + (s === 'na' ? '-' : s === 'blank' ? '' : v) + '</td>';
       }).join('') + '<td class="my-sol' + slc + '">' + (sol === null ? '-' : sol + '%') + '</td></tr>';
     }).join('');
-    const total = (label, f, first) => '<tr class="my-total' + (first ? ' my-p2' : '') + '"><th class="my-n">' + label + '</th>' + items.map((it) => { const v = f(it); return '<td>' + (v === null ? '' : v) + '</td>'; }).join('') + '<td></td></tr>';
+    const total = (label, f, first) => '<tr class="my-total' + (first ? ' my-p2' : ' my-test') + '"><th class="my-n">' + label + '</th>' + items.map((it) => { const v = f(it); return '<td>' + (v === null ? '' : v) + '</td>'; }).join('') + '<td></td></tr>';
     return '<div class="my-scroll" data-my-scroll><table class="my-tbl">' + head + rows + total('Первичный<br>балл', H.primaryOf, true) + total('Тестовый<br>балл', H.testOf, false) + '</table></div>';
   }
 
