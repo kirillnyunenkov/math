@@ -207,3 +207,33 @@ test('history add: input errors are refused before any network call', async () =
     assert.equal(badId.code, 1); assert.match(badId.out, /--id/);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('link: dry run writes nothing, --yes patches only solution_url', async () => {
+  const hits = [];
+  const srv = createServer((q, s) => {
+    let body = ''; q.on('data', (c) => { body += c; });
+    q.on('end', () => {
+      s.setHeader('content-type', 'application/json');
+      const u = q.url.split('?')[0]; hits.push(q.method + ' ' + u + (q.method === 'PATCH' ? ' ' + body : ''));
+      if (u.endsWith('/auth-with-password')) return s.end(JSON.stringify({ token: 'stub-token', record: { role: 'teacher' } }));
+      if (u.endsWith('/collections/exams/records') && q.method === 'GET') return s.end(JSON.stringify({ items: [{ id: 'e1', title: 'Пример', full: false, created: '2026-01-01' }] }));
+      if (q.method === 'PATCH') return s.end('{}');
+      s.statusCode = 500; s.end('{}');
+    });
+  });
+  await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const dir = mkdtempSync(join(tmpdir(), 'exam-api-test-'));
+  try {
+    const link = join(dir, 'link.txt');
+    writeFileSync(link, 'http://localhost:3456/teacher.html#/login/teacher.StubSecret1\n');
+    const base = ['--api', 'http://127.0.0.1:' + srv.address().port + '/api', '--link-file', link];
+    const dry = await run(['link', '--exam', '1', '--url', 'https://youtu.be/abc', ...base]);
+    assert.equal(dry.code, 3, dry.out);
+    assert.ok(!hits.some((h) => h.startsWith('PATCH')));
+    const bad = await run(['link', '--exam', '1', '--url', 'http://x.ru', '--yes', ...base]);
+    assert.equal(bad.code, 1); assert.ok(!hits.some((h) => h.startsWith('PATCH')));
+    const ok = await run(['link', '--exam', '1', '--url', 'https://youtu.be/abc', '--yes', ...base]);
+    assert.equal(ok.code, 0, ok.out);
+    assert.ok(hits.includes('PATCH /api/collections/exams/records/e1 {"solution_url":"https://youtu.be/abc"}'), hits.join('\n'));
+  } finally { srv.close(); rmSync(dir, { recursive: true, force: true }); }
+});

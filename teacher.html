@@ -1248,6 +1248,7 @@ async function renderCheck(id){
     max:Math.min(100,Math.max(1,Math.trunc(numOr(t.max,1))||1)),cond:txt(t.cond)}));
   const key=isObj(e.key)?e.key:{},keyOf=n=>{const k=own(key,String(n));return isObj(k)?k:{};};
   const dur=numOr(a.duration,0),start=numOr(a.start,0);
+  const solUrl=/^https:\/\/[^\s]+$/.test(txt(e.solution_url))?txt(e.solution_url):'';   // set by the teacher's tool; shown only if it is a plain https link
   const photos=phs||photosOfAsg(id);   // a failed request falls back to the list loaded earlier, with a notice
   const fb=Array.isArray(fbs)?fbs:[];
   const tok=(photos.length||fb.length)?await freshToken(60000):'';
@@ -1274,6 +1275,7 @@ async function renderCheck(id){
   app.innerHTML=`<p><a href="#/exams">← Пробники</a> · <a href="#/s/${esc(a.user)}">${esc(nameOf(a.user))}</a></p>
     <div class="toolbar"><h2 class="grow">${esc(title)} · ${esc(nameOf(a.user))} ${chipFor(ph)}</h2></div>
     <p class="lead">Начало: ${T(start)} (по Москве) · на работу ${Math.round(dur/60)} мин · ${numOr(a.opened,0)>0?'открыл: '+T(a.opened):'не открывал'}${numOr(a.finished,0)>0?' · завершил досрочно: '+T(a.finished):''}${numOr(a.photos_done,0)>0?' · закончил с фото: '+T(a.photos_done):''}</p>
+    ${solUrl?`<p><a class="btn quiet" href="${esc(solUrl)}" target="_blank" rel="noopener noreferrer">Решения пробника ↗</a></p>`:''}
     ${phs?'':'<p class="muted">Не удалось обновить список фото.</p>'}
     ${ready?'':`<div class="panel"><p class="muted" role="status">${notReady}</p></div>`}
     <div class="panel"><h3>Активность</h3>
