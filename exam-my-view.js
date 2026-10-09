@@ -14,78 +14,41 @@
   // Drills (full === false) may be numbered 1..40 and hold any tasks: they do not fit the 20 rows of an exam.
   const isFull = (it) => it.full !== false;
 
-  // A partial score shades by its share of the maximum: little (< 40%), about half, most (>= 60%).
-  const partClass = (item, n, v) => {
-    const m = H.maxFor(item, n), r = m > 0 && typeof v === 'number' ? v / m : 0.5;
-    return r < 0.4 ? ' my-pl' : r >= 0.6 ? ' my-ph' : '';
-  };
-
   function tableHtml(all) {
     const items = all.filter(isFull);
     if (!items.length) return '';
-    const last = items.length - 1, mark = (i) => (items.length > 1 && i === last ? ' my-last' : '');
-    const head = '<tr><th class="my-n"></th>' + items.map((it, i) => '<th' + (mark(i) ? ' class="my-last"' : '') + ' title="' + esc(it.title) + '">' + dm(it.date) + '</th>').join('') + '<th class="my-sol">Решаемость</th></tr>';
+    const last = items.length - 1, isLast = (i) => items.length > 1 && i === last;   // the newest exam: only its date is marked
+    const head = '<tr><th class="my-n"></th>' + items.map((it, i) => '<th' + (isLast(i) ? ' class="my-last"' : '') + ' title="' + esc(it.title) + '">' + dm(it.date) + '</th>').join('') + '<th class="my-sol">Решаемость</th></tr>';
     const rows = H.NUMS.map((n) => {
       const sol = H.solvability(items, n);
       const slc = sol === null ? '' : sol < 50 ? ' my-sl' : sol < 80 ? ' my-sm' : '';
       return '<tr' + (n === 14 ? ' class="my-p2"' : '') + '><th class="my-n">' + n + '</th>' + items.map((it, i) => {
         const s = H.cellState(it, n), v = it.scores[n];
-        return '<td class="my-c my-' + s + (s === 'part' ? partClass(it, n, v) : '') + mark(i) + '">' + (s === 'na' ? '-' : s === 'blank' ? '' : v) + '</td>';
+        return '<td class="my-c my-' + s + '">' + (s === 'na' ? '-' : s === 'blank' ? '' : v) + '</td>';
       }).join('') + '<td class="my-sol' + slc + '">' + (sol === null ? '-' : sol + '%') + '</td></tr>';
     }).join('');
-    // The test score carries the change against the previous exam that has one.
-    const total = (label, f, withDelta, first) => {
-      let prev = null;
-      return '<tr class="my-total' + (first ? ' my-p2' : '') + '"><th class="my-n">' + label + '</th>' + items.map((it, i) => {
-        const v = f(it);
-        let d = '';
-        if (withDelta && v !== null) {
-          if (prev !== null && v !== prev) d = '<small class="' + (v > prev ? 'my-up' : 'my-dn') + '">' + (v > prev ? '+' : '\u2212') + Math.abs(v - prev) + '</small>';
-          prev = v;
-        }
-        return '<td' + (mark(i) ? ' class="my-last"' : '') + '>' + (v === null ? '' : v) + d + '</td>';
-      }).join('') + '<td></td></tr>';
-    };
-    return '<div class="my-scroll my-tscroll" data-my-scroll><table class="my-tbl">' + head + rows + total('Первичный<br>балл', H.primaryOf, false, true) + total('Тестовый<br>балл', H.testOf, true, false) + '</table></div>';
+    const total = (label, f, first) => '<tr class="my-total' + (first ? ' my-p2' : '') + '"><th class="my-n">' + label + '</th>' + items.map((it) => { const v = f(it); return '<td>' + (v === null ? '' : v) + '</td>'; }).join('') + '<td></td></tr>';
+    return '<div class="my-scroll" data-my-scroll><table class="my-tbl">' + head + rows + total('Первичный<br>балл', H.primaryOf, true) + total('Тестовый<br>балл', H.testOf, false) + '</table></div>';
   }
 
-  // Tap or hover a cell: its row and column are outlined, so a wide table is easy to follow. A tap keeps it until the next tap.
+  // Hover a cell with the mouse: everything outside its row and column is dimmed, so a wide table is easy to follow.
   function bindTables(el) {
     if (!el || !el.querySelectorAll) return;
     el.querySelectorAll('table.my-tbl').forEach((tbl) => {
-      let pinned = null;
-      const clear = () => tbl.querySelectorAll('.my-hr,.my-hc').forEach((c) => c.classList.remove('my-hr', 'my-hc'));
+      const clear = () => { tbl.classList.remove('my-focus'); tbl.querySelectorAll('.my-hr,.my-hc').forEach((c) => c.classList.remove('my-hr', 'my-hc')); };
       const show = (cell) => {
         clear();
+        tbl.classList.add('my-focus');
         const r = cell.parentNode.rowIndex, c = cell.cellIndex;
         Array.prototype.forEach.call(tbl.rows, (row) => Array.prototype.forEach.call(row.cells, (x) => {
           if (row.rowIndex === r) x.classList.add('my-hr');
           if (x.cellIndex === c) x.classList.add('my-hc');
         }));
       };
-      // The header row follows the page while the table is on screen: no scroll box of its own, so a phone scrolls the page as usual.
-      const heads = Array.prototype.slice.call(tbl.rows[0].cells);
-      let queued = false;
-      const place = () => {
-        queued = false;
-        if (!tbl.isConnected) { window.removeEventListener('scroll', queue); window.removeEventListener('resize', queue); return; }   // the page was re-rendered
-        const bar = typeof document !== 'undefined' && document.querySelector('header'), top = bar ? bar.getBoundingClientRect().bottom : 0;
-        const box = tbl.getBoundingClientRect(), room = box.height - tbl.rows[0].offsetHeight - tbl.rows[tbl.rows.length - 1].offsetHeight;
-        const dy = Math.max(0, Math.min(top - box.top, room));
-        heads.forEach((c) => { c.style.transform = dy ? 'translateY(' + dy + 'px)' : ''; });
-      };
-      const queue = () => { if (!queued) { queued = true; (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : setTimeout)(place); } };
-      window.addEventListener('scroll', queue, { passive: true });
-      window.addEventListener('resize', queue);
-      place();
       const cellOf = (e) => { const t = e.target && e.target.closest ? e.target.closest('td.my-c') : null; return t && tbl.contains(t) ? t : null; };
-      tbl.addEventListener('mouseover', (e) => { const c = cellOf(e); if (c && !pinned) show(c); });
-      tbl.addEventListener('mouseleave', () => { if (!pinned) clear(); });
-      tbl.addEventListener('click', (e) => {
-        const c = cellOf(e);
-        if (!c || c === pinned) { pinned = null; clear(); return; }
-        pinned = c; show(c);
-      });
+      // Mouse only: a finger has no hover, and a tap would leave the dimming stuck.
+      tbl.addEventListener('pointerover', (e) => { const c = e.pointerType === 'mouse' ? cellOf(e) : null; if (c) show(c); });
+      tbl.addEventListener('pointerleave', clear);
     });
   }
 
@@ -124,7 +87,7 @@
     const chart = chartHtml(items), table = tableHtml(items);
     return (chart ? '<section class="my-card"><h3>Тестовый балл</h3>' + chart + '</section>' : '') +
       (table ? '<section class="my-card"><h3>Баллы по заданиям</h3>' + table +
-      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов (чем светлее, тем ближе к максимуму), красный: 0, пусто: не решал, «-»: задания не было в варианте. Тёмная линия перед 14-м заданием отделяет вторую часть, рамка справа выделяет последний пробник, цифры под тестовым баллом показывают изменение по сравнению с предыдущим. Нажми на ячейку, чтобы подсветить её строку и столбец. Решаемость: какую долю баллов за это задание ' + ((opt && opt.readonly) ? 'ученик набрал' : 'ты набрал') + ' по всем пробникам.</p></section>' : '') +
+      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте. Линия перед 14-м заданием отделяет вторую часть. Наведи мышь на ячейку, чтобы выделить её строку и столбец. Решаемость: какую долю баллов за это задание ' + ((opt && opt.readonly) ? 'ученик набрал' : 'ты набрал') + ' по всем пробникам.</p></section>' : '') +
       '<section class="my-card"><h3>Все пробники</h3><div class="my-list">' + listHtml(items, (opt && opt.seen) || [], !!(opt && opt.readonly)) + '</div></section>';
   }
 

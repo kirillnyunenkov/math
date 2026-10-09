@@ -92,17 +92,15 @@ test('teacher view: the same dashboard, no "Открыть" buttons, the wording
   assert.match(V.pageHtml([A, B], { seen: [] }), /data-exam="a"/);        // the student page keeps its buttons
 });
 
-test('table polish: second-part divider, shaded partial scores, trend under the test score, latest exam marked', () => {
+test('table polish: second-part divider, tinted weak tasks, only the newest date marked; no trend, no shaded partial scores', () => {
   const mkp = (id, date, s15, test) => { const x = mk(id, date, 1, { test }); x.scores[15] = s15; return x; };
   const C = mkp('c', 1000000, 1, 60), D = mkp('d', 2000000, 2, 70), E = mkp('e', 3000000, 0, 64);
   const h = V.tableHtml([C, D, E]);
   assert.match(h, /<tr class="my-p2"><th class="my-n">14</);                  // before task 14
   assert.match(h, /<tr class="my-total my-p2">/);                              // and before the totals
-  assert.match(h, /my-c my-part my-pl">1</);                       // task 15: 1 of 3 is a small share
-  assert.match(h, /my-c my-part my-ph">2</);                                  // 2 of 3 is most of it
-  assert.match(h, /<small class="my-up">\+10<\/small>/);
-  assert.match(h, /<small class="my-dn">−6<\/small>/);
-  assert.equal((h.match(/my-last/g) || []).length, 1 + 20 + 2);                // header + 20 rows + 2 totals, last column only
+  assert.equal((h.match(/my-last/g) || []).length, 1);                         // the date of the newest exam only
   assert.doesNotMatch(V.tableHtml([C]), /my-last/);                            // one exam: nothing to compare
   assert.match(h, /my-sol my-sm">50%</);                                      // task 15: 3 of 6 points, a middling task is tinted
+  assert.match(h, /my-c my-part">1</);                                        // partial scores stay one plain colour
+  assert.doesNotMatch(h, /my-pl|my-ph|my-up|my-dn|<small/);
 });
