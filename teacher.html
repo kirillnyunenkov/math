@@ -355,8 +355,8 @@
 <script src="exam-core.js"></script>
 <script src="exam-panel-core.js"></script>
 <script src="exam-validate.js"></script>
-<script src="exam-history-core.js"></script>
-<script src="exam-my-view.js"></script>
+<script src="exam-history-core.js?v=100"></script>
+<script src="exam-my-view.js?v=100"></script>
 <script src="config.js"></script>
 <script>
 /* Панель преподавателя. Данные учеников сюда приходят только с сервера и
@@ -621,7 +621,7 @@ function renderStudent(id){
 }
 // The student's exam dashboard: scores per exam and per task, read from the server on the first opening of the card.
 async function fillMyExams(id){
-  const el=document.getElementById('my-exams');if(!el||!window.ExamMyView)return;
+  const el=document.getElementById('my-exams');if(!el||!window.ExamMyView||!ExamMyView.dashboardHtml)return;
   if(!myExams[id]){
     el.innerHTML='<p class="muted">Загружаю результаты пробников…</p>';
     let r;try{r=await api('/ege/exams/summary?user='+encodeURIComponent(id));}catch(e){return;}
