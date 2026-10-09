@@ -545,10 +545,10 @@ function renderList(){
 function renderLeads(){
   const rows=data.leads;
   app.innerHTML=`${tabs('l')}
-    <p class="lead">Зарегистрировались через бота: ${rows.length}. Нажми на человека, чтобы открыть его статистику. «В мои ученики» переносит его в основной список.</p>
+    <p class="lead">Зарегистрировались через бота: ${rows.length}. Нажми на человека, чтобы открыть его статистику. «В мои ученики» переносит его в основной список. «Новый ученик» создаёт аккаунт со ссылкой для входа.</p>
     <div class="panel">
       <div class="toolbar"><div class="grow muted">Обновлено ${fmtDate(data.loaded)}</div>
-        <button class="btn quiet" data-act="reload">Обновить</button></div>
+        <button class="btn quiet" data-act="reload">Обновить</button><button class="btn" data-act="invite">Новый ученик</button></div>
       ${rows.length?`<div class="table-wrap"><table>
         <thead><tr><th>Имя</th><th>Telegram</th><th class="hide-m">Регистрация</th><th class="num">Отметок</th><th>Последняя активность</th><th></th></tr></thead>
         <tbody>${rows.map(p=>`<tr class="row${p.active?'':' off'}" data-open="${esc(p.user)}">
@@ -617,9 +617,12 @@ function renderStudent(id){
       <button class="btn quiet" data-act="alias" data-id="${id}">${data.alias[id]?'Изменить имя':'Дать имя'}</button>
       ${prof
         ?`<span class="muted">${tgLink(prof.username)}</span>
+          ${prof.placeholder?`<button class="btn quiet" data-act="link" data-id="${id}">Ссылка для входа</button>
+          <button class="btn quiet" data-act="rotate" data-id="${id}">Новая ссылка</button>`:''}
           <button class="btn ${lead?'':'quiet'}" data-act="mine" data-id="${esc(prof.id)}" data-v="${lead?1:0}">${lead?'В мои ученики':'Убрать из учеников'}</button>`
         :`<button class="btn quiet" data-act="link" data-id="${id}">Ссылка для входа</button>
-          <button class="btn quiet" data-act="rotate" data-id="${id}">Новая ссылка</button>`}
+          <button class="btn quiet" data-act="rotate" data-id="${id}">Новая ссылка</button>
+          <button class="btn quiet" data-act="to-leads" data-id="${id}">Убрать из учеников</button>`}
       <button class="btn ${u.active===false?'quiet':'danger'}" data-act="active" data-id="${id}" data-v="${u.active===false?1:0}">${u.active===false?'Включить':'Отключить'}</button></div>
     <div class="kpis">
       <div class="kpi"><b>${s.lastActive==null?'—':fmtDay(s.lastActive)}</b><span>последняя активность</span></div>
@@ -703,12 +706,12 @@ function showLink(u,secret,title){
     <div class="acts"><button class="btn quiet" data-act="close">Закрыть</button><button class="btn" data-act="copy" data-url="${esc(url)}">Скопировать</button></div>`);
 }
 async function rotate(id){
-  const u=data.students.find(x=>x.id===id);
+  const u=data.userOf[id];
   sheet(`<h3>Выпустить новую ссылку?</h3><p>Старая ссылка перестанет работать, и все устройства, где ${esc(dispName(u))} вошёл по ней, выйдут из аккаунта. Прогресс не пропадёт.</p>
     <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="rotate-go" data-id="${id}">Выпустить</button></div>`);
 }
 async function rotateGo(id){
-  const u=data.students.find(x=>x.id===id),secret=rnd(32,ALNUM);
+  const u=data.userOf[id],secret=rnd(32,ALNUM);
   const r=await api('/collections/users/records/'+id,{method:'PATCH',body:{password:secret,passwordConfirm:secret}});
   if(r.status!==200){closeSheet();return;}
   const l=data.linkOf[id];
@@ -716,6 +719,25 @@ async function rotateGo(id){
   else await api('/collections/links/records',{method:'POST',body:{user:id,secret}});
   await refresh();
   showLink(u,secret,'Новая ссылка');
+}
+/* An old link account has no bot profile, so it cannot be a lead. The server gives it a
+   placeholder profile (a made-up Telegram id); progress and the link stay as they are. */
+async function toLeads(id){
+  const r=await api('/ege/invite',{method:'POST',body:{user:id}});
+  if(r.status!==200){sheet(`<h3>Не получилось</h3><p>Сервер ответил ${esc(r.status)}.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
+  location.hash='#/leads';
+  await refresh();
+}
+/* A new account for a person who gets only a link. They type their own name on first entry. */
+async function inviteNew(){
+  const r=await api('/ege/invite',{method:'POST',body:{}});
+  if(r.status!==200||!r.json||!r.json.login){sheet(`<h3>Не получилось</h3><p>Сервер ответил ${esc(r.status)}. Аккаунт не создан.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);return;}
+  const url=linkFor({login:r.json.login},r.json.secret);
+  sheet(`<h3>Новый ученик</h3><p>Отправь эту ссылку человеку. По ней он входит на любом устройстве и при первом входе сам вводит своё имя. Пусть никому её не пересылает.</p>
+    <div class="linkbox">${esc(url)}</div>
+    <div class="acts"><button class="btn quiet" data-act="close">Закрыть</button><button class="btn" data-act="copy" data-url="${esc(url)}">Скопировать</button></div>`);
+  location.hash='#/leads';
+  await refresh();
 }
 async function setMine(pid,on){
   const r=await api('/collections/tg_profiles/records/'+pid,{method:'PATCH',body:{mine:on}});
@@ -1276,12 +1298,14 @@ document.addEventListener('click',e=>{
   if(a==='reload')refresh();
   else if(a==='close')closeSheet();
   else if(a==='copy')navigator.clipboard.writeText(b.dataset.url).then(()=>{b.textContent='Скопировано';});
-  else if(a==='link'){const l=data.linkOf[id],u=data.students.find(x=>x.id===id);
+  else if(a==='link'){const l=data.linkOf[id],u=data.userOf[id];
     if(l)showLink(u,l.secret,'Ссылка для входа');else rotate(id);}
   else if(a==='rotate')rotate(id);
   else if(a==='rotate-go')rotateGo(id);
   else if(a==='alias')aliasSheet(id);
   else if(a==='mine')setMine(id,b.dataset.v==='1');
+  else if(a==='to-leads')toLeads(id);
+  else if(a==='invite')inviteNew();
   else if(a==='active')setActive(id,b.dataset.v==='1');
   else if(a==='vdel')delVariant(b.dataset.user,id);
   else if(a==='vdel-go')delVariantGo(b.dataset.user,id);

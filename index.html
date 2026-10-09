@@ -193,7 +193,7 @@
     /* гостю нужна надпись «Войти»: значок человечка не читается как вход */
     #account.guest{width:auto;padding:0 var(--s3);}
     #account.guest .acc-label{display:inline;}}
-  a.sheet-go{display:flex;text-decoration:none;box-sizing:border-box;}
+  a.sheet-go,a.sheet-btn{display:flex;text-decoration:none;box-sizing:border-box;justify-content:center;align-items:center;}
   @media(max-width:760px){.install-mobile-only{display:inline-flex!important;}}
   @media(max-width:760px){:root{--card-base:330px;}}
   .burger{display:none;font:inherit;background:transparent;border:1px solid var(--line-strong);
@@ -463,7 +463,8 @@
     border-radius:var(--r-md);border:1px solid var(--line-strong);background:var(--glass-strong);color:var(--ink);}
   .code-go:hover{border-color:var(--ink-3);}
   .code-go:disabled{opacity:.6;cursor:default;}
-  .code-form .code-msg{font-size:var(--fs-sm);color:var(--err-text);margin:var(--s2) 0 0;min-height:1.4em;line-height:1.4;}
+  .name-form .code-input{letter-spacing:0;}
+  .name-form .code-msg,.code-form .code-msg{font-size:var(--fs-sm);color:var(--err-text);margin:var(--s2) 0 0;min-height:1.4em;line-height:1.4;}
   .help{max-width:720px;margin:0 auto;padding:var(--s10) var(--s6) var(--s16);}
   .help h2{font-size:var(--fs-3xl);margin-bottom:var(--s2);}
   .help .help-lead{color:var(--ink-2);font-size:var(--fs-base);margin-bottom:var(--s8);}
@@ -1996,7 +1997,7 @@ const Sync={
     }
     const known=loadJ('ege_auth_last_user',null);
     const same=known===rec.id;
-    auth={token:r.json.token,userId:rec.id,name:rec.name||rec.login,role:rec.role,link:link,
+    auth={token:r.json.token,userId:rec.id,name:rec.name||rec.login,named:!!rec.name,role:rec.role,link:link,
       device:deviceId()};
     saveJ(AUTH_KEY,auth);
     exUI('reset');
@@ -2013,29 +2014,93 @@ const Sync={
     }
     saveJ('ege_auth_last_user',rec.id);
     render();
-    note('Вход выполнен','Привет, '+escapeHtml(auth.name)+'! Теперь прогресс сохраняется и на других устройствах.');
+    if(!auth.named)nameSheet();
+    else note('Вход выполнен','Привет, '+escapeHtml(auth.name)+'! Теперь прогресс сохраняется и на других устройствах.');
     this.soon(0);},
   async refreshToken(){
     if(!auth||!navigator.onLine)return;
     try{const r=await this.api('/collections/users/auth-refresh',{method:'POST'});
       if(r.status===401||r.status===403){this.expired(r.status===403);return;}
-      if(r.status===200){auth.token=r.json.token;auth.name=r.json.record.name||auth.name;saveJ(AUTH_KEY,auth);}
+      if(r.status===200){auth.token=r.json.token;auth.name=r.json.record.name||auth.name;auth.named=!!r.json.record.name;saveJ(AUTH_KEY,auth);}
     }catch(e){}},
   logout(){exUI('reset');auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}render();}
 };
 window.addEventListener('online',()=>Sync.soon(0));
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')Sync.soon(0);});
 setInterval(()=>{if(document.visibilityState==='visible')Sync.soon(0);},60000);
-function accountSheet(){
+/* Имя: ссылку выдаёт учитель, а имя ученик вводит сам, один раз. Дальше менять
+   его может только учитель (в панели). Пока имени нет, аккаунт называется логином. */
+function nameSheet(){
+  if(!auth)return;
+  sheetResolve=null;
+  showSheet(`<h3>Как тебя зовут?</h3><p class="ih-sub">Имя увидит только преподаватель. Потом поменять его сможет только он.</p>
+    <form class="name-form" novalidate><div class="code-row"><input class="code-input" id="name-input" type="text" maxlength="80" autocomplete="name" placeholder="Имя и фамилия">
+    <button class="code-go" type="submit">Сохранить</button></div><p class="code-msg" role="status" aria-live="polite"></p></form>
+    <div class="sheet-actions" style="margin-top:10px"><button class="sheet-btn" data-sheet="0">Позже</button></div>`);
+  const inp=document.getElementById('name-input');if(inp)inp.focus();
+}
+document.addEventListener('submit',async e=>{
+  const f=e.target.closest('.name-form');if(!f)return;
+  e.preventDefault();
+  const inp=f.querySelector('.code-input'),btn=f.querySelector('.code-go'),msg=f.querySelector('.code-msg');
+  const name=inp.value.replace(/\s+/g,' ').trim();
+  if(!name){msg.textContent='Напиши имя.';inp.focus();return;}
+  msg.textContent='';btn.disabled=true;
+  let r=null;
+  try{r=await Sync.api('/ege/name',{method:'POST',body:{name:name}});}catch(err){}
+  btn.disabled=false;
+  if(!r){msg.textContent='Нет связи. Попробуй ещё раз.';return;}
+  if(r.status===401){Sync.expired();return;}
+  if(r.status===200&&r.json&&r.json.name){auth.name=r.json.name;auth.named=true;saveJ(AUTH_KEY,auth);closeSheet(true);render();return;}
+  if(r.status===403){auth.named=true;saveJ(AUTH_KEY,auth);Sync.refreshToken().then(()=>{closeSheet(true);render();});return;}
+  msg.textContent='Не получилось сохранить. Попробуй позже.';
+});
+/* Привязка настоящего Telegram к аккаунту по ссылке: бот получает одноразовый код
+   и заменяет им «пустышку». Окно висит и опрашивает сервер, пока привязка не пройдёт. */
+let tgPoll=null;
+function stopTgPoll(){clearInterval(tgPoll);tgPoll=null;}
+async function tgBindSheet(){
+  stopTgPoll();
+  let r=null;
+  try{r=await Sync.api('/ege/tg-link',{method:'POST'});}catch(err){}
+  if(r&&r.status===401){Sync.expired();return;}
+  if(r&&r.status===200&&r.json&&r.json.linked){showHint(`<h3>Telegram привязан ✓</h3><p class="ih-sub">Бот теперь знает твой аккаунт. Уведомления о пробниках придут в Telegram.</p><button class="sheet-btn" data-sheet="0">Закрыть</button>`);return;}
+  if(!r||r.status!==200||!r.json||!r.json.code){note('Не получилось','Нет связи с сервером. Попробуй ещё раз позже.');return;}
+  const code=r.json.code,bot=r.json.bot||TG_BOT;
+  showHint(`<h3>Привязать Telegram</h3>
+    <p class="ih-sub"><b>1.</b> Нажми кнопку — откроется Telegram.<br><b>2.</b> Внизу нажми <b>«Запустить»</b> (Start). Ничего писать не нужно.<br>Заходи в бота только по этой кнопке: если написать ему самому, он заведёт второй аккаунт.</p>
+    <a class="sheet-btn go" href="https://t.me/${bot}?start=link_${code}" target="_blank" rel="noopener">Открыть Telegram</a>
+    <p class="ih-sub" style="margin-top:12px">Ссылка открылась без кода? Напиши боту: <b>/link ${code}</b></p>
+    <p class="ih-sub" id="tg-wait" role="status" aria-live="polite">Жду, пока ты нажмёшь «Запустить»…</p>
+    <div class="sheet-actions" style="margin-top:10px"><button class="sheet-btn" data-sheet="0">Закрыть</button></div>`);
+  const t0=Date.now();
+  tgPoll=setInterval(async()=>{
+    const wait=document.getElementById('tg-wait');
+    if(!wait||!auth){stopTgPoll();return;}
+    if(Date.now()-t0>600000){stopTgPoll();wait.innerHTML='Код устарел. <a href="#" data-tgbind="1">Получить новый</a>';return;}
+    let s=null;try{s=await Sync.api('/ege/tg-link');}catch(err){}
+    if(s&&s.status===200&&s.json&&s.json.linked){stopTgPoll();tgBindSheet();}
+  },3000);
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-tgbind]');if(b){e.preventDefault();tgBindSheet();}});
+async function accountSheet(){
+  if(!auth)return;
+  /* привязан ли настоящий Telegram: без ответа сервера просто не показываем кнопку */
+  let linked=true;
+  try{const r=await Sync.api('/ege/tg-link');if(r.status===200&&r.json)linked=!!r.json.linked;}catch(err){}
   if(!auth)return;
   return new Promise(res=>{sheetResolve=res;
     showSheet(`<h3>${escapeHtml(auth.name)}</h3><p class="ih-sub">Прогресс сохраняется на сервере. Чтобы продолжить на другом устройстве, открой там свою ссылку для входа или напиши боту в Telegram.</p>`+
       `<button class="sheet-go" data-sheet="copy">Скопировать ссылку</button>`+
+      (linked?'':`<button class="sheet-btn" data-sheet="tg" style="margin-top:10px">Привязать Telegram</button>`)+
+      (auth.named===false?`<button class="sheet-btn" data-sheet="name" style="margin-top:10px">Указать имя</button>`:'')+
       `<div class="sheet-actions" style="margin-top:10px"><button class="sheet-btn" data-sheet="logout">Выйти</button><button class="sheet-btn" data-sheet="0">Закрыть</button></div>`);
   }).then(v=>{
     if(v==='copy')navigator.clipboard.writeText(auth.link).then(
       ()=>note('Ссылка скопирована','Открой её на другом устройстве. Никому её не пересылай — по ней входят в твой аккаунт.'),
       ()=>prompt('Твоя ссылка для входа:',auth.link));
+    else if(v==='tg')tgBindSheet();
+    else if(v==='name')nameSheet();
     else if(v==='logout')ask({title:'Выйти из аккаунта?',
       text:'Отметки на этом устройстве останутся. Чтобы вернуться в тренажёр, понадобится снова войти через Telegram.',ok:'Выйти'}).then(y=>{if(y)Sync.logout();});
   });
@@ -3761,7 +3826,7 @@ window.addEventListener('appinstalled',()=>{deferredPrompt=null;render();});
 if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('sw.js').catch(()=>{});});}
 window.addEventListener('DOMContentLoaded',()=>{
   if(loginFromHash())return;
-  if(auth)Sync.refreshToken().then(()=>Sync.soon(0));
+  if(auth)Sync.refreshToken().then(()=>{Sync.soon(0);if(auth&&auth.named===false&&!document.getElementById('sheet-ov').classList.contains('open'))nameSheet();});
   /* за стеной ссылку с прогрессом не разбираем: сначала вход */
   if(gated()){render();return;}
   const params=new URLSearchParams(location.search);
