@@ -119,6 +119,16 @@ test('only the teacher deletes a mock exam, leaving a tombstone for the owner', 
   assert.ok([403, 404].includes((await req('DELETE', `/collections/variant_deletes/records/${own[0].id}`, tok.teacher)).status));
 });
 
+test('teacher aliases are visible and writable only to the teacher', async () => {
+  const r = await req('POST', '/collections/teacher_aliases/records', tok.teacher, { user: ids.stu1, alias: 'Маша' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await req('GET', '/collections/teacher_aliases/records', tok.teacher)).json.totalItems, 1);
+  assert.ok([400, 403].includes((await req('POST', '/collections/teacher_aliases/records', tok.stu1, { user: ids.stu1, alias: 'x' })).status));
+  assert.ok([403, 404].includes((await req('GET', `/collections/teacher_aliases/records/${r.json.id}`, tok.stu1)).status));
+  assert.equal((await req('GET', '/collections/teacher_aliases/records', tok.stu1)).json.totalItems, 0);
+  assert.ok([403, 404].includes((await req('PATCH', `/collections/teacher_aliases/records/${r.json.id}`, tok.stu1, { alias: 'x' })).status));
+});
+
 test('links are teacher-only', async () => {
   const r = await req('POST', '/collections/links/records', tok.teacher, { user: ids.stu1, secret: PW.stu1 });
   assert.equal(r.status, 200, JSON.stringify(r.json));

@@ -449,6 +449,9 @@ async function load(){
     soft(all('exam_assignments',null,'id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,created')),
     soft(all('exam_photos',null,'id,assignment,user,n,file'))]);
   data.exams=exams;data.asg=asg;data.photos=photos;data.examErr=bad[0]||null;
+  /* Teacher-only names. A server without the collection just means no names yet. */
+  data.alias={};data.aliasRec={};
+  (await soft(all('teacher_aliases'))).forEach(a=>{data.alias[a.user]=a.alias;data.aliasRec[a.user]=a.id;});
 }
 /* A lead's journal is fetched only when their card is opened. */
 async function loadOne(id){
@@ -494,7 +497,10 @@ const examOf=id=>(data.exams||[]).find(e=>e.id===id);
 // the catalog is numbered by upload order: the owner says "пробник 3"
 const examNo=id=>(data.exams||[]).findIndex(e=>e.id===id)+1;
 const examLabel=e=>`№${examNo(e.id)} · ${e.title}`;
-const nameOf=uid=>{const u=(data.userOf||{})[uid];return u?(u.name||u.login):'—';};
+// the teacher's own name for a student wins over the registered one; students never see it
+const dispName=u=>(data.alias&&data.alias[u.id])||u.name||u.login;
+const nameOf=uid=>{const u=(data.userOf||{})[uid];return u?dispName(u):'—';};
+const realName=u=>data.alias&&data.alias[u.id]&&(u.name||u.login)!==data.alias[u.id]?` <span class="muted">(${esc(u.name||u.login)})</span>`:'';
 const phaseOf=a=>ExamCore.phase({start:a.start,duration:a.duration,opened:a.opened,finished:a.finished,photos_done:a.photos_done,checked:a.checked},nowS());
 const asgOfUser=uid=>(data.asg||[]).filter(a=>a.user===uid);
 const photosOfAsg=id=>(data.photos||[]).filter(p=>p.assignment===id);
@@ -509,7 +515,7 @@ function rowData(u){const s=summaryOf(u),lastV=s.variants[s.variants.length-1];
   return{u,last:s.lastActive,week:s.solved7d,mastered:g,mock:lastV?lastV.s:null,mockT:lastV?lastV.t:null};}
 function renderList(){
   const rows=data.students.map(rowData);
-  const val=r=>sortKey==='name'?(r.u.name||r.u.login).toLowerCase():r[sortKey];
+  const val=r=>sortKey==='name'?dispName(r.u).toLowerCase():r[sortKey];
   rows.sort((a,b)=>{const x=val(a),y=val(b);
     if(x==null&&y==null)return 0;if(x==null)return 1;if(y==null)return -1;
     return (x<y?-1:x>y?1:0)*sortDir;});
@@ -524,7 +530,7 @@ function renderList(){
       ${rows.length?`<div class="table-wrap"><table>
         <thead><tr>${th('name','Ученик')}${th('last','Последняя активность')}${th('week','Решено за 7 дней','num')}${th('mastered','Умею','num hide-m')}${th('mock','Последний пробник','num')}</tr></thead>
         <tbody>${rows.map(r=>`<tr class="row${r.u.active===false?' off':''}" data-open="${r.u.id}">
-          <td><span class="name">${esc(r.u.name||r.u.login)}</span>${r.u.active===false?' <span class="chip off">отключён</span>':''}</td>
+          <td><span class="name">${esc(dispName(r.u))}</span>${realName(r.u)}${r.u.active===false?' <span class="chip off">отключён</span>':''}</td>
           <td>${ago(r.last)}</td>
           <td class="num">${r.week}</td>
           <td class="num hide-m">${r.mastered}</td>
@@ -545,7 +551,7 @@ function renderLeads(){
       ${rows.length?`<div class="table-wrap"><table>
         <thead><tr><th>Имя</th><th>Telegram</th><th class="hide-m">Регистрация</th><th class="num">Отметок</th><th>Последняя активность</th><th></th></tr></thead>
         <tbody>${rows.map(p=>`<tr class="row${p.active?'':' off'}" data-open="${esc(p.user)}">
-          <td><span class="name">${esc(p.name)}</span>${p.active?'':' <span class="chip off">отключён</span>'}</td>
+          <td><span class="name">${esc(data.userOf[p.user]?dispName(data.userOf[p.user]):p.name)}</span>${data.userOf[p.user]?realName(data.userOf[p.user]):''}${p.active?'':' <span class="chip off">отключён</span>'}</td>
           <td>${tgLink(p.username)}</td>
           <td class="hide-m">${fmtDay(pbTime(p.created))}</td>
           <td class="num">${Number(p.marks)||0}</td>
@@ -579,7 +585,8 @@ function renderStudent(id){
   const vs=s.variants.slice().reverse();
   app.innerHTML=`
     <p><a href="${lead?'#/leads':'#/'}">← ${lead?'Из канала':'Все ученики'}</a></p>
-    <div class="toolbar"><h2 class="grow">${esc(u.name||u.login)}${u.active===false?' <span class="chip off">отключён</span>':''}</h2>
+    <div class="toolbar"><h2 class="grow">${esc(dispName(u))}${realName(u)}${u.active===false?' <span class="chip off">отключён</span>':''}</h2>
+      <button class="btn quiet" data-act="alias" data-id="${id}">${data.alias[id]?'Изменить имя':'Дать имя'}</button>
       ${prof
         ?`<span class="muted">${tgLink(prof.username)}</span>
           <button class="btn ${lead?'':'quiet'}" data-act="mine" data-id="${esc(prof.id)}" data-v="${lead?1:0}">${lead?'В мои ученики':'Убрать из учеников'}</button>`
@@ -663,13 +670,13 @@ function closeSheet(){document.getElementById('sheet-ov').classList.remove('open
   const o=sheetOpener;sheetOpener=null;if(o&&o!==document.body&&document.contains(o))o.focus({preventScroll:true});}
 function showLink(u,secret,title){
   const url=linkFor(u,secret);
-  sheet(`<h3>${esc(title)}</h3><p>Отправь эту ссылку ученику <b>${esc(u.name||u.login)}</b>. По ней он входит на любом устройстве — пусть никому её не пересылает.</p>
+  sheet(`<h3>${esc(title)}</h3><p>Отправь эту ссылку ученику <b>${esc(dispName(u))}</b>. По ней он входит на любом устройстве — пусть никому её не пересылает.</p>
     <div class="linkbox">${esc(url)}</div>
     <div class="acts"><button class="btn quiet" data-act="close">Закрыть</button><button class="btn" data-act="copy" data-url="${esc(url)}">Скопировать</button></div>`);
 }
 async function rotate(id){
   const u=data.students.find(x=>x.id===id);
-  sheet(`<h3>Выпустить новую ссылку?</h3><p>Старая ссылка перестанет работать, и все устройства, где ${esc(u.name)} вошёл по ней, выйдут из аккаунта. Прогресс не пропадёт.</p>
+  sheet(`<h3>Выпустить новую ссылку?</h3><p>Старая ссылка перестанет работать, и все устройства, где ${esc(dispName(u))} вошёл по ней, выйдут из аккаунта. Прогресс не пропадёт.</p>
     <div class="acts"><button class="btn quiet" data-act="close">Отмена</button><button class="btn" data-act="rotate-go" data-id="${id}">Выпустить</button></div>`);
 }
 async function rotateGo(id){
@@ -706,6 +713,30 @@ async function delVariantGo(uid,vid){
   if(r.status!==200){fail(`Сервер ответил ${esc(r.status)}.`);return;}
   closeSheet();
   await refresh();
+}
+function aliasSheet(id){
+  const u=data.userOf[id];if(!u)return;
+  sheet(`<form id="al-form" data-id="${esc(id)}"><h3>Имя ученика</h3>
+    <p>Это имя видишь только ты. Ученик и другие его не увидят. Зарегистрирован как «${esc(u.name||u.login)}».</p>
+    <label class="fld">Имя<input id="al-name" maxlength="80" autocomplete="off" value="${esc(data.alias[id]||'')}" placeholder="${esc(u.name||u.login)}"></label>
+    <div class="acts"><button type="button" class="btn quiet" data-act="close">Отмена</button><button type="submit" class="btn">Сохранить</button></div></form>`);
+  const f=document.getElementById('al-name');f.focus();f.select();
+}
+async function aliasGo(id,b){
+  const v=document.getElementById('al-name').value.trim(),rec=data.aliasRec[id];
+  const fail=why=>sheet(`<h3>Не получилось</h3><p>${why} Имя не сохранено.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);
+  if(!v&&!rec){closeSheet();return;}
+  b.disabled=true;
+  let r;
+  try{
+    r=!v?await api('/collections/teacher_aliases/records/'+rec,{method:'DELETE'})
+      :rec?await api('/collections/teacher_aliases/records/'+rec,{method:'PATCH',body:{alias:v}})
+      :await api('/collections/teacher_aliases/records',{method:'POST',body:{user:id,alias:v}});
+  }catch(e){if(e.message!=='401')fail('Нет связи с сервером.');return;}
+  if(r.status!==200&&r.status!==204){fail(r.status===404?'На сервере ещё нет места для имён (нужна выкладка).':`Сервер ответил ${esc(r.status)}.`);return;}
+  if(!v){delete data.alias[id];delete data.aliasRec[id];}
+  else{data.alias[id]=v;data.aliasRec[id]=r.json.id;}
+  closeSheet();route();
 }
 async function setActive(uid,on){
   await api('/collections/users/records/'+uid,{method:'PATCH',body:{active:on}});
@@ -761,9 +792,9 @@ const fmtErr=(kind,status)=>status===400?(kind==='assign'?'Такой пробн
   :status===403?'Нет доступа: вход мог истечь. Открой свою ссылку преподавателя заново.'
   :status===404?'Такого назначения уже нет, возможно, его отменили. Список обновлён.'
   :`Сервер ответил ${status}.`;
-const byName=(x,y)=>(x.name||x.login||'').localeCompare(y.name||y.login||'','ru');
+const byName=(x,y)=>(dispName(x)||'').localeCompare(dispName(y)||'','ru');
 function personOptions(sel){
-  const opt=u=>`<option value="${esc(u.id)}"${u.id===sel?' selected':''}>${esc(u.name||u.login)}</option>`;
+  const opt=u=>`<option value="${esc(u.id)}"${u.id===sel?' selected':''}>${esc(dispName(u))}</option>`;
   const students=data.students.filter(u=>u.active!==false||u.id===sel).sort(byName);
   const leads=data.leads.filter(p=>p.active||p.user===sel).map(p=>data.userOf[p.user]).filter(Boolean).sort(byName);
   // no default person: an assignment to the first name in the list by mistake is worse than one more tap
@@ -1221,6 +1252,7 @@ document.addEventListener('click',e=>{
     if(l)showLink(u,l.secret,'Ссылка для входа');else rotate(id);}
   else if(a==='rotate')rotate(id);
   else if(a==='rotate-go')rotateGo(id);
+  else if(a==='alias')aliasSheet(id);
   else if(a==='mine')setMine(id,b.dataset.v==='1');
   else if(a==='active')setActive(id,b.dataset.v==='1');
   else if(a==='vdel')delVariant(b.dataset.user,id);
@@ -1245,7 +1277,8 @@ document.getElementById('theme').addEventListener('click',()=>{
   document.querySelector('meta[name="theme-color"]').setAttribute('content',dark?'#f2efe7':'#161713');});
 /* Enter in a field and the submit button both land here (assign and move sheets). */
 document.addEventListener('submit',e=>{
-  const f=e.target;if(!f.matches||!f.matches('#as-form'))return;
+  const f=e.target;if(f.matches&&f.matches('#al-form')){e.preventDefault();aliasGo(f.dataset.id,f.querySelector('button[type="submit"]'));return;}
+  if(!f.matches||!f.matches('#as-form'))return;
   e.preventDefault();const b=f.querySelector('button[type="submit"]');
   if(!b||b.disabled)return;
   if(f.dataset.kind==='assign')assignGo(b);else moveGo(f.dataset.id,b);
