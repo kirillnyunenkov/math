@@ -53,3 +53,13 @@ export function linkFromText(text) {
   const m = /#\/login\/([a-z0-9_-]+)\.([A-Za-z0-9]+)/.exec(String(text || ''));
   return m ? { login: m[1], secret: m[2] } : null;
 }
+
+// A link to the solutions: https only, no spaces, no credentials in the address, at most 500 characters.
+export function checkSolutionUrl(text) {
+  const s = String(text == null ? '' : text).trim();
+  if (!s) return { error: 'Укажи ссылку: --url https://…' };
+  if (s.length > 500) return { error: 'Ссылка длиннее 500 символов.' };
+  let u; try { u = new URL(s); } catch { return { error: 'Это не ссылка. Нужна вида https://…' }; }
+  if (u.protocol !== 'https:' || /\s/.test(s) || u.username || u.password) return { error: 'Нужна ссылка https:// без пробелов, логина и пароля.' };
+  return { url: u.href };
+}

@@ -3,6 +3,7 @@
 //   node tools/exam_api.mjs upload <exam.json>
 //   node tools/exam_api.mjs assign --student "Иван" --exam 3 --at "2026-10-09 18:00" [--minutes 235] [--yes]
 //   node tools/exam_api.mjs delete --exam 3 [--yes]
+//   node tools/exam_api.mjs link --exam 3 --url https://… [--yes]   (link to the solutions, shown only on the check page)
 // --exam takes a catalog number ("3" or "№3", as in `exams` and in the panel) or a title / fragment.
 // DEFAULT TARGET IS PRODUCTION (https://api.kirillnyun.space/api). For tests always pass
 // --api http://127.0.0.1:8090/api (local dev stack). Every write command prints the target host first.
@@ -14,7 +15,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { checkExam } from './exam-check-lib.mjs';
-import { checkWhen, pickOne, pickExam, linkFromText } from './exam-cli-lib.mjs';
+import { checkWhen, pickOne, pickExam, linkFromText, checkSolutionUrl } from './exam-cli-lib.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
@@ -28,9 +29,9 @@ process.on('uncaughtException', () => die('Непредвиденная ошиб
 process.on('unhandledRejection', () => die('Непредвиденная ошибка инструмента (подробности скрыты, чтобы не показать секреты).'));
 
 // ---- arguments: unknown options are refused (a typo must never silently fall back to production) ----
-const VALUE_OPTS = ['api', 'link-file', 'student', 'exam', 'at', 'minutes', 'date', 'title', 'scores', 'test', 'id'], FLAG_OPTS = ['yes'];
-const COMMANDS = ['exams', 'students', 'status', 'upload', 'assign', 'delete', 'history'];
-const USAGE = 'Команды: exams | students | status | upload <exam.json> | assign --student --exam --at [--minutes] [--yes] | delete --exam [--yes]\n'
+const VALUE_OPTS = ['api', 'link-file', 'student', 'exam', 'at', 'minutes', 'url', 'date', 'title', 'scores', 'test', 'id'], FLAG_OPTS = ['yes'];
+const COMMANDS = ['exams', 'students', 'status', 'upload', 'assign', 'delete', 'link', 'history'];
+const USAGE = 'Команды: exams | students | status | upload <exam.json> | assign --student --exam --at [--minutes] [--yes] | delete --exam [--yes] | link --exam --url https://… [--yes]\n'
   + '| history add --student --date ГГГГ-ММ-ДД --title --scores "<20 значений>" --test [--yes] | history list --student | history delete --student --id [--yes]\n'
   + 'Адрес сервера по умолчанию — боевой. Для проверок всегда указывай --api http://127.0.0.1:8090/api';
 const raw = process.argv.slice(2), cmd = raw.shift();
@@ -79,7 +80,7 @@ catch { die('--api должен быть адресом вида https://хос�
 const IS_LOCAL = LOOPBACK.test(new URL(API).hostname);
 const LINK = opt('link-file', join(homedir(), 'ege-teacher-link.txt'));
 
-const WRITES = ['upload', 'assign', 'delete'];
+const WRITES = ['upload', 'assign', 'delete', 'link'];
 if (WRITES.includes(cmd)) console.log('Сервер: ' + HOST + (IS_LOCAL ? ' (локальный, для проверки)' : ' (БОЕВОЙ)'));
 if (cmd === 'history' && pos[0] !== 'list') console.log('Сервер: ' + HOST + (IS_LOCAL ? ' (локальный, для проверки)' : ' (БОЕВОЙ)'));
 
@@ -112,7 +113,7 @@ async function all(path) {
 }
 const fmt = (ts) => new Date(ts * 1000).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
 // The catalog order = the numbering shown to the owner and in the panel: ascending creation time, ties by id.
-const exams = () => all('/collections/exams/records?sort=created,id&fields=id,title,full,created');
+const exams = () => all('/collections/exams/records?sort=created,id&fields=id,title,full,created,solution_url');
 const examName = (list, e) => '№' + (list.indexOf(e) + 1) + ' · ' + e.title;
 async function people() {
   const users = await all('/collections/users/records?filter=' + encodeURIComponent('role="student"') + '&fields=id,name,login,active');
@@ -125,7 +126,7 @@ await login();
 
 if (cmd === 'exams') {
   const list = await exams();
-  list.forEach((e) => console.log(examName(list, e) + (e.full ? ' (полный вариант)' : '')));
+  list.forEach((e) => console.log(examName(list, e) + (e.full ? ' (полный вариант)' : '') + (e.solution_url ? ' · ссылка на решения: ' + e.solution_url : ' · ссылки на решения нет')));
   if (!list.length) console.log('Каталог пуст.');
 } else if (cmd === 'students') {
   (await people()).forEach((p) => console.log('• ' + p.name + ' (' + p.login + ')' + (p.lead ? ' — из канала' : '')));
@@ -175,6 +176,14 @@ if (cmd === 'exams') {
   const r = await call('DELETE', '/collections/exams/records/' + e.item.id);
   if (r.status !== 204 && r.status !== 200) die('Сервер не принял удаление (ответ ' + r.status + '). Подробности скрыты; проверь `status`: возможно, этот пробник уже назначали ученикам.');
   console.log('Удалено.');
+} else if (cmd === 'link') {
+  const list = await exams(), e = pickExam(list, opt('exam'), (x) => x.title), u = checkSolutionUrl(opt('url'));
+  if (e.error) die('Пробник: ' + e.error); if (u.error) die(u.error);
+  console.log('Привяжу к ' + examName(list, e.item) + ' ссылку на решения: ' + u.url + (e.item.solution_url ? ' (заменит прежнюю).' : '.') + ' Видна только тебе, на странице проверки.');
+  if (!flag('yes')) die('Ничего не сделано. Подтверди и добавь --yes.', 3);
+  const r = await call('PATCH', '/collections/exams/records/' + e.item.id, { solution_url: u.url });
+  if (r.status !== 200) die('Сервер не принял ссылку (ответ ' + r.status + '). Если 400: на сервере не применена миграция 1790800016_exam_solution_url.js.');
+  console.log('Готово.');
 } else if (cmd === 'history') {
   const sub = pos[0];
   const ppl = await people(), s = pickOne(ppl, opt('student'), (p) => p.name);

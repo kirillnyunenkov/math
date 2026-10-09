@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseWhen, checkWhen, pickOne, pickExam, linkFromText } from '../tools/exam-cli-lib.mjs';
+import { parseWhen, checkWhen, pickOne, pickExam, linkFromText, checkSolutionUrl } from '../tools/exam-cli-lib.mjs';
 
 test('parseWhen reads Moscow wall time in both spellings', () => {
   assert.equal(parseWhen('2026-10-09 18:00'), 1791558000);
@@ -70,4 +70,10 @@ test('pickExam: a title that is a number still resolves as a number first', () =
 test('linkFromText finds the login pair in a pasted teacher link', () => {
   assert.deepEqual(linkFromText('https://x.github.io/math/teacher.html#/login/teacher.AbC123\n'), { login: 'teacher', secret: 'AbC123' });
   assert.equal(linkFromText('nothing here'), null);
+});
+
+test('checkSolutionUrl accepts only a plain https link', () => {
+  assert.equal(checkSolutionUrl(' https://youtu.be/abc?t=5 ').url, 'https://youtu.be/abc?t=5');
+  for (const bad of ['', 'youtu.be/abc', 'http://x.ru/a', 'javascript:alert(1)', 'https://u:p@x.ru/', 'https://x.ru/a b', 'https://x.ru/' + 'a'.repeat(500)])
+    assert.ok(checkSolutionUrl(bad).error, bad);
 });
