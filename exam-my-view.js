@@ -31,11 +31,10 @@
     return '<div class="my-scroll" data-my-scroll><table class="my-tbl">' + head + rows + total('Первичный<br>балл', H.primaryOf, true) + total('Тестовый<br>балл', H.testOf, false) + '</table></div>';
   }
 
-  // Tap or hover a cell: everything outside its row and column is dimmed, so a wide table is easy to follow. A tap keeps it until the next tap.
+  // Hover a cell with the mouse: everything outside its row and column is dimmed, so a wide table is easy to follow.
   function bindTables(el) {
     if (!el || !el.querySelectorAll) return;
     el.querySelectorAll('table.my-tbl').forEach((tbl) => {
-      let pinned = null;
       const clear = () => { tbl.classList.remove('my-focus'); tbl.querySelectorAll('.my-hr,.my-hc').forEach((c) => c.classList.remove('my-hr', 'my-hc')); };
       const show = (cell) => {
         clear();
@@ -47,13 +46,9 @@
         }));
       };
       const cellOf = (e) => { const t = e.target && e.target.closest ? e.target.closest('td.my-c') : null; return t && tbl.contains(t) ? t : null; };
-      tbl.addEventListener('mouseover', (e) => { const c = cellOf(e); if (c && !pinned) show(c); });
-      tbl.addEventListener('mouseleave', () => { if (!pinned) clear(); });
-      tbl.addEventListener('click', (e) => {
-        const c = cellOf(e);
-        if (!c || c === pinned) { pinned = null; clear(); return; }
-        pinned = c; show(c);
-      });
+      // Mouse only: a finger has no hover, and a tap would leave the dimming stuck.
+      tbl.addEventListener('pointerover', (e) => { const c = e.pointerType === 'mouse' ? cellOf(e) : null; if (c) show(c); });
+      tbl.addEventListener('pointerleave', clear);
     });
   }
 
@@ -92,7 +87,7 @@
     const chart = chartHtml(items), table = tableHtml(items);
     return (chart ? '<section class="my-card"><h3>Тестовый балл</h3>' + chart + '</section>' : '') +
       (table ? '<section class="my-card"><h3>Баллы по заданиям</h3>' + table +
-      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте. Линия перед 14-м заданием отделяет вторую часть. Нажми на ячейку, чтобы выделить её строку и столбец. Решаемость: какую долю баллов за это задание ' + ((opt && opt.readonly) ? 'ученик набрал' : 'ты набрал') + ' по всем пробникам.</p></section>' : '') +
+      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте. Линия перед 14-м заданием отделяет вторую часть. Наведи мышь на ячейку, чтобы выделить её строку и столбец. Решаемость: какую долю баллов за это задание ' + ((opt && opt.readonly) ? 'ученик набрал' : 'ты набрал') + ' по всем пробникам.</p></section>' : '') +
       '<section class="my-card"><h3>Все пробники</h3><div class="my-list">' + listHtml(items, (opt && opt.seen) || [], !!(opt && opt.readonly)) + '</div></section>';
   }
 
