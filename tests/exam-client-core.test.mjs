@@ -374,6 +374,14 @@ test('resultOf: a checked exam sums part 2 and agrees with ExamCore.total', () =
   assert.equal(zero.total.pts, 1);
 });
 
+test('resultOf: the general comment is shown only once the exam is checked', () => {
+  const part2 = { 13: { pts: 2 }, 14: { pts: 1 }, _general: '  Хорошая работа\nПовтори задание 14 ' };
+  const t = C.wellFormedTasks(RTASKS);
+  assert.equal(C.resultOf(rview({ phase: 'checked', part2 }), t).general, 'Хорошая работа\nПовтори задание 14');
+  assert.equal(C.resultOf(rview({ phase: 'submitted', part2 }), t).general, '');
+  assert.equal(C.resultOf(rview({ phase: 'checked', part2: { 13: { pts: 2 } } }), t).general, '');
+});
+
 test('resultOf: points are clamped and never NaN, whatever the server sent', () => {
   const t = C.wellFormedTasks(RTASKS);
   const r = C.resultOf(rview({ phase: 'checked', p1: 'many', part2: { 13: { pts: 99 }, 14: { pts: NaN } } }), t);

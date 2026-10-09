@@ -69,12 +69,13 @@
       };
       pick(raw.pts, out.pts, function (v) { return Number.isInteger(v) && v >= 0 && v <= 100; });
       pick(raw.note, out.note, function (v) { return typeof v === 'string' && v.length <= 2000; });
-      return Object.keys(out.pts).length || Object.keys(out.note).length ? out : null;
+      if (typeof raw.general === 'string' && raw.general && raw.general.length <= 3000) out.general = raw.general;
+      return Object.keys(out.pts).length || Object.keys(out.note).length || out.general ? out : null;
     } catch (e) { return null; }
   }
   function writeDraft(storage, key, draft) {
     try {
-      if (draft && (Object.keys(draft.pts || {}).length || Object.keys(draft.note || {}).length)) storage.setItem(key, JSON.stringify(draft));
+      if (draft && (Object.keys(draft.pts || {}).length || Object.keys(draft.note || {}).length || draft.general)) storage.setItem(key, JSON.stringify(draft));
       else storage.removeItem(key);
     } catch (e) { /* storage full or blocked: the form still works, only the safety net is gone */ }
   }
@@ -83,6 +84,7 @@
     if (!draft) return false;
     const has = function (o, k) { return Object.prototype.hasOwnProperty.call(o || {}, k); };
     const cur = function (k) { return has(server, k) && server[k] && typeof server[k] === 'object' ? server[k] : {}; };
+    if (draft.general && draft.general !== (has(server, '_general') && typeof server._general === 'string' ? server._general : '')) return true;
     return Object.keys(draft.pts || {}).some(function (k) { return draft.pts[k] !== (Number.isInteger(cur(k).pts) ? cur(k).pts : 0); }) ||
       Object.keys(draft.note || {}).some(function (k) { return draft.note[k] !== (typeof cur(k).comment === 'string' ? cur(k).comment : ''); });
   }

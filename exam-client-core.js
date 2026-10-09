@@ -380,6 +380,7 @@
       }
     }
     return { checked: checked, items: items, hasLong: hasLong, p1: p1, max1: max1, max2: max2, part2: part2, total: total,
+      general: checked ? text(ownGet(v.part2, '_general'), 5000) : '',
       second: total ? secondaryOf(v.full, total.pts, opts && opts.secondary) : null };
   }
 
