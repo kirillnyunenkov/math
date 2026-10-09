@@ -15,14 +15,34 @@ const site = () => env("SITE_URL") || "https://kirillnyunenkov.github.io/math/";
 function send(chatId, text, url, label) {
   const body = { chat_id: chatId, text: text, disable_web_page_preview: true };
   if (url) body.reply_markup = { inline_keyboard: [[{ text: label || TEXT.button, url: url }]] };
+  let status = 0;
   try {
     const res = $http.send({
       url: (env("TG_API") || "https://api.telegram.org") + "/bot" + env("TG_BOT_TOKEN") + "/sendMessage",
       method: "POST", body: JSON.stringify(body), headers: { "content-type": "application/json" }, timeout: 10,
     });
-    if (res.statusCode !== 200) console.log("tg: sendMessage answered " + res.statusCode);
-    return res.statusCode === 200;
-  } catch (err) { console.log("tg: sendMessage failed"); return false; }   // never log the URL: it holds the token
+    status = res.statusCode;
+    if (status !== 200) console.log("tg: sendMessage answered " + status);
+  } catch (err) { console.log("tg: sendMessage failed"); }   // never log the URL: it holds the token
+  journal(chatId, text, url ? label || TEXT.button : "", status);
+  return status === 200;
+}
+
+// One row in bot_messages per attempt. The sign-in code is masked and the
+// button's link is not kept at all (it holds the personal secret). A failure
+// here must never stop the message itself.
+function journal(chatId, text, label, status) {
+  try {
+    const rec = new Record($app.findCollectionByNameOrId("bot_messages"));
+    rec.set("chat", String(chatId));
+    const prof = findProfile(String(chatId));
+    if (prof) rec.set("user", prof.get("user"));
+    rec.set("text", String(text).replace(/(введи код: )\d{6}/, "$1••••••").slice(0, 4096));
+    rec.set("label", String(label).slice(0, 64));
+    rec.set("ok", status === 200);
+    rec.set("status", status);
+    $app.save(rec);
+  } catch (err) { console.log("tg: journal failed"); }
 }
 
 function findProfile(tgId) {

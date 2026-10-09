@@ -260,3 +260,16 @@ Rollout (hooks and the migration; take the backup first):
     ssh root@185.249.154.78 'chown -R egeapi: /opt/ege-api/pb_hooks /opt/ege-api/pb_migrations && systemctl restart ege-api && sleep 2 && systemctl is-active ege-api'
 
 Verify: `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/summary` must print `403`.
+
+### Bot message journal
+
+Every message the bot tries to send (`tg.send` in `pb_hooks/tg.js`) is written to `bot_messages` (migration
+`1790800013_bot_messages.js`): chat, student (empty for the teacher's chat), text, button label, delivered or not and
+Telegram's status. The sign-in code is masked and the button link is never stored. Only the teacher can read it
+(panel tab "Бот"); nothing writes to it through the API. Rollout: migration and `tg.js`, then the site:
+
+    scp backend/pb_migrations/1790800013_bot_messages.js root@185.249.154.78:/opt/ege-api/pb_migrations/
+    scp backend/pb_hooks/tg.js root@185.249.154.78:/opt/ege-api/pb_hooks/
+    ssh root@185.249.154.78 'chown egeapi: /opt/ege-api/pb_migrations/1790800013_bot_messages.js /opt/ege-api/pb_hooks/tg.js && systemctl restart ege-api && sleep 2 && systemctl is-active ege-api'
+
+The journal starts empty: earlier messages were not recorded.
