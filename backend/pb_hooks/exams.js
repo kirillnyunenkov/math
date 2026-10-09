@@ -65,6 +65,7 @@ function when(ts) {
 function tell(userId, text, url, label) {
   let chat = "";
   try { chat = $app.findFirstRecordByData("tg_profiles", "user", userId).getString("tg_id"); } catch (_) { return true; }
+  if (chat.charAt(0) === "0") return true;   // an invited account that has not bound a real Telegram yet
   return tg.send(chat, text, url, label);
 }
 const examUrl = (id) => site() + "#/exam/" + id;
