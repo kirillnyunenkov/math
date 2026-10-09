@@ -451,7 +451,7 @@ async function load(){
   data.exams=exams;data.asg=asg;data.photos=photos;data.examErr=bad[0]||null;
   /* Teacher-only names. A server without the collection just means no names yet. */
   data.alias={};data.aliasRec={};
-  (await soft(all('teacher_aliases'))).forEach(a=>{data.alias[a.user]=a.alias;data.aliasRec[a.user]=a.id;});
+  (await soft(all('teacher_aliases',null,null,'id'))).forEach(a=>{data.alias[a.user]=a.alias;data.aliasRec[a.user]=a.id;});
 }
 /* A lead's journal is fetched only when their card is opened. */
 async function loadOne(id){
