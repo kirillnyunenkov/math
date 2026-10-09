@@ -63,6 +63,21 @@
           if (x.cellIndex === c) x.classList.add('my-hc');
         }));
       };
+      // The header row follows the page while the table is on screen: no scroll box of its own, so a phone scrolls the page as usual.
+      const heads = Array.prototype.slice.call(tbl.rows[0].cells);
+      let queued = false;
+      const place = () => {
+        queued = false;
+        if (!tbl.isConnected) { window.removeEventListener('scroll', queue); window.removeEventListener('resize', queue); return; }   // the page was re-rendered
+        const bar = typeof document !== 'undefined' && document.querySelector('header'), top = bar ? bar.getBoundingClientRect().bottom : 0;
+        const box = tbl.getBoundingClientRect(), room = box.height - tbl.rows[0].offsetHeight - tbl.rows[tbl.rows.length - 1].offsetHeight;
+        const dy = Math.max(0, Math.min(top - box.top, room));
+        heads.forEach((c) => { c.style.transform = dy ? 'translateY(' + dy + 'px)' : ''; });
+      };
+      const queue = () => { if (!queued) { queued = true; (typeof requestAnimationFrame === 'function' ? requestAnimationFrame : setTimeout)(place); } };
+      window.addEventListener('scroll', queue, { passive: true });
+      window.addEventListener('resize', queue);
+      place();
       const cellOf = (e) => { const t = e.target && e.target.closest ? e.target.closest('td.my-c') : null; return t && tbl.contains(t) ? t : null; };
       tbl.addEventListener('mouseover', (e) => { const c = cellOf(e); if (c && !pinned) show(c); });
       tbl.addEventListener('mouseleave', () => { if (!pinned) clear(); });

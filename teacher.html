@@ -245,9 +245,8 @@
   .my-zero{background:var(--c-zero);color:var(--c-zero-t);}
   .my-na{color:var(--ink-3);}
   .my-total td,.my-total th{font-weight:700;}
-  .my-tscroll{max-height:min(80vh,860px);}   /* the header stays in view while the rows scroll */
-  .my-tbl tr:first-child th{position:sticky;top:0;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--line);}
-  .my-tbl tr:first-child th.my-n{z-index:3;}
+  .my-tbl tr:first-child th{position:relative;z-index:2;background:var(--surface);box-shadow:inset 0 -1px 0 var(--line);}   /* kept under the page header by bindTables */
+  .my-tbl tr:first-child th.my-n{position:sticky;z-index:3;}
   .my-tbl tr:first-child th.my-sol{background:var(--surface-2);}
   .my-tbl tr.my-p2 > *{border-top:2px solid var(--line-strong);}   /* second part starts at task 14 */
   .my-tbl{--c-part-lo:#f2c14e;--c-part-hi:#fcefc0;}
