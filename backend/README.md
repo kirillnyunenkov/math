@@ -241,7 +241,7 @@ rows, nobody writes through the collection API: every write goes through the tea
 
 Routes:
 
-- `GET /api/ege/exams/summary` (student): checked trainer exams with per-task points, plus own manual rows, by date.
+- `GET /api/ege/exams/summary` (student): checked trainer exams with per-task points, plus own manual rows, by date. The teacher adds `?user=<id>` to read one student's (the student card in the panel).
 - `POST /api/ege/exams/history` (teacher): `{user, date: "YYYY-MM-DD", title, scores, na, test}` -> `{id}`.
 - `GET /api/ege/exams/history?user=<id>` (teacher): the manual rows of one student.
 - `DELETE /api/ege/exams/history/{id}` (teacher): `{ok: true}`.
