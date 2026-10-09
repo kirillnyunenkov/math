@@ -365,7 +365,7 @@ function logout(msg){auth=null;try{localStorage.removeItem(AUTH_KEY);}catch(e){}
 /* A link such as teacher.html#/check/<id> (from the bot) opened without a valid session: the
    route is kept for this tab and restored once after the next successful login. */
 const PEND_KEY='ege_teacher_pending_hash';
-const PEND_OK=/^#\/(?:(?:s|check)\/[a-z0-9]+|leads|exams)$/;
+const PEND_OK=/^#\/(?:(?:s|check)\/[a-z0-9]+|leads|exams|bot)$/;
 function pendSave(){if(!PEND_OK.test(location.hash))return;try{sessionStorage.setItem(PEND_KEY,location.hash);}catch(e){}}
 function pendTake(){let h=null;try{h=sessionStorage.getItem(PEND_KEY);sessionStorage.removeItem(PEND_KEY);}catch(e){}return h&&PEND_OK.test(h)?h:null;}
 const EXPIRED='Вход больше не действует. Открой свою ссылку преподавателя.';
@@ -451,7 +451,8 @@ const tabs=cur=>{const wait=(data.asg||[]).filter(a=>phaseOf(a)==='submitted').l
   return `<div class="tabs">
   <a href="#/" class="${cur==='s'?'on':''}">Ученики <span>${data.students.length}</span></a>
   <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a>
-  <a href="#/exams" class="${cur==='x'?'on':''}">Пробники${wait?` <span>${wait}</span>`:''}</a></div>`;};
+  <a href="#/exams" class="${cur==='x'?'on':''}">Пробники${wait?` <span>${wait}</span>`:''}</a>
+  <a href="#/bot" class="${cur==='b'?'on':''}">Бот</a></div>`;};
 /* Telegram usernames are [A-Za-z0-9_]; anything else is shown as plain text. */
 const tgLink=un=>/^[A-Za-z0-9_]{1,64}$/.test(un||'')?`<a href="https://t.me/${un}" target="_blank" rel="noopener">@${un}</a>`:'<span class="muted">—</span>';
 const pbTime=s=>s?Date.parse(String(s).replace(' ','T')):null;
@@ -524,6 +525,33 @@ function renderLeads(){
       :'<p class="center muted">Пока никто не зарегистрировался через бота.</p>'}
     </div>`;
 }
+
+// ---- журнал бота ----
+/* Everything the bot sent, newest first. Loaded when the tab opens (not with the rest of the
+   data): the journal grows with every message. Sign-in codes are masked on the server. */
+async function renderBot(){
+  const gen=++botGen,alive=()=>gen===botGen&&location.hash==='#/bot';
+  app.innerHTML=`${tabs('b')}<p class="center muted">Загружаю…</p>`;
+  const r=await api('/collections/bot_messages/records?perPage=200&skipTotal=1&sort=-created');
+  if(!alive())return;
+  if(r.status!==200){app.innerHTML=`${tabs('b')}<p class="center muted">Не удалось загрузить журнал (код ${esc(r.status)}).</p>`;return;}
+  const rows=r.json.items;
+  app.innerHTML=`${tabs('b')}
+    <p class="lead">Всё, что бот отправлял: последние ${rows.length>=200?'200':rows.length}. Журнал ведётся с момента выкладки этой версии, раньше сообщения не записывались. Коды для входа скрыты.</p>
+    <div class="panel">
+      <div class="toolbar"><div class="grow muted">Обновлено ${fmtDate(Date.now())}</div><button class="btn quiet" data-act="reload">Обновить</button></div>
+      ${rows.length?`<div class="table-wrap"><table>
+        <thead><tr><th>Когда</th><th>Кому</th><th>Сообщение</th><th>Статус</th></tr></thead>
+        <tbody>${rows.map(m=>`<tr>
+          <td>${fmtDate(pbTime(m.created))}</td>
+          <td>${m.user?esc(nameOf(m.user)):'<span class="muted">тебе</span>'}</td>
+          <td style="white-space:pre-wrap">${esc(m.text)}${m.label?` <span class="chip">${esc(m.label)}</span>`:''}</td>
+          <td>${m.ok?'доставлено':`<span class="chip off">не дошло${m.status?' ('+esc(m.status)+')':''}</span>`}</td>
+        </tr>`).join('')}</tbody></table></div>`
+      :'<p class="center muted">Пока пусто: журнал заполняется с новых сообщений.</p>'}
+    </div>`;
+}
+let botGen=0;
 
 // ---- карточка ученика ----
 function renderStudent(id){
@@ -1132,7 +1160,7 @@ function route(){
   const mc=location.hash.match(/^#\/check\/([a-z0-9]+)$/);
   if(!mc){ckShown=null;ckGen++;}   // leaving the check page: a draw still in flight must not paint over the new page
   if(mc)renderCheck(mc[1]).catch(err=>{keepY=null;ckShown=null;if(err.message!=='401')app.innerHTML=`<p class="center muted">Не удалось открыть работу: ${esc(err.message)}</p>`;});
-  else if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else if(location.hash==='#/exams')renderExams();else renderList();
+  else if(m)renderStudent(m[1]);else if(location.hash==='#/leads')renderLeads();else if(location.hash==='#/bot')renderBot().catch(err=>{if(err.message!=='401')app.innerHTML=`${tabs('b')}<p class="center muted">Не удалось загрузить журнал: ${esc(err.message)}</p>`;});else if(location.hash==='#/exams')renderExams();else renderList();
   if(keepY===null)window.scrollTo(0,0);
 }
 function render(msg){

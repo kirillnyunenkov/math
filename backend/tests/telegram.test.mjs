@@ -229,3 +229,27 @@ test('guessing is rate limited per address', async () => {
   assert.equal(st[6], 429);
   assert.equal((await claim('000000', '10.0.0.10')).status, 400);
 });
+
+test('every bot message is journaled for the teacher, without the link and the code', async () => {
+  await hook(update(from(900)));
+  const q = (t) => req('GET', '/collections/bot_messages/records?sort=-created&filter=' + encodeURIComponent('chat="900"'), t);
+  const rows = (await q(tok.teacher)).json.items;
+  assert.equal(rows.length, 1);
+  const [row] = rows, text = sent.at(-1).text;
+  assert.equal(row.ok, true);
+  assert.equal(row.status, 200);
+  assert.equal(row.label, 'Открыть тренажёр');
+  assert.match(row.text, /^Привет/);
+  const code = text.match(/код: (\d{6})/)[1];
+  assert.ok(!row.text.includes(code), 'code leaked into the journal');
+  assert.match(row.text, /код: ••••••/);
+  assert.ok(!JSON.stringify(row).includes(linkOf(900).secret), 'link secret leaked');
+  const prof = (await req('GET', '/collections/tg_profiles/records?filter=' + encodeURIComponent('tg_id="900"'), tok.teacher)).json.items[0];
+  assert.equal(row.user, prof.user);
+  // closed to students and guests
+  assert.notEqual((await q(tok.lead)).json?.totalItems, 1);
+  assert.notEqual((await q(null)).json?.totalItems, 1);
+  // no writes through the API, even for the teacher
+  const w = await req('POST', '/collections/bot_messages/records', tok.teacher, { chat: '1', text: 'x' });
+  assert.ok([400, 403].includes(w.status), String(w.status));
+});
