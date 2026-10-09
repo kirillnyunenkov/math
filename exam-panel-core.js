@@ -103,12 +103,12 @@
     (asg || []).forEach(function (a) { const s = Number(a.start); if (isFinite(s) && s > 0 && !(lastOf[a.user] >= s)) lastOf[a.user] = s; });
     const out = [];
     (students || []).forEach(function (u) {
-      const last = lastOf[u.id] || null, ref = last || (isFinite(u.since) && u.since > 0 ? u.since : null);
-      if (!ref) return;
-      const due = addMonth(ref);
+      const last = lastOf[u.id] || null;
+      if (!last) { out.push({ id: u.id, last: null, due: null, days: null }); return; }
+      const due = addMonth(last);
       if (now >= due - REMIND_BEFORE) out.push({ id: u.id, last: last, due: due, days: Math.ceil((due - now) / 86400) });
     });
-    return out.sort(function (a, b) { return a.due - b.due; });
+    return out.sort(function (a, b) { return (a.due === null ? -1 : a.due) - (b.due === null ? -1 : b.due); });
   }
 
   const api = { mockReminders: mockReminders, moscowInputToTs: moscowInputToTs, tsToMoscowInput: tsToMoscowInput, activitySummary: activitySummary,

@@ -130,11 +130,11 @@ test('mockReminders: a mock assigned ahead of time (future start) counts and sil
   assert.deepEqual(P.mockReminders(stu, [{ user: 'a', start: D('2026-10-20') }], D('2026-10-10')), []);
 });
 
-test('mockReminders: a student with no mock yet counts from the day they joined; most overdue first', () => {
-  const stu = [{ id: 'new', since: D('2026-10-01') }, { id: 'old', since: D('2026-06-01') }, { id: 'x', since: null }];
-  const r = P.mockReminders(stu, [], D('2026-10-10'));
-  assert.deepEqual(r.map((x) => x.id), ['old']);
-  assert.equal(r[0].last, null);
+test('mockReminders: a student with no mock yet is listed at once, before everyone else', () => {
+  const stu = [{ id: 'a' }, { id: 'new' }];
+  const r = P.mockReminders(stu, [{ user: 'a', start: D('2026-09-10') }, { user: 'a', start: D('2026-09-01') }], D('2026-10-05'));
+  assert.deepEqual(r.map((x) => x.id), ['new', 'a']);
+  assert.deepEqual(r[0], { id: 'new', last: null, due: null, days: null });
 });
 
 test('mockReminders: month arithmetic clamps to the end of a short month', () => {
