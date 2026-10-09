@@ -1246,6 +1246,7 @@
     const bot = P.server.some((p) => p.n === '')
       ? '<div class="vcard ex-tgph" data-ex-bot hidden><div class="vlabel">Фото, присланные боту</div><div class="ex-thumbs"></div></div>' : '';
     stageAndMount(shell('<div class="vresult"><h2>' + titleOf(v) + '</h2><div class="vscores">' + tiles + '</div>' + waits +
+        (R.general ? '<div class="ex-comment"><div class="ex-comment-h">Общий комментарий</div>' + esc(R.general) + '</div>' : '') +
         (lost && !R.checked ? '<p class="ex-note">Часть фото не успела загрузиться и в работу не попала.</p>' : '') +
         (rej ? '<p class="ex-note">' + esc(rej) + '</p>' : '') +
         (dropped ? '<p class="ex-note">Часть заданий не удалось показать. Напиши мне.</p>' : '') +

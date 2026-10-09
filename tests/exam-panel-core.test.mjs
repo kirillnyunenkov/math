@@ -93,6 +93,16 @@ test('draft: garbage in storage is dropped, never thrown on', () => {
   assert.doesNotThrow(() => P.writeDraft({ setItem() { throw new Error('full'); }, removeItem() {} }, k, { pts: { 1: 1 }, note: {} }));
 });
 
+test('draft: the general comment alone is a draft, and differs from the server only when changed', () => {
+  const s = mem(), k = P.draftKey('g');
+  P.writeDraft(s, k, { pts: {}, note: {}, general: 'Молодец' });
+  assert.deepEqual(P.readDraft(s, k), { pts: {}, note: {}, general: 'Молодец' });
+  assert.equal(P.draftDiffers(P.readDraft(s, k), { _general: 'Молодец' }), false);
+  assert.equal(P.draftDiffers(P.readDraft(s, k), {}), true);
+  P.writeDraft(s, k, { pts: {}, note: {}, general: '' });
+  assert.equal(P.readDraft(s, k), null);
+});
+
 test('draftDiffers: equal to the server is not a draft', () => {
   const server = { 13: { pts: 2, comment: 'a' } };
   assert.equal(P.draftDiffers({ pts: { 13: 2 }, note: { 13: 'a' } }, server), false);

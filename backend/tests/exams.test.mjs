@@ -559,6 +559,19 @@ test('check: teacher only, valid points only, the student is told once', async (
   assert.equal(said(s.chat, 'проверен:'), 1);
 });
 
+test('check: the general comment is stored, trimmed, capped and may be dropped on a correction', async () => {
+  const { id, s } = await started(7000000147);
+  await post(id, 'answers', s.token, { answers: { 1: '5', 2: '0,5' } });
+  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  assert.equal((await post(id, 'check', tok.teacher, { part2: { 13: { pts: 1 } }, general: '  Хорошая работа  ' })).status, 200);
+  assert.equal((await view(id, s.token)).json.part2._general, 'Хорошая работа');
+  assert.equal((await post(id, 'check', tok.teacher, { part2: { 13: { pts: 1 } }, general: 'я'.repeat(4000) })).status, 200);
+  assert.equal((await view(id, s.token)).json.part2._general.length, 3000);
+  assert.equal((await post(id, 'check', tok.teacher, { part2: { 13: { pts: 1 } } })).status, 200);
+  assert.equal('_general' in (await view(id, s.token)).json.part2, false);
+  assert.deepEqual((await view(id, s.token)).json.total, { pts: 3, max: 4 });   // the comment never counts as points
+});
+
 // ---- Concurrency: every write re-reads the row; no bot call holds it ----
 
 test('a slow bot message does not undo what the student did meanwhile', async () => {

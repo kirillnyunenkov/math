@@ -484,6 +484,9 @@ function check(e) {
     if (pts === null || pts < 0 || pts > (x.max || 1)) return fail(e, 400, "bad points for task " + x.n);
     part2[String(x.n)] = { pts: pts, comment: String(g.comment == null ? "" : g.comment).slice(0, 2000) };
   }
+  // The teacher's general comment on the whole work lives in part2 under a key no task number can take.
+  const general = String((e.requestInfo().body || {}).general == null ? "" : e.requestInfo().body.general).trim().slice(0, 3000);
+  if (general) part2._general = general;
   let first = false;
   const out = mutate(rec.id, (r) => {
     first = !r.getInt("checked");

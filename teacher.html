@@ -990,13 +990,15 @@ function ckStore(){try{return localStorage;}catch(e){return null;}}
 // points and comments are kept as a draft in this browser until the check is saved (back / a link / an expired sign-in must not lose them)
 function ckDraftSave(){
   if(!ck||location.hash!=='#/check/'+ck.id)return;
-  const d={pts:{},note:{}};
+  const d={pts:{},note:{},general:''};
+  const gen=document.querySelector('[data-ck-general]');
+  if(gen&&!gen.disabled)d.general=gen.value;
   ck.long.forEach((t,i)=>{const s=document.querySelector(`[data-ck-pts="${i}"]`),c=document.querySelector(`[data-ck-note="${i}"]`);
     if(s&&!s.disabled)d.pts[t.n]=Number(s.value);
     if(c&&!c.disabled)d.note[t.n]=c.value;});
   ExamPanelCore.writeDraft(ckStore(),ExamPanelCore.draftKey(ck.id),d);
 }
-app.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('[data-ck-pts],[data-ck-note]'))ckDraftSave();});
+app.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('[data-ck-pts],[data-ck-note],[data-ck-general]'))ckDraftSave();});
 app.addEventListener('change',e=>{if(e.target.closest&&e.target.closest('[data-ck-pts]'))ckDraftSave();});
 app.addEventListener('dragover',e=>{if(e.target.closest&&e.target.closest('[data-ck-fb]')&&e.dataTransfer&&Array.from(e.dataTransfer.types||[]).includes('Files'))e.preventDefault();});
 app.addEventListener('drop',e=>{
@@ -1108,6 +1110,8 @@ async function renderCheck(id){
           <p class="ck-fb-msg" data-fb-msg="${i}" role="status"></p></div>
         <div class="ck-row"><label class="fld">Баллы<select data-ck-pts="${i}" ${ready?'':'disabled'}>${pointsOptions(max,cur)}</select></label>
           <label class="fld grow">Комментарий ученику<textarea class="field" data-ck-note="${i}" rows="3" maxlength="2000" ${ready?'':'disabled'}>${esc(txt(g.comment))}</textarea></label></div></div>`;}).join('')}
+    <div class="panel"><h3>Общий комментарий <span class="muted">· ученик увидит его над разбором заданий</span></h3>
+      <label class="fld grow"><textarea class="field" data-ck-general rows="4" maxlength="3000" ${ready?'':'disabled'}>${esc(txt(part2._general))}</textarea></label></div>
     ${botPh.length?`<div class="panel"><h3>Фото, присланные боту <span class="muted">· ${botPh.length}</span></h3>
       <p class="muted">Ученик отправил их боту без указания задания. Они в порядке получения.</p>
       <div class="ex-ph">${botPh.map(p=>phThumb(p,tok,'Фото, присланное боту')).join('')}</div></div>`:''}
@@ -1120,6 +1124,8 @@ async function renderCheck(id){
     long.forEach((t,i)=>{const s=document.querySelector(`[data-ck-pts="${i}"]`),c=document.querySelector(`[data-ck-note="${i}"]`);
       if(s&&Object.prototype.hasOwnProperty.call(dr.pts,t.n)&&[...s.options].some(o=>o.value===String(dr.pts[t.n])))s.value=String(dr.pts[t.n]);
       if(c&&Object.prototype.hasOwnProperty.call(dr.note,t.n))c.value=dr.note[t.n];});
+    const gc=document.querySelector('[data-ck-general]');
+    if(gc&&dr.general)gc.value=dr.general;
     const m=document.getElementById('ck-msg');
     if(m&&!(ckNote&&ckNote.id===id)){m.textContent='Восстановлен черновик: баллы и комментарии, которые ты не успел отправить.';m.className='ck-msg grow';}
   }
@@ -1142,12 +1148,13 @@ async function checkSend(id,btn){
   const part2=Object.create(null);
   ck.long.forEach((t,i)=>{const s=document.querySelector(`[data-ck-pts="${i}"]`),c=document.querySelector(`[data-ck-note="${i}"]`);
     if(s&&c)part2[t.n]={pts:Number(s.value),comment:c.value};});
+  const gen=document.querySelector('[data-ck-general]'),general=gen?gen.value:'';
   const first=!ck.checked;
   let r;
   sending=true;
   try{
     btn.disabled=true;say('Отправляю…');
-    try{r=await api(`/ege/exams/${id}/check`,{method:'POST',body:{part2}});}
+    try{r=await api(`/ege/exams/${id}/check`,{method:'POST',body:{part2,general}});}
     catch(err){if(err.message!=='401'){say('Нет связи с сервером. Ничего не сохранено.',true);btn.disabled=false;}return;}
   }finally{sending=false;}
   if(r.status!==200){
