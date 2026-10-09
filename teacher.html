@@ -389,9 +389,11 @@
   <button type="button" class="lb-nav lb-prev" data-lb="prev" aria-label="Предыдущее фото">‹</button>
   <button type="button" class="lb-nav lb-next" data-lb="next" aria-label="Следующее фото">›</button>
   <div class="lb-bar">
+    <button type="button" data-lb="out" aria-label="Уменьшить">−</button>
     <button type="button" data-lb="left" aria-label="Повернуть влево">⟲</button>
     <span class="lb-cnt" id="lb-cnt"></span>
     <button type="button" data-lb="right" aria-label="Повернуть вправо">⟳</button>
+    <button type="button" data-lb="in" aria-label="Увеличить">+</button>
   </div>
 </div>
 <div class="sheet-ov" id="sheet-ov"><div class="sheet" id="sheet"></div></div>
@@ -1149,18 +1151,18 @@ app.addEventListener('change',e=>{
 });
 /* Full-screen photo viewer: all photos of one task, arrows/swipe to switch, 90-degree rotation (kept per photo on this device).
    The token is renewed on open, since the page may have been drawn long ago. */
-const lb={el:document.getElementById('lb'),img:document.getElementById('lb-img'),cnt:document.getElementById('lb-cnt'),list:[],i:0};
+const lb={el:document.getElementById('lb'),img:document.getElementById('lb-img'),cnt:document.getElementById('lb-cnt'),list:[],i:0,z:1,x:0,y:0};
 const ROT_KEY='ege_ph_rot';
 const rotGet=k=>{try{return Number((JSON.parse(localStorage.getItem(ROT_KEY)||'{}'))[k])||0;}catch(e){return 0;}};
 const rotSet=(k,v)=>{try{const o=JSON.parse(localStorage.getItem(ROT_KEY)||'{}');if(v)o[k]=v;else delete o[k];localStorage.setItem(ROT_KEY,JSON.stringify(o));}catch(e){}};
 function lbFit(){
   const r=lb.rot,odd=r/90%2!==0,W=innerWidth,H=innerHeight-64;   // 64 px: the bottom bar
   lb.img.style.maxWidth=(odd?H:W)+'px';lb.img.style.maxHeight=(odd?W:H)+'px';
-  lb.img.style.transform=`rotate(${r}deg)`;
+  lb.img.style.transform=`translate(${lb.x}px,${lb.y}px) scale(${lb.z}) rotate(${r}deg)`;
 }
 function lbShow(){
   const a=lb.list[lb.i],k=a.dataset.phc+'/'+a.dataset.ph;
-  lb.rot=rotGet(k);lb.key=k;lb.img.dataset.retried='';
+  lb.rot=rotGet(k);lb.key=k;lb.z=1;lb.x=0;lb.y=0;lb.img.dataset.retried='';
   lb.img.src=phUrl(a.dataset.ph,ckTok.v,a.dataset.phc);
   lb.img.alt=(a.querySelector('img')||{}).alt||'Фото';
   lb.cnt.textContent=lb.list.length>1?`${lb.i+1} / ${lb.list.length}`:'';
@@ -1196,17 +1198,55 @@ lb.el.addEventListener('click',e=>{
     else if(x==='left')lbRotate(-90);else if(x==='right')lbRotate(90);return;}
   if(e.target===lb.el)lbClose();
 });
-let lbX=null;
-lb.el.addEventListener('touchstart',e=>{lbX=e.touches.length===1?e.touches[0].clientX:null;},{passive:true});
-lb.el.addEventListener('touchend',e=>{
-  if(lbX===null||!e.changedTouches.length)return;
-  const dx=e.changedTouches[0].clientX-lbX;lbX=null;if(Math.abs(dx)>60)lbStep(dx<0?1:-1);
-},{passive:true});
+/* Zoom: wheel, double click, two-finger pinch, +/- buttons; a zoomed photo is dragged with one finger or the mouse.
+   At normal size a horizontal swipe switches the photo. Zoom is around the point under the cursor/fingers. */
+const LB_MAX=6;
+function lbZoom(z2,px,py){
+  z2=Math.min(LB_MAX,Math.max(1,z2));
+  const r=lb.el.getBoundingClientRect(),cx=r.left+r.width/2,cy=(r.top+(r.height-64)/2),k=z2/lb.z;
+  lb.x=(px-cx)-k*(px-cx-lb.x);lb.y=(py-cy)-k*(py-cy-lb.y);lb.z=z2;
+  if(z2===1){lb.x=0;lb.y=0;}
+  lbFit();
+}
+const lbMid=()=>({x:innerWidth/2,y:(innerHeight-64)/2});
+lb.el.addEventListener('wheel',e=>{e.preventDefault();lbZoom(lb.z*Math.exp(-e.deltaY*(e.ctrlKey?0.01:0.002)),e.clientX,e.clientY);},{passive:false});
+lb.el.addEventListener('dblclick',e=>{if(e.target!==lb.img)return;lbZoom(lb.z>1?1:2.5,e.clientX,e.clientY);});
+lb.el.addEventListener('click',e=>{const b=e.target.closest('[data-lb="in"],[data-lb="out"]');if(!b)return;
+  const m=lbMid();lbZoom(b.dataset.lb==='in'?lb.z*1.5:lb.z/1.5,m.x,m.y);});
+const lbPt=new Map();let lbPinch=0,lbSw=null;
+lb.el.addEventListener('pointerdown',e=>{
+  if(e.target.closest('button'))return;
+  lbPt.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  lb.img.style.transition='none';
+  if(lbPt.size===2){const [p,q]=[...lbPt.values()];lbPinch=Math.hypot(p.x-q.x,p.y-q.y);lbSw=null;}
+  else lbSw={x:e.clientX,y:e.clientY};
+});
+lb.el.addEventListener('pointermove',e=>{
+  const o=lbPt.get(e.pointerId);if(!o)return;
+  const n={x:e.clientX,y:e.clientY};
+  if(lbPt.size===2){
+    lbPt.set(e.pointerId,n);const [p,q]=[...lbPt.values()],d=Math.hypot(p.x-q.x,p.y-q.y);
+    if(lbPinch>0)lbZoom(lb.z*d/lbPinch,(p.x+q.x)/2,(p.y+q.y)/2);
+    lbPinch=d;
+  }else{
+    lbPt.set(e.pointerId,n);
+    if(lb.z>1){lb.x+=n.x-o.x;lb.y+=n.y-o.y;lbFit();}
+  }
+});
+function lbUp(e){
+  if(!lbPt.has(e.pointerId))return;
+  lbPt.delete(e.pointerId);lb.img.style.transition='';
+  if(lbSw&&lb.z===1&&lbPt.size===0&&e.type==='pointerup'){
+    const dx=e.clientX-lbSw.x,dy=e.clientY-lbSw.y;if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)*1.5)lbStep(dx<0?1:-1);}
+  lbSw=null;if(lbPt.size<2)lbPinch=0;
+}
+lb.el.addEventListener('pointerup',lbUp);lb.el.addEventListener('pointercancel',lbUp);
 addEventListener('resize',()=>{if(lb.el.classList.contains('on'))lbFit();});
 document.addEventListener('keydown',e=>{
   if(!lb.el.classList.contains('on'))return;
   if(e.key==='Escape'){lbClose();e.stopImmediatePropagation();}
   else if(e.key==='ArrowLeft')lbStep(-1);else if(e.key==='ArrowRight')lbStep(1);
+  else if(e.key==='+'||e.key==='=')lbZoom(lb.z*1.5,...Object.values(lbMid()));else if(e.key==='-')lbZoom(lb.z/1.5,...Object.values(lbMid()));
   else if(e.key==='r'||e.key==='R'||e.key==='к'||e.key==='К')lbRotate(e.shiftKey?-90:90);
 },true);
 /* Everything read from an exam or a submitted work is untrusted data: the server does not check
