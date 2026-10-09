@@ -131,6 +131,12 @@
     text-decoration:none;font-size:var(--fs-sm);font-weight:600;}
   .tabs a.on{background:var(--accent-soft);color:var(--accent);border-color:var(--accent-line);}
   .tabs a span{font-weight:500;color:var(--ink-3);}
+  .remind{background:var(--warn-soft);border:1px solid var(--warn);border-left-width:6px;border-radius:var(--r-md,12px);
+    padding:var(--s4) var(--s5);margin-bottom:var(--s5);color:var(--warn-text);}
+  .remind h3{margin:0 0 var(--s3);color:var(--warn-text);}
+  .remind .rw{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s2) 0;}
+  .remind .rw .who{font-weight:600;}
+  .remind .rw .grow{flex:1 1 200px;}
   td.acts{text-align:right;white-space:nowrap;}
   td.acts .btn{min-height:32px;padding:0 var(--s3);}
 
@@ -483,11 +489,21 @@ const fmtDay=ts=>new Date(ts).toLocaleDateString('ru-RU',{timeZone:'Europe/Mosco
 
 // the third tab's badge counts works waiting for a check (nothing when there are none)
 const tabs=cur=>{const wait=(data.asg||[]).filter(a=>phaseOf(a)==='submitted').length;
-  return `<div class="tabs">
+  return `${remindBox()}<div class="tabs">
   <a href="#/" class="${cur==='s'?'on':''}">Ученики <span>${data.students.length}</span></a>
   <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a>
   <a href="#/exams" class="${cur==='x'?'on':''}">Пробники${wait?` <span>${wait}</span>`:''}</a>
   <a href="#/bot" class="${cur==='b'?'on':''}">Бот</a></div>`;};
+/* Monthly mock reminder: shown above the tabs on every screen until a mock is assigned. */
+function remindBox(){
+  const act=data.students.filter(u=>u.active!==false).map(u=>({id:u.id,since:Math.floor((pbTime(u.created)||0)/1000)}));
+  const list=ExamPanelCore.mockReminders(act,data.asg||[],nowS());
+  if(!list.length)return '';
+  const note=r=>r.days<0?`просрочено на ${-r.days} дн.`:r.days===0?'срок сегодня':`срок через ${r.days} дн.`;
+  return `<div class="remind" role="alert"><h3>Пора обсудить пробник на ближайшем занятии</h3>${list.map(r=>`<div class="rw">
+    <span class="who grow">${esc(nameOf(r.id))} <span class="muted">· ${r.last?'последний назначен '+fmtTs(r.last):'пробников ещё не было'} · ${note(r)}</span></span>
+    <button class="btn" data-act="assign" data-user="${esc(r.id)}">Назначить</button></div>`).join('')}</div>`;
+}
 /* Telegram usernames are [A-Za-z0-9_]; anything else is shown as plain text. */
 const tgLink=un=>/^[A-Za-z0-9_]{1,64}$/.test(un||'')?`<a href="https://t.me/${un}" target="_blank" rel="noopener">@${un}</a>`:'<span class="muted">—</span>';
 const pbTime=s=>s?Date.parse(String(s).replace(' ','T')):null;
