@@ -111,3 +111,34 @@ test('draftDiffers: equal to the server is not a draft', () => {
   assert.equal(P.draftDiffers({ pts: { 14: 0 }, note: {} }, {}), false);   // nothing saved yet: 0 points and empty text is the blank form
   assert.equal(P.draftDiffers(null, server), false);
 });
+
+const D = (s) => P.moscowInputToTs(s + 'T12:00');   // noon Moscow, seconds
+
+test('mockReminders: one month after the last assigned mock, reminded a week ahead', () => {
+  const stu = [{ id: 'a', since: D('2026-01-01') }];
+  const asg = [{ user: 'a', start: D('2026-09-10') }, { user: 'a', start: D('2026-08-10') }];
+  // due 2026-10-10; the reminder opens on 2026-10-03
+  assert.deepEqual(P.mockReminders(stu, asg, D('2026-10-02')), []);
+  const r = P.mockReminders(stu, asg, D('2026-10-03'));
+  assert.equal(r.length, 1);
+  assert.deepEqual(r[0], { id: 'a', last: D('2026-09-10'), due: D('2026-10-10'), days: 7 });
+  assert.equal(P.mockReminders(stu, asg, D('2026-10-14'))[0].days, -4);   // overdue by 4 days
+});
+
+test('mockReminders: a mock assigned ahead of time (future start) counts and silences the reminder', () => {
+  const stu = [{ id: 'a', since: D('2026-01-01') }];
+  assert.deepEqual(P.mockReminders(stu, [{ user: 'a', start: D('2026-10-20') }], D('2026-10-10')), []);
+});
+
+test('mockReminders: a student with no mock yet is listed at once, before everyone else', () => {
+  const stu = [{ id: 'a' }, { id: 'new' }];
+  const r = P.mockReminders(stu, [{ user: 'a', start: D('2026-09-10') }, { user: 'a', start: D('2026-09-01') }], D('2026-10-05'));
+  assert.deepEqual(r.map((x) => x.id), ['new', 'a']);
+  assert.deepEqual(r[0], { id: 'new', last: null, due: null, days: null });
+});
+
+test('mockReminders: month arithmetic clamps to the end of a short month', () => {
+  const stu = [{ id: 'a', since: 0 }];
+  const r = P.mockReminders(stu, [{ user: 'a', start: D('2026-01-31') }], D('2026-02-21'));
+  assert.equal(r[0].due, D('2026-02-28'));
+});

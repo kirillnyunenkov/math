@@ -89,7 +89,29 @@
       Object.keys(draft.note || {}).some(function (k) { return draft.note[k] !== (typeof cur(k).comment === 'string' ? cur(k).comment : ''); });
   }
 
-  const api = { moscowInputToTs: moscowInputToTs, tsToMoscowInput: tsToMoscowInput, activitySummary: activitySummary,
+  /* Monthly mock reminder. A student is due one calendar month (Moscow time) after their latest assigned mock —
+     a mock assigned ahead of time counts too — or, with none yet, after `since`. The reminder opens a week
+     before the due date. Result: [{id,last,due,days}] with days = whole days left (negative = overdue), most overdue first. */
+  const REMIND_BEFORE = 7 * 86400;
+  function addMonth(ts) {
+    const d = new Date((ts + 10800) * 1000), y = d.getUTCFullYear(), m = d.getUTCMonth() + 1;
+    const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return Math.floor(Date.UTC(y, m, Math.min(d.getUTCDate(), last), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()) / 1000) - 10800;
+  }
+  function mockReminders(students, asg, now) {
+    const lastOf = {};
+    (asg || []).forEach(function (a) { const s = Number(a.start); if (isFinite(s) && s > 0 && !(lastOf[a.user] >= s)) lastOf[a.user] = s; });
+    const out = [];
+    (students || []).forEach(function (u) {
+      const last = lastOf[u.id] || null;
+      if (!last) { out.push({ id: u.id, last: null, due: null, days: null }); return; }
+      const due = addMonth(last);
+      if (now >= due - REMIND_BEFORE) out.push({ id: u.id, last: last, due: due, days: Math.ceil((due - now) / 86400) });
+    });
+    return out.sort(function (a, b) { return (a.due === null ? -1 : a.due) - (b.due === null ? -1 : b.due); });
+  }
+
+  const api = { mockReminders: mockReminders, moscowInputToTs: moscowInputToTs, tsToMoscowInput: tsToMoscowInput, activitySummary: activitySummary,
     fmtSec: fmtSec, PHASE_TEXT: PHASE_TEXT,
     draftKey: draftKey, readDraft: readDraft, writeDraft: writeDraft, draftDiffers: draftDiffers };
   if (typeof module === 'object' && module.exports) module.exports = api;
