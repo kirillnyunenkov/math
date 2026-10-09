@@ -533,7 +533,7 @@ const fmtDay=ts=>new Date(ts).toLocaleDateString('ru-RU',{timeZone:'Europe/Mosco
 const tabs=cur=>{const wait=(data.asg||[]).filter(a=>phaseOf(a)==='submitted').length;
   return `${remindBox()}<div class="tabs">
   <a href="#/" class="${cur==='s'?'on':''}">Ученики <span>${data.students.length}</span></a>
-  <a href="#/leads" class="${cur==='l'?'on':''}">Из канала <span>${data.leads.length}</span></a>
+  <a href="#/leads" class="${cur==='l'?'on':''}">Пользователи <span>${data.leads.length}</span></a>
   <a href="#/exams" class="${cur==='x'?'on':''}">Пробники${wait?` <span>${wait}</span>`:''}</a>
   <a href="#/bot" class="${cur==='b'?'on':''}">Бот</a></div>`;};
 /* Monthly mock reminder: shown above the tabs on every screen until a mock is assigned. */
@@ -595,7 +595,7 @@ function renderList(){
           <td class="num hide-m">${r.mastered}</td>
           <td class="num">${r.mock==null?'<span class="muted">—</span>':`<b>${r.mock}</b> <span class="muted">· ${fmtDay(r.mockT)}</span>`}</td>
         </tr>`).join('')}</tbody></table></div>`
-      :'<p class="center muted">Учеников пока нет. Открой вкладку «Из канала» и нажми «В мои ученики» у нужного человека.</p>'}
+      :'<p class="center muted">Учеников пока нет. Открой вкладку «Пользователи» и нажми «В мои ученики» у нужного человека.</p>'}
     </div>`;
 }
 
@@ -670,7 +670,7 @@ function renderStudent(id){
       <span title="умею ${c.g} · повторить ${c.o} · разобраться ${c.b} из ${c.total}"><span class="bar"><i class="g" style="width:${p(c.g)}"></i><i class="o" style="width:${p(c.o)}"></i><i class="b" style="width:${p(c.b)}"></i></span></span></div>`);}
   const vs=s.variants.slice().reverse();
   app.innerHTML=`
-    <p><a href="${lead?'#/leads':'#/'}">← ${lead?'Из канала':'Все ученики'}</a></p>
+    <p><a href="${lead?'#/leads':'#/'}">← ${lead?'Пользователи':'Все ученики'}</a></p>
     <div class="toolbar"><h2 class="grow">${esc(dispName(u))}${realName(u)}${u.active===false?' <span class="chip off">отключён</span>':''}</h2>
       <button class="btn quiet" data-act="alias" data-id="${id}">${data.alias[id]?'Изменить имя':'Дать имя'}</button>
       ${prof
