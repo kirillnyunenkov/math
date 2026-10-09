@@ -501,7 +501,7 @@ function remindBox(){
   if(!list.length)return '';
   const note=r=>r.days<0?`просрочено на ${-r.days} дн.`:r.days===0?'срок сегодня':`срок через ${r.days} дн.`;
   return `<div class="remind" role="alert"><h3>Пора обсудить пробник на ближайшем занятии</h3>${list.map(r=>`<div class="rw">
-    <span class="who grow">${esc(nameOf(r.id))} <span class="muted">· ${r.last?'последний назначен '+fmtTs(r.last):'пробников ещё не было'} · ${note(r)}</span></span>
+    <span class="who grow">${esc(nameOf(r.id))} <span class="muted">· ${r.last?'последний назначен '+fmtDay(r.last*1000):'пробников ещё не было'} · ${note(r)}</span></span>
     <button class="btn" data-act="assign" data-user="${esc(r.id)}">Назначить</button></div>`).join('')}</div>`;
 }
 /* Telegram usernames are [A-Za-z0-9_]; anything else is shown as plain text. */
