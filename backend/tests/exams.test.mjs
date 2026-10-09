@@ -190,6 +190,16 @@ test('move and cancel work before the start only, and tell the student', async (
   assert.equal((await assign(s.id, exam, nowS() + 7200)).status, 200);   // free to assign again
 });
 
+test('an invited student without a real Telegram is assigned and moved without any bot message', async () => {
+  const exam = await mkExam();
+  const inv = (await req('POST', '/ege/invite', tok.teacher, {})).json;
+  const n = sent.length;
+  const id = (await assign(inv.id, exam, nowS() + 7200)).json.id;
+  assert.equal((await req('POST', `/ege/exams/${id}/move`, tok.teacher, { start: nowS() + 9000 })).status, 200);
+  assert.equal((await req('POST', `/ege/exams/${id}/cancel`, tok.teacher)).status, 200);
+  assert.deepEqual(sent.slice(n).filter(m => String(m.chat_id).startsWith('0')), []);
+});
+
 const view = (id, token) => req('GET', `/ege/exams/${id}`, token);
 
 test('before the start the student sees the time and nothing else', async () => {

@@ -48,6 +48,23 @@ in on a device without Telegram: the page sends it to `POST /api/tg/code` and
 gets the same login pair the personal link holds. Codes live in `login_codes`
 (closed to the API); guessing is capped at 5 requests a minute per address.
 
+### Invited accounts and binding a Telegram
+
+The teacher can create an account that never went through the bot
+(`POST /api/ege/invite`, teacher only; the panel's «Новый ученик»). It gets a
+personal link and a placeholder `tg_profiles` row whose `tg_id` starts with `0`
+(real Telegram ids never do), so the person shows up under «Из канала». The same
+call with `{user: id}` puts a placeholder on an old link account that has no
+profile. Exam messages skip placeholders (`exams.js` `tell`). A student names
+themselves once with `POST /api/ege/name`; after that only the teacher can rename.
+
+A placeholder is swapped for a real Telegram like this: the student asks for a
+code (`POST /api/ege/tg-link`, `login_codes.purpose = "link"`), opens
+`t.me/<bot>?start=link_<code>` (or sends `/link <code>`), and the bot replaces
+`tg_id`. `GET /api/ege/tg-link` tells the page whether it is done. A Telegram
+that already has its own account cannot be bound to another one; merging two
+accounts is a manual job.
+
 A hook change needs the files copied to `/opt/ege-api/pb_hooks/` and
 `systemctl restart ege-api`.
 
