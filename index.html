@@ -3759,7 +3759,7 @@ appEl.addEventListener('click',e=>{
 });
 appEl.addEventListener('input',e=>{const el=e.target;
   if(el.classList.contains('ans-input')||el.classList.contains('v-input')){
-    const cleaned=el.value.replace(/\./g,',').replace(/[\u2212\u2013\u2014]/g,'-').replace(/[^0-9,\-]/g,'');
+    const cleaned=el.value.replace(/[\u2212\u2013\u2014]/g,'-').replace(/[^0-9.,\-]/g,'');
     if(cleaned!==el.value){const p=el.selectionStart-(el.value.length-cleaned.length);el.value=cleaned;try{el.setSelectionRange(p,p);}catch(_){}}}
 });
 /* Один переключатель на обе кнопки — в шапке и в панели задания.
