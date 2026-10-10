@@ -3,7 +3,7 @@
    returns for the current phase (see backend/pb_hooks/exams.js). Nothing is
    written to the progress state, the event journal or the mock-exam history.
    Globals from index.html: API, auth, appEl, statsEl, setBack, parseRoute, go,
-   escapeHtml, render, stageAndMount, IS_IPHONE, ask, note, scrollTop, typeset.
+   escapeHtml, render, stageAndMount, ANS_ATTRS, ask, note, scrollTop, typeset.
    Other scripts: exam-client-core.js (ExamClientCore), exam-validate.js (ExamValidate). */
 (function () {
   'use strict';
@@ -311,9 +311,6 @@
   // ---- the open phase ----
   // The whole page is made of what the server sent; nothing here is built from it other than through esc() / Number() /
   // safeHtml(), and no selector is ever built from a task number (cards are found through dataset).
-  // iPhone has no minus sign on a numeric keypad: always the text keyboard there (same attributes as ansAttrs of the generator).
-  const ansAttrs = () => IS_IPHONE ? 'type="text" autocapitalize="off" autocorrect="off" spellcheck="false"'
-    : 'type="text" inputmode="decimal"';
   const ballWordOf = (n) => (typeof ballWord === 'function' ? ballWord(n) : 'б.');
 
   function cardHTML(t, typed) {
@@ -322,7 +319,7 @@
       '<div class="vlabel">Задание ' + t.n + (long && t.max ? '<span class="vlabel-art"> · максимум ' + t.max + ' ' + ballWordOf(t.max) + '</span>' : '') + '</div>' +
       '<div class="cond"><div class="tex">' + safeHtml(t.cond) + '</div></div>' +
       (long ? photoBlockHTML(t.n) :
-        '<input class="v-input" ' + ansAttrs() + ' maxlength="40" placeholder="Ответ" data-ex-in="' + t.n + '" value="' + esc(typed[t.n]) + '" autocomplete="off" aria-label="Ответ на задание ' + t.n + '">') +
+        '<input class="v-input" ' + ANS_ATTRS + ' maxlength="40" placeholder="Ответ" data-ex-in="' + t.n + '" value="' + esc(typed[t.n]) + '" autocomplete="off" aria-label="Ответ на задание ' + t.n + '">') +
       '</div>';
   }
   // The timer starts empty: it is filled from the server clock only (never "NaN:NaN").
