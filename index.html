@@ -2184,17 +2184,10 @@ function nextTaskWithWork(n){
 
 // ответы нигде не сохраняются — в прогресс/ссылку попадает только итоговый статус
 function plainAnswer(html){if(!html)return'';const t=document.createElement('div');t.innerHTML=html;return(t.textContent||'').trim();}
-/* The iPhone decimal keypad has no minus key, and no numeric keypad there
-   has one. So on iPhone, tasks whose bank contains negative answers get the
-   regular text keyboard (minus and comma sit under "123"); the rest keep the
-   keypad. Decided per task, not per answer, so the keyboard is not a hint. */
-const IS_IPHONE=/iphone|ipod/i.test(navigator.userAgent);
-const negAnsCache={};
-function hasNegAns(n){const d=window.TASKDATA[n];if(!d)return false;
-  if(!(n in negAnsCache))negAnsCache[n]=d.some(t=>/^[-\u2212]/.test(plainAnswer(t.a)));
-  return negAnsCache[n];}
-function ansAttrs(n){return IS_IPHONE&&hasNegAns(n)
-  ?'type="text" autocapitalize="off" autocorrect="off" spellcheck="false"':'type="text" inputmode="decimal"';}
+/* One keyboard rule for every device and task: the regular text keyboard.
+   Numeric keypads are not reliable: iPhone's has no minus key, and on Android
+   the decimal keypad shows a comma key that types nothing. */
+const ANS_ATTRS='type="text" autocapitalize="off" autocorrect="off" spellcheck="false"';
 function normAns(s){return(s||'').toLowerCase().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.');}
 function parseNum(s){let t=(s||'').toString().replace(/\u2212/g,'-').replace(/\s+/g,'').replace(/,/g,'.').replace(/\.$/,'');
   if(t===''||!/^-?\d*\.?\d+$/.test(t))return null;const n=parseFloat(t);return isFinite(n)?n:null;}
@@ -3090,7 +3083,7 @@ function renderTask(n){
   const pl=protoList(n);
   const acHTML=id=>{const ansTxt=task.mode==='html'&&!isLongAns(n)?plainAnswer((data[id-1]||{}).a):'';
     return ansTxt?`<div class="answer-check">
-          <input class="ans-input" ${ansAttrs(n)} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
+          <input class="ans-input" ${ANS_ATTRS} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
           <button class="btn check" data-check="${id}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span>
         </div>`:'';};
@@ -3185,7 +3178,7 @@ function renderTask(n){
 function simCardHTML(n,id){const d=(window.TASKDATA[n]||[])[id-1]||{};
   const ansTxt=isLongAns(n)?'':plainAnswer(d.a);
   const ac=ansTxt?`<div class="answer-check">
-      <input class="ans-input" ${ansAttrs(n)} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
+      <input class="ans-input" ${ANS_ATTRS} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${id}" autocomplete="off">
       <button class="btn check" data-check="${id}" data-nostatus="1">Проверить</button>
       <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
   return `<div class="subcard">
@@ -3532,7 +3525,7 @@ function renderTraining(){
       const st=(state[it.n]||{})[it.id]||'',c=st?'is-'+st:'';
       const ansTxt=isLongAns(it.n)?'':plainAnswer(d.a);
       const ac=ansTxt?`<div class="answer-check">
-          <input class="ans-input" ${ansAttrs(it.n)} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off">
+          <input class="ans-input" ${ANS_ATTRS} placeholder="Ваш ответ" aria-label="Ваш ответ" data-id="${it.id}" autocomplete="off">
           <button class="btn check" data-tcheck="${i}">Проверить</button>
           <span class="ans-msg" role="status" aria-live="polite"></span></div>`:'';
       return `<div class="vcard ${c}" id="tcard-${i}" data-n="${it.n}">
@@ -3567,7 +3560,7 @@ function renderVariant(){
           <div class="vlabel">Задание ${it.n}${long?`<span class="vlabel-art"> · максимум ${mx} ${ballWord(mx)}</span>`:''}</div>
           <div class="cond"><div class="tex">${d.c||''}</div></div>
           ${long?'<p class="vlong-hint">Решение записывай на листе. Баллы поставишь себе сам по критериям после завершения.</p>'
-            :`<input class="v-input" ${ansAttrs(it.n)} placeholder="Ответ" data-vi="${i}" autocomplete="off">`}
+            :`<input class="v-input" ${ANS_ATTRS} placeholder="Ответ" data-vi="${i}" autocomplete="off">`}
         </div>`;}).join('')}
       <div style="text-align:center;margin-top:8px"><button class="btn primary" data-vfinish>Завершить вариант</button></div>
     </div>`;
@@ -3759,7 +3752,7 @@ appEl.addEventListener('click',e=>{
 });
 appEl.addEventListener('input',e=>{const el=e.target;
   if(el.classList.contains('ans-input')||el.classList.contains('v-input')){
-    const cleaned=el.value.replace(/[.\u3002\uFF0E\u2024]/g,',').replace(/[\u060C\u066B\u066C\u201A\uFF0C\u3001\uFE50\uFE51]/g,',').replace(/[\u2212\u2013\u2014]/g,'-').replace(/[^0-9,\-]/g,'');
+    const cleaned=el.value.replace(/\./g,',').replace(/[\u2212\u2013\u2014]/g,'-').replace(/[^0-9,\-]/g,'');
     if(cleaned!==el.value){const p=el.selectionStart-(el.value.length-cleaned.length);el.value=cleaned;try{el.setSelectionRange(p,p);}catch(_){}}}
 });
 /* Один переключатель на обе кнопки — в шапке и в панели задания.
