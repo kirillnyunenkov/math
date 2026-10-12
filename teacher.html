@@ -137,6 +137,11 @@
   .remind .rw{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap;padding:var(--s2) 0;}
   .remind .rw .who{font-weight:600;}
   .remind .rw .grow{flex:1 1 200px;}
+  .remind-held{margin:0 0 var(--s5);line-height:2;}
+  .remind-held .it{margin-left:var(--s3);}
+  .remind+.remind-held{margin-top:calc(-1*var(--s3));}
+  .remind-held .lnk{font:inherit;color:var(--accent);background:none;border:0;padding:var(--s2) var(--s1);cursor:pointer;text-decoration:underline;}
+  .remind-held .lnk:disabled{opacity:.5;cursor:default;}
   td.acts{text-align:right;white-space:nowrap;}
   td.acts .btn{min-height:32px;padding:0 var(--s3);}
 
@@ -504,6 +509,9 @@ async function load(){
   /* Teacher-only names. A server without the collection just means no names yet. */
   data.alias={};data.aliasRec={};
   (await soft(all('teacher_aliases',null,null,'id'))).forEach(a=>{data.alias[a.user]=a.alias;data.aliasRec[a.user]=a.id;});
+  /* Mock reminders put off until a date. Same: no collection yet means nothing is put off. */
+  data.hold={};data.holdRec={};
+  (await soft(all('reminder_holds',null,null,'id'))).forEach(h=>{data.hold[h.user]=h.until;data.holdRec[h.user]=h.id;});
 }
 /* A lead's journal is fetched only when their card is opened. */
 async function loadOne(id){
@@ -540,15 +548,20 @@ const tabs=cur=>{const wait=(data.asg||[]).filter(a=>phaseOf(a)==='submitted').l
   <a href="#/leads" class="${cur==='l'?'on':''}">Пользователи <span>${data.leads.length}</span></a>
   <a href="#/exams" class="${cur==='x'?'on':''}">Пробники${wait?` <span>${wait}</span>`:''}</a>
   <a href="#/bot" class="${cur==='b'?'on':''}">Бот</a></div>`;};
-/* Monthly mock reminder: shown above the tabs on every screen until a mock is assigned. */
+/* Monthly mock reminder: shown above the tabs on every screen until a mock is assigned or the reminder is
+   put off. The ones put off stay listed in a quiet line below, so that nobody is forgotten. */
 function remindBox(){
   const act=data.students.filter(u=>u.active!==false).map(u=>({id:u.id}));
-  const list=ExamPanelCore.mockReminders(act,data.asg||[],nowS());
-  if(!list.length)return '';
+  const list=ExamPanelCore.mockReminders(act,data.asg||[],nowS(),data.hold);
+  const held=ExamPanelCore.heldReminders(act,data.asg||[],nowS(),data.hold);
   const note=r=>r.days===null?'назначь первый':r.days<0?`просрочено на ${-r.days} дн.`:r.days===0?'срок сегодня':`срок через ${r.days} дн.`;
-  return `<div class="remind" role="alert"><h3>Пора обсудить пробник на ближайшем занятии</h3>${list.map(r=>`<div class="rw">
+  const box=!list.length?'':`<div class="remind" role="alert"><h3>Пора обсудить пробник на ближайшем занятии</h3>${list.map(r=>`<div class="rw">
     <span class="who grow">${esc(nameOf(r.id))} <span class="muted">· ${r.last?'последний назначен '+fmtDay(r.last*1000):'пробников ещё не было'} · ${note(r)}</span></span>
+    <button class="btn quiet" data-act="hold" data-id="${esc(r.id)}">Отложить</button>
     <button class="btn" data-act="assign" data-user="${esc(r.id)}">Назначить</button></div>`).join('')}</div>`;
+  const line=!held.length?'':`<div class="remind-held muted">Пробник отложен: ${held.map(h=>`<span class="it">${esc(nameOf(h.id))} — до ${fmtDay(h.until*1000)}
+    <button class="lnk" data-act="unhold" data-id="${esc(h.id)}" aria-label="Вернуть напоминание: ${esc(nameOf(h.id))}">вернуть</button></span>`).join('')}</div>`;
+  return box+line;
 }
 /* Telegram usernames are [A-Za-z0-9_]; anything else is shown as plain text. */
 const tgLink=un=>/^[A-Za-z0-9_]{1,64}$/.test(un||'')?`<a href="https://t.me/${un}" target="_blank" rel="noopener">@${un}</a>`:'<span class="muted">—</span>';
@@ -850,6 +863,39 @@ async function aliasGo(id,b){
   if(!v){delete data.alias[id];delete data.aliasRec[id];}
   else{data.alias[id]=v;data.aliasRec[id]=r.json.id;}
   closeSheet();route();
+}
+/* Put the mock reminder off until a date (the student is away). Nothing is sent to the student. */
+function holdSheet(id){
+  if(!data.userOf[id])return;
+  const min=ExamPanelCore.tsToMoscowDay(nowS()+86400);
+  sheet(`<form id="hd-form" data-id="${esc(id)}"><h3>Отложить пробник</h3>
+    <p><b>${esc(nameOf(id))}</b> пропадёт из напоминаний и вернётся в выбранный день. Ученик об этом не узнает.</p>
+    <label class="fld">Напомнить снова<input type="date" id="hd-day" required min="${min}"></label>
+    <p class="errline" id="hd-err" role="alert"></p>
+    <div class="acts"><button type="button" class="btn quiet" data-act="close">Отмена</button><button type="submit" class="btn">Отложить</button></div></form>`);
+  document.getElementById('hd-day').focus();
+}
+/* until=null takes the hold off. */
+async function holdSave(id,until){
+  const rec=data.holdRec[id];
+  const fail=why=>sheet(`<h3>Не получилось</h3><p>${why} Напоминание осталось как было.</p><div class="acts"><button class="btn" data-act="close">Понятно</button></div>`);
+  if(!until&&!rec){delete data.hold[id];closeSheet();route();return;}
+  let r;
+  try{
+    r=!until?await api('/collections/reminder_holds/records/'+rec,{method:'DELETE'})
+      :rec?await api('/collections/reminder_holds/records/'+rec,{method:'PATCH',body:{until:until}})
+      :await api('/collections/reminder_holds/records',{method:'POST',body:{user:id,until:until}});
+  }catch(e){if(e.message!=='401')fail('Нет связи с сервером.');return;}
+  if(r.status!==200&&r.status!==204){fail(r.status===404&&until&&!rec?'На сервере ещё нет места для отсрочек (нужна выкладка).':`Сервер ответил ${esc(r.status)}.`);return;}
+  if(!until){delete data.hold[id];delete data.holdRec[id];}
+  else{data.hold[id]=until;data.holdRec[id]=r.json.id;}
+  closeSheet();route();
+}
+async function holdGo(id,b){
+  const until=ExamPanelCore.moscowDayToTs(document.getElementById('hd-day').value);
+  if(!until||until<=nowS()){document.getElementById('hd-err').textContent='Выбери день позже сегодняшнего.';return;}
+  b.disabled=true;
+  await holdSave(id,until);
 }
 async function setActive(uid,on){
   await api('/collections/users/records/'+uid,{method:'PATCH',body:{active:on}});
@@ -1463,6 +1509,8 @@ document.addEventListener('click',e=>{
   else if(a==='rotate')rotate(id);
   else if(a==='rotate-go')rotateGo(id);
   else if(a==='alias')aliasSheet(id);
+  else if(a==='hold')holdSheet(id);
+  else if(a==='unhold'){b.disabled=true;holdSave(id,null);}
   else if(a==='mine')setMine(id,b.dataset.v==='1');
   else if(a==='to-leads')toLeads(id);
   else if(a==='invite')inviteNew();
@@ -1490,6 +1538,7 @@ document.getElementById('theme').addEventListener('click',()=>{
 /* Enter in a field and the submit button both land here (assign and move sheets). */
 document.addEventListener('submit',e=>{
   const f=e.target;if(f.matches&&f.matches('#al-form')){e.preventDefault();aliasGo(f.dataset.id,f.querySelector('button[type="submit"]'));return;}
+  if(f.matches&&f.matches('#hd-form')){e.preventDefault();const hb=f.querySelector('button[type="submit"]');if(!hb.disabled)holdGo(f.dataset.id,hb);return;}
   if(!f.matches||!f.matches('#as-form'))return;
   e.preventDefault();const b=f.querySelector('button[type="submit"]');
   if(!b||b.disabled)return;

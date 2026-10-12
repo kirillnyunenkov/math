@@ -129,6 +129,17 @@ test('teacher aliases are visible and writable only to the teacher', async () =>
   assert.ok([403, 404].includes((await req('PATCH', `/collections/teacher_aliases/records/${r.json.id}`, tok.stu1, { alias: 'x' })).status));
 });
 
+test('reminder holds are visible and writable only to the teacher, one per student', async () => {
+  const r = await req('POST', '/collections/reminder_holds/records', tok.teacher, { user: ids.stu1, until: 1794690000 });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((await req('POST', '/collections/reminder_holds/records', tok.teacher, { user: ids.stu1, until: 1794700000 })).status, 400);
+  assert.equal((await req('PATCH', `/collections/reminder_holds/records/${r.json.id}`, tok.teacher, { until: 1794700000 })).json.until, 1794700000);
+  assert.ok([400, 403].includes((await req('POST', '/collections/reminder_holds/records', tok.stu2, { user: ids.stu2, until: 1794690000 })).status));
+  assert.equal((await req('GET', '/collections/reminder_holds/records', tok.stu1)).json.totalItems, 0);
+  assert.ok([403, 404].includes((await req('DELETE', `/collections/reminder_holds/records/${r.json.id}`, tok.stu1)).status));
+  assert.equal((await req('DELETE', `/collections/reminder_holds/records/${r.json.id}`, tok.teacher)).status, 204);
+});
+
 test('links are teacher-only', async () => {
   const r = await req('POST', '/collections/links/records', tok.teacher, { user: ids.stu1, secret: PW.stu1 });
   assert.equal(r.status, 200, JSON.stringify(r.json));

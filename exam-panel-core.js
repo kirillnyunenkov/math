@@ -10,6 +10,13 @@
     return Math.floor(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]) / 1000) - 10800;
   }
 
+  // A calendar day ("2026-11-15", what <input type="date"> gives) is its Moscow midnight.
+  function moscowDayToTs(s) {
+    const ts = moscowInputToTs((s || '') + 'T00:00');
+    return ts !== null && tsToMoscowDay(ts) === s ? ts : null;
+  }
+  function tsToMoscowDay(ts) { return tsToMoscowInput(ts).slice(0, 10); }
+
   function tsToMoscowInput(ts) {
     const d = new Date((ts + 10800) * 1000), p = (x) => String(x).padStart(2, '0');
     return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + 'T' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes());
@@ -98,7 +105,7 @@
     const last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
     return Math.floor(Date.UTC(y, m, Math.min(d.getUTCDate(), last), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()) / 1000) - 10800;
   }
-  function mockReminders(students, asg, now) {
+  function allReminders(students, asg, now) {
     const lastOf = {};
     (asg || []).forEach(function (a) { const s = Number(a.start); if (isFinite(s) && s > 0 && !(lastOf[a.user] >= s)) lastOf[a.user] = s; });
     const out = [];
@@ -110,8 +117,19 @@
     });
     return out.sort(function (a, b) { return (a.due === null ? -1 : a.due) - (b.due === null ? -1 : b.due); });
   }
+  /* `hold` is {userId: ts}: the teacher put the reminder off (the student is away), and it stays hidden
+     until that moment. A hold changes nothing else — once it runs out the reminder is back as it was. */
+  const isHeld = function (hold, id, now) { return !!hold && hold[id] > now; };
+  function mockReminders(students, asg, now, hold) {
+    return allReminders(students, asg, now).filter(function (r) { return !isHeld(hold, r.id, now); });
+  }
+  // Reminders hidden by a hold right now: [{id,until}], the soonest to come back first.
+  function heldReminders(students, asg, now, hold) {
+    return allReminders(students, asg, now).filter(function (r) { return isHeld(hold, r.id, now); })
+      .map(function (r) { return { id: r.id, until: hold[r.id] }; }).sort(function (a, b) { return a.until - b.until; });
+  }
 
-  const api = { mockReminders: mockReminders, moscowInputToTs: moscowInputToTs, tsToMoscowInput: tsToMoscowInput, activitySummary: activitySummary,
+  const api = { mockReminders: mockReminders, heldReminders: heldReminders, moscowDayToTs: moscowDayToTs, tsToMoscowDay: tsToMoscowDay, moscowInputToTs: moscowInputToTs, tsToMoscowInput: tsToMoscowInput, activitySummary: activitySummary,
     fmtSec: fmtSec, PHASE_TEXT: PHASE_TEXT,
     draftKey: draftKey, readDraft: readDraft, writeDraft: writeDraft, draftDiffers: draftDiffers };
   if (typeof module === 'object' && module.exports) module.exports = api;
