@@ -142,3 +142,33 @@ test('mockReminders: month arithmetic clamps to the end of a short month', () =>
   const r = P.mockReminders(stu, [{ user: 'a', start: D('2026-01-31') }], D('2026-02-21'));
   assert.equal(r[0].due, D('2026-02-28'));
 });
+
+test('mockReminders: a hold hides the student until its date, then the reminder comes back as it was', () => {
+  const stu = [{ id: 'a' }, { id: 'new' }];
+  const asg = [{ user: 'a', start: D('2026-09-10') }];
+  const hold = { a: P.moscowDayToTs('2026-11-15'), new: P.moscowDayToTs('2026-10-20') };
+  assert.deepEqual(P.mockReminders(stu, asg, D('2026-10-12'), hold), []);
+  assert.deepEqual(P.mockReminders(stu, asg, D('2026-10-20'), hold).map((x) => x.id), ['new']);
+  // the last second of 14 November is still hidden; midnight of the 15th (Moscow) is not
+  assert.deepEqual(P.mockReminders([stu[0]], asg, hold.a - 1, hold), []);
+  const back = P.mockReminders([stu[0]], asg, hold.a, hold);
+  assert.deepEqual(back, [{ id: 'a', last: D('2026-09-10'), due: D('2026-10-10'), days: -35 }]);
+});
+
+test('heldReminders: only students whose reminder is hidden right now, soonest return first', () => {
+  const stu = [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }];
+  const asg = [{ user: 'a', start: D('2026-09-10') }, { user: 'c', start: D('2026-10-05') }, { user: 'd', start: D('2026-09-01') }];
+  // c is not due yet, so its hold hides nothing; d's hold has run out
+  const hold = { a: P.moscowDayToTs('2026-11-15'), b: P.moscowDayToTs('2026-10-20'), c: P.moscowDayToTs('2026-12-01'), d: P.moscowDayToTs('2026-10-01') };
+  assert.deepEqual(P.heldReminders(stu, asg, D('2026-10-12'), hold), [{ id: 'b', until: hold.b }, { id: 'a', until: hold.a }]);
+  assert.deepEqual(P.heldReminders(stu, asg, D('2026-10-12'), {}), []);
+  assert.deepEqual(P.mockReminders(stu, asg, D('2026-10-12'), hold).map((x) => x.id), ['d']);
+});
+
+test('moscowDayToTs / tsToMoscowDay: a calendar day is its Moscow midnight', () => {
+  assert.equal(P.moscowDayToTs('2026-11-15'), P.moscowInputToTs('2026-11-15T00:00'));
+  assert.equal(P.moscowDayToTs('15.11.2026'), null);
+  assert.equal(P.moscowDayToTs('2026-02-30'), null);
+  assert.equal(P.tsToMoscowDay(P.moscowDayToTs('2026-11-15')), '2026-11-15');
+  assert.equal(P.tsToMoscowDay(P.moscowDayToTs('2026-11-15') - 1), '2026-11-14');
+});
