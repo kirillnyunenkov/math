@@ -453,6 +453,8 @@
   .sheet .code-form{margin-top:var(--s5);padding-top:var(--s4);border-top:1px solid var(--line);}
   .code-form .code-label{display:block;font-size:var(--fs-sm);color:var(--ink-2);line-height:1.5;margin:0 0 var(--s3);}
   .code-form .code-label b{color:var(--ink);font-weight:600;}
+  /* the bot's username, to type into Telegram search on a phone */
+  .code-form .code-bot{display:block;margin:var(--s2) 0;font-size:var(--fs-md);font-weight:600;color:var(--ink);user-select:all;}
   .code-row{display:flex;gap:var(--s2);}
   .code-input{flex:1;min-width:0;font:inherit;font-size:var(--fs-md);letter-spacing:.12em;font-variant-numeric:tabular-nums;
     padding:0 var(--s3);min-height:48px;border:1px solid var(--line-strong);border-radius:var(--r-md);
@@ -3222,7 +3224,8 @@ const gated=()=>!auth&&!guest&&markedCount()>=FREE_CHECKS;
    зашита в личную ссылку, дальше обычный вход. */
 function codeFormHtml(){
   return `<form class="code-form" novalidate>
-    <label class="code-label" for="code-input"><b>Telegram на другом устройстве?</b><br>Напиши боту там — он пришлёт код. Введи его здесь:</label>
+    <label class="code-label" for="code-input"><b>Telegram на другом устройстве?</b><br>Найди там в поиске бота и напиши ему любое сообщение:
+    <span class="code-bot">@${TG_BOT}</span>Он пришлёт код — введи его здесь:</label>
     <div class="code-row"><input class="code-input" id="code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" placeholder="6 цифр">
     <button class="code-go" type="submit">Войти</button></div>
     <p class="code-msg" role="status" aria-live="polite"></p></form>`;
