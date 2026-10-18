@@ -1168,3 +1168,65 @@ test('manual exams: na must be a list of distinct task numbers', async () => {
   assert.equal((await add({ na: ['6'] })).status, 400);
   assert.equal((await add({ na: [6] })).status, 200);
 });
+
+test('pause: only the teacher, only a running opened exam; the student sees no tasks and nothing is accepted', async () => {
+  const { id, s } = await started(7000000401);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  assert.equal((await post(id, 'pause', s.token)).status, 403);                     // a student cannot pause
+  assert.equal((await post(id, 'resume', s.token)).status, 409);                    // nothing to resume yet
+  assert.equal((await post('nosuchid1234567', 'pause', tok.teacher)).status, 404);
+  assert.equal((await post(id, 'pause', tok.teacher, { at: nowS() + 60 })).status, 400);   // not in the future
+  assert.equal((await post(id, 'pause', tok.teacher, { at: 1 })).status, 400);              // not before it was opened
+  assert.equal((await post(id, 'pause', tok.teacher, { add: 7200 })).status, 400);          // at most an hour extra
+  assert.equal((await post(id, 'pause', tok.teacher)).status, 200);
+  const v = await view(id, s.token);
+  assert.equal(v.json.phase, 'paused');
+  assert.equal('tasks' in v.json, false);
+  assert.equal('answers' in v.json, false);
+  assert.ok(v.json.left > 500 && v.json.left <= 600, String(v.json.left));
+  assert.equal((await post(id, 'answers', s.token, { answers: { 1: '6' } })).status, 409);
+  assert.equal((await post(id, 'finish', s.token)).status, 409);
+  assert.equal((await post(id, 'pause', tok.teacher)).status, 409);                // already on hold
+  const mine = (await req('GET', '/ege/exams/mine', s.token)).json.items.find((x) => x.id === id);
+  assert.equal(mine.phase, 'paused');
+  assert.deepEqual((await rowOf(id)).answers, { 1: '5' });
+});
+
+test('pause outlasts the window; resume adds the pause to the duration and the exam goes on', async () => {
+  const { id, s } = await started(7000000402);
+  const at = nowS() - 2;
+  await shift(id, { opened: at - 5 });
+  assert.equal((await post(id, 'pause', tok.teacher, { at })).status, 200);         // backdated to when the student stopped
+  // an hour later: far past the 10-minute window, still on hold, not settled by the tick
+  const row0 = await rowOf(id);
+  await shift(id, { start: row0.start - 3600, opened: row0.opened - 3600, paused: row0.paused - 3600 });
+  await req('POST', '/ege/exams/tick', tok.su);
+  assert.equal((await view(id, s.token)).json.phase, 'paused');
+  assert.equal((await rowOf(id)).settled, 0);
+  assert.notEqual((await post(id, 'resume', tok.teacher)).status, 200);            // the student's button, not the teacher's
+  assert.equal((await post(id, 'resume', s.token)).status, 200);
+  const row = await rowOf(id);
+  assert.equal(row.paused, 0);
+  assert.ok(row.duration >= 600 + 3600 && row.duration <= 600 + 3600 + 5, String(row.duration));
+  const v = await view(id, s.token);
+  assert.equal(v.json.phase, 'open');
+  assert.ok(v.json.until - v.json.now > 500, String(v.json.until - v.json.now));   // the time left before the pause is back
+  assert.equal((await post(id, 'answers', s.token, { answers: { 1: '5' } })).status, 200);
+  assert.equal((await post(id, 'resume', s.token)).status, 409);
+});
+
+test('a photo to the bot while paused is refused with a hint to resume', async () => {
+  const { id, s } = await started(7000000403);
+  assert.equal((await post(id, 'pause', tok.teacher)).status, 200);
+  await botHook(photoUpdate(7000000403));
+  assert.equal((await photosOf(id, s.token)).length, 0);
+  assert.equal(said(s.chat, 'на паузе'), 1);
+});
+
+test('pause with extra time: the student gets the added minutes on top of what was left', async () => {
+  const { id, s } = await started(7000000404);
+  assert.equal((await post(id, 'pause', tok.teacher, { add: 900 })).status, 200);
+  assert.equal((await rowOf(id)).duration, 600 + 900);
+  const v = await view(id, s.token);
+  assert.ok(v.json.left > 1400 && v.json.left <= 1500, String(v.json.left));
+});

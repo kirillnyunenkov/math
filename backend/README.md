@@ -249,6 +249,14 @@ there too. The tool logs in with `~/ege-teacher-link.txt` and prints no secrets.
 The nightly backup archives `pb_data`, which now includes the photos in
 `pb_data/storage/`; watch the size of `/opt/ege-api/backups/`.
 
+### Pausing a running exam (one-off exception)
+
+The teacher can put one running exam on hold: `node tools/exam_api.mjs pause --student … --exam … [--at "ГГГГ-ММ-ДД ЧЧ:ММ"] [--add 15] --yes`
+(POST `/api/ege/exams/{id}/pause`, teacher only). From `--at` (default: now) the window stands still; the
+student sees no tasks and a "Возобновить" button (POST `/{id}/resume`), which adds the pause (plus `--add`
+minutes) to the duration. No bot message is sent. Rollout: migration `1790800018_assignment_pause.js` and
+the hooks (`exams.pb.js`, `exams.js`, `lib/`), restart, then the site.
+
 ## Exam history (Мои пробники)
 
 The collection `exam_history` holds exams a student wrote before the trainer existed. One row = one exam:

@@ -100,10 +100,10 @@
   // ---- hub banner ----
   // The hub keeps only what needs the student now: a running exam, the photo phase, a start within a day.
   // Everything else (further scheduled, waiting for a check, checked) lives on #/exams.
-  const shown = (it) => it.phase === 'open' || it.phase === 'photos' ||
+  const shown = (it) => it.phase === 'open' || it.phase === 'photos' || it.phase === 'paused' ||
     (it.phase === 'scheduled' && it.start - (Date.now() + st.offset) / 1000 < 86400);
   // What needs the student first: a running exam, then one that is coming, then results.
-  const PRIO = { open: 0, photos: 0, scheduled: 1, submitted: 2, checked: 3 };
+  const PRIO = { open: 0, photos: 0, paused: 0, scheduled: 1, submitted: 2, checked: 3 };
   // Only well-formed items are kept: the page never trusts the shape of the server answer.
   const wellFormed = (it) => !!it && typeof it === 'object' && typeof it.id === 'string' && typeof it.phase === 'string' &&
     typeof it.start === 'number' && Number.isFinite(it.start);
@@ -120,6 +120,7 @@
       (act ? '<button class="btn primary" data-exam="' + esc(it.id) + '">' + act + '</button>' : '') + '</div>';
     if (it.phase === 'scheduled') return row(t, C.whenText(it.start) + ' · время московское', 'Подробнее');
     if (it.phase === 'open') return row(t + ' открыт', 'Время на работу уже идёт', 'Открыть');
+    if (it.phase === 'paused') return row(t + ' на паузе', leftWords(it.left) || 'Время стоит', 'Открыть');
     // `early` / `nolong` come with the photo phase only; an older server sends neither and the plain wording stays.
     if (it.phase === 'photos') return row(t, it.nolong === true ? 'Время работы вышло, открой, чтобы сдать'
       : (it.early === false ? 'Время вышло, осталось прикрепить фото второй части' : 'Осталось прикрепить фото второй части'), 'Открыть');
@@ -264,6 +265,7 @@
     if (v.phase === 'scheduled') return paintScheduled(v, again);
     if (v.phase === 'missed') return paintMissed(v);
     if (v.phase === 'open') return paintOpen(v);
+    if (v.phase === 'paused') return paintPaused(v);
     if (v.phase === 'photos') return paintPhotos(v);
     if (v.phase === 'submitted' || v.phase === 'checked') return paintResult(v);
     appEl.innerHTML = shell('<p class="lead">' + esc(v.phase) + '</p>');   // replaced by later tasks
@@ -306,6 +308,30 @@
       '<p class="lead">Время пробника прошло, а работа так и не была открыта. Напиши мне — договоримся о новом времени.</p>' +
       '<div class="vactions"><a class="btn primary" href="' + TG + '" target="_blank" rel="noopener">Написать в Telegram</a> ' +
       '<button class="btn" data-home>К заданиям</button></div></div>');
+  }
+
+  // On hold (a one-off pause set by the teacher): the clock stands still until the student resumes.
+  const leftWords = (sec) => (numOk(sec) && sec > 0 ? 'Осталось ' + C.durationText(Math.floor(sec / 60)) : '');
+  function paintPaused(v) {
+    const left = leftWords(v.left);
+    appEl.innerHTML = shell('<div class="vintro"><h2>' + titleOf(v) + '</h2>' +
+      '<p class="lead">Пробник на паузе, время сейчас не идёт.' + (left ? ' ' + left + '.' : '') + '</p>' +
+      '<p class="mode-hint">Когда будешь готов продолжить, нажми «Возобновить» — время пойдёт с того места, где остановилось.</p>' +
+      '<div class="vactions"><button class="btn primary" data-ex-resume>Возобновить</button> ' +
+      '<button class="btn" data-home>К заданиям</button></div></div>');
+    appear();
+  }
+  async function resumeNow(btn) {
+    const id = st.id;
+    if (!id || btn.disabled) return;
+    btn.disabled = true;
+    let r = null;
+    try { r = await xapi('/' + encodeURIComponent(id) + '/resume', { method: 'POST' }); } catch (e) { r = null; }
+    if (st.id !== id) return;
+    // 409: already resumed (another tab) — the server says which screen is next either way
+    if (r && (r.status === 200 || r.status === 409)) { renderExam(id); return; }
+    btn.disabled = false;
+    note('Не получилось возобновить', 'Проверь интернет и нажми «Возобновить» ещё раз.');
   }
 
   // ---- the open phase ----
@@ -1366,6 +1392,8 @@
     if (open) { go('#/exam/' + open.dataset.exam); return; }
     if (t.closest('[data-ex-retry]')) { if (st.id) renderExam(st.id); else if (parseRoute().view === 'exams') renderMy(); return; }
     if (t.closest('[data-ex-finish]') && s) { finishNow(s); return; }
+    const res = t.closest('[data-ex-resume]');
+    if (res) { resumeNow(res); return; }
     if (t.closest('[data-ex-done]') && s) { doneNow(s); return; }
     const pic = t.closest('.ex-z img');
     if (pic && !pic.classList.contains('ex-broken')) { openZoom(pic); return; }       // a photo is opened in every phase, also read-only
@@ -1415,7 +1443,7 @@
     if (r.status === 401 || r.status === 403) { fail('Чтобы увидеть свои пробники, войди в тренажёр через Telegram.'); return; }
     if (r.status !== 200 || !r.json || !Array.isArray(r.json.items)) { fail('Не получилось загрузить пробники.', true); return; }
     try {
-      const ahead = (st.mine || []).filter((it) => it.phase === 'scheduled' || it.phase === 'submitted' || it.phase === 'open' || it.phase === 'photos')
+      const ahead = (st.mine || []).filter((it) => it.phase === 'scheduled' || it.phase === 'submitted' || it.phase === 'open' || it.phase === 'photos' || it.phase === 'paused')
         .sort((a, b) => PRIO[a.phase] - PRIO[b.phase]);
       const top = ahead.length ? '<section class="my-card"><h3>Ждут тебя</h3>' + ahead.map(bannerOf).join('') + '</section>' : '';
       appEl.innerHTML = shell(window.ExamMyView.pageHtml(r.json.items, { seen: seen(), top: top }));
@@ -1427,7 +1455,7 @@
 
   // The dot on the header button: an unseen result, or an exam to take now.
   function dot() {
-    try { return !!(st.mine || []).some((it) => (it.phase === 'checked' && seen().indexOf(it.id) < 0) || it.phase === 'open' || it.phase === 'photos'); }
+    try { return !!(st.mine || []).some((it) => (it.phase === 'checked' && seen().indexOf(it.id) < 0) || it.phase === 'open' || it.phase === 'photos' || it.phase === 'paused'); }
     catch (e) { return false; }
   }
   function paintDot() { const b = document.getElementById('exams-btn'); if (b) b.classList.toggle('has-dot', dot()); }

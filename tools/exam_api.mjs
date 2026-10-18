@@ -4,6 +4,8 @@
 //   node tools/exam_api.mjs assign --student "Иван" --exam 3 --at "2026-10-09 18:00" [--minutes 235] [--yes]
 //   node tools/exam_api.mjs delete --exam 3 [--yes]
 //   node tools/exam_api.mjs link --exam 3 --url https://… [--yes]   (link to the solutions, shown only on the check page)
+//   node tools/exam_api.mjs pause --student "Иван" --exam 3 [--at "2026-10-18 14:05"] [--add 15] [--yes]
+//     (a one-off exception: puts a running exam on hold; the student resumes it with a button; --add = extra minutes)
 // --exam takes a catalog number ("3" or "№3", as in `exams` and in the panel) or a title / fragment.
 // DEFAULT TARGET IS PRODUCTION (https://api.kirillnyun.space/api). For tests always pass
 // --api http://127.0.0.1:8090/api (local dev stack). Every write command prints the target host first.
@@ -29,9 +31,9 @@ process.on('uncaughtException', () => die('Непредвиденная ошиб
 process.on('unhandledRejection', () => die('Непредвиденная ошибка инструмента (подробности скрыты, чтобы не показать секреты).'));
 
 // ---- arguments: unknown options are refused (a typo must never silently fall back to production) ----
-const VALUE_OPTS = ['api', 'link-file', 'student', 'exam', 'at', 'minutes', 'url', 'date', 'title', 'scores', 'test', 'id'], FLAG_OPTS = ['yes'];
-const COMMANDS = ['exams', 'students', 'status', 'upload', 'assign', 'delete', 'link', 'history'];
-const USAGE = 'Команды: exams | students | status | upload <exam.json> | assign --student --exam --at [--minutes] [--yes] | delete --exam [--yes] | link --exam --url https://… [--yes]\n'
+const VALUE_OPTS = ['api', 'link-file', 'student', 'exam', 'at', 'minutes', 'url', 'date', 'title', 'scores', 'test', 'id', 'add'], FLAG_OPTS = ['yes'];
+const COMMANDS = ['exams', 'students', 'status', 'upload', 'assign', 'delete', 'link', 'history', 'pause'];
+const USAGE = 'Команды: exams | students | status | upload <exam.json> | assign --student --exam --at [--minutes] [--yes] | delete --exam [--yes] | link --exam --url https://… [--yes] | pause --student --exam [--at] [--add минуты] [--yes]\n'
   + '| history add --student --date ГГГГ-ММ-ДД --title --scores "<20 значений>" --test [--yes] | history list --student | history delete --student --id [--yes]\n'
   + 'Адрес сервера по умолчанию — боевой. Для проверок всегда указывай --api http://127.0.0.1:8090/api';
 const raw = process.argv.slice(2), cmd = raw.shift();
@@ -80,7 +82,7 @@ catch { die('--api должен быть адресом вида https://хос�
 const IS_LOCAL = LOOPBACK.test(new URL(API).hostname);
 const LINK = opt('link-file', join(homedir(), 'ege-teacher-link.txt'));
 
-const WRITES = ['upload', 'assign', 'delete', 'link'];
+const WRITES = ['upload', 'assign', 'delete', 'link', 'pause'];
 if (WRITES.includes(cmd)) console.log('Сервер: ' + HOST + (IS_LOCAL ? ' (локальный, для проверки)' : ' (БОЕВОЙ)'));
 if (cmd === 'history' && pos[0] !== 'list') console.log('Сервер: ' + HOST + (IS_LOCAL ? ' (локальный, для проверки)' : ' (БОЕВОЙ)'));
 
@@ -131,7 +133,7 @@ if (cmd === 'exams') {
 } else if (cmd === 'students') {
   (await people()).forEach((p) => console.log('• ' + p.name + ' (' + p.login + ')' + (p.lead ? ' — из канала' : '')));
 } else if (cmd === 'status') {
-  const [asg, ex, ph, ppl] = await Promise.all([all('/collections/exam_assignments/records?fields=id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1'),
+  const [asg, ex, ph, ppl] = await Promise.all([all('/collections/exam_assignments/records?fields=id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,paused'),
     exams(), all('/collections/exam_photos/records?fields=id,assignment'), people()]);
   const now = Math.floor(Date.now() / 1000);
   asg.sort((a, b) => b.start - a.start).forEach((a) => {
@@ -168,6 +170,32 @@ if (cmd === 'exams') {
   const r = await call('POST', '/ege/exams/assign', { user: s.item.id, exam: e.item.id, start, duration: Math.round(minutes * 60) });
   if (r.status !== 200) die('Сервер не принял назначение (ответ ' + r.status + '). Подробности скрыты; проверь `status`: возможно, этот пробник уже назначен ученику.');
   console.log('Назначено. Ученик получил сообщение.');
+} else if (cmd === 'pause') {
+  const [list, ppl] = await Promise.all([exams(), people()]);
+  const s = pickOne(ppl, opt('student'), (p) => p.name), e = pickExam(list, opt('exam'), (x) => x.title);
+  if (s.error) die('Ученик: ' + s.error); if (e.error) die('Пробник: ' + e.error);
+  const now = Math.floor(Date.now() / 1000);
+  let at = now;
+  if (opt('at') !== undefined) {
+    const w = checkWhen(opt('at'), now);
+    if (w.error) die(w.error);
+    if (w.ts > now) die('Момент паузы не может быть в будущем.');
+    at = w.ts;
+  }
+  const add = Number(opt('add', '0'));
+  if (!(Number.isInteger(add) && add >= 0 && add <= 60)) die('--add: целое число минут от 0 до 60.');
+  const rows = await all('/collections/exam_assignments/records?filter=' + encodeURIComponent('user="' + s.item.id + '" && exam="' + e.item.id + '"') + '&fields=id,start,duration,opened,finished,photos_done,checked,paused');
+  const a = rows[0];
+  if (!a) die('У ' + s.item.name + ' нет назначения на ' + examName(list, e.item) + '.');
+  if (Core.phase(a, now) !== 'open' || !a.opened) die('Пробник сейчас не идёт (статус: ' + P.PHASE_TEXT[Core.phase(a, now)] + '). Ничего не сделано.');
+  const left = Math.max(0, a.start + a.duration - at);
+  console.log('Поставлю на паузу: ' + s.item.name + ' · ' + examName(list, e.item) + ' · с ' + fmt(at) + ' (МСК).');
+  console.log('После «Возобновить» у ученика будет ' + Math.floor(left / 60) + ' мин' + (add ? ' + ' + add + ' мин сверху = ' + (Math.floor(left / 60) + add) + ' мин' : '') + '. Сообщение в Telegram не уходит.');
+  if (!flag('yes')) die('Ничего не сделано. Подтверди и добавь --yes.', 3);
+  const r = await call('POST', '/ege/exams/' + a.id + '/pause', { at, add: add * 60 });
+  if (r.status === 404) die('Сервер не знает маршрута паузы (404): сначала выложи серверную часть из backend/README.md.');
+  if (r.status !== 200) die('Сервер не принял паузу (ответ ' + r.status + ').');
+  console.log('На паузе. У ученика на странице пробника кнопка «Возобновить».');
 } else if (cmd === 'delete') {
   const list = await exams(), e = pickExam(list, opt('exam'), (x) => x.title);
   if (e.error) die('Пробник: ' + e.error);

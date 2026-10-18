@@ -59,7 +59,7 @@
     return h ? h + ':' + p(m) + ':' + p(s) : m + ':' + p(s);
   }
 
-  const PHASE_TEXT = { scheduled: 'назначен', open: 'идёт', photos: 'фото', submitted: 'ждёт проверки', checked: 'проверен', missed: 'пропущен' };
+  const PHASE_TEXT = { scheduled: 'назначен', open: 'идёт', photos: 'фото', submitted: 'ждёт проверки', checked: 'проверен', missed: 'пропущен', paused: 'на паузе' };
 
   /* A draft of the check form (points and comments typed but not yet sent): kept in the teacher's own browser so that
      "back", a link, or an expired sign-in does not lose it. Read back defensively: only numeric task keys, whole points
