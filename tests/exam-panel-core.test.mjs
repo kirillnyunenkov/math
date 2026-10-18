@@ -38,7 +38,7 @@ test('fmtSec', () => {
 });
 
 test('every phase the server can return has a label', () => {
-  for (const p of ['scheduled', 'open', 'photos', 'submitted', 'checked', 'missed']) assert.ok(P.PHASE_TEXT[p], p);
+  for (const p of ['scheduled', 'open', 'photos', 'submitted', 'checked', 'missed', 'paused']) assert.ok(P.PHASE_TEXT[p], p);
 });
 
 test('activitySummary tolerates malformed entries and non-array logs', () => {

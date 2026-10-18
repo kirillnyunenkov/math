@@ -5,7 +5,9 @@
 
    All times are unix seconds, 0 = not set. The window is hard:
    end = start + duration, a late start does not move it. After the window
-   (or an early finish) the student has PHOTO_GRACE seconds for photos only. */
+   (or an early finish) the student has PHOTO_GRACE seconds for photos only.
+   `paused` (set by the teacher as a one-off exception): the window stands still
+   from that moment; the student's "resume" adds the pause to the duration. */
 (function (root) {
   'use strict';
 
@@ -21,6 +23,7 @@
   function phase(a, now) {
     if (now < a.start) return 'scheduled';
     if (a.checked) return 'checked';
+    if (a.paused && a.opened && !a.finished) return 'paused';
     const t = times(a);
     // never opened: the statements were not seen, so the exam stays reusable
     if (!a.opened) return now < t.end ? 'open' : 'missed';

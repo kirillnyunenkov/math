@@ -29,6 +29,7 @@ const TEXT = {
   botNotOpened: "Сначала открой пробник в тренажёре — фото принимаются после этого.",
   botOkAlbum: (title) => "Принял фото к пробнику «" + title + "». Все присланные фото видны в тренажёре.",
   botOk: (title, k) => "Принял фото к пробнику «" + title + "» (всего " + k + ").",
+  botPaused: "Пробник сейчас на паузе. Открой его в тренажёре и нажми «Возобновить» — после этого фото снова принимаются.",
 };
 const MAX_PHOTOS = 5, MAX_FB_PHOTOS = 5, MAX_BOT_PHOTOS = 15, MAX_LOG = 3000, MIN_DURATION = 60, MAX_DURATION = 21600;
 const BOT_PHOTO_AGE = 86400;   // a photo to the bot is taken for an exam that ended at most this long ago
@@ -53,7 +54,7 @@ function J(rec, field, fallback) {
 function shortsOf(tasks) { return tasks.filter((x) => x && x.kind === "short").map((x) => String(x.n)); }
 function shape(rec) {
   return { start: rec.getInt("start"), duration: rec.getInt("duration"), opened: rec.getInt("opened"),
-    finished: rec.getInt("finished"), photos_done: rec.getInt("photos_done"), checked: rec.getInt("checked") };
+    finished: rec.getInt("finished"), photos_done: rec.getInt("photos_done"), checked: rec.getInt("checked"), paused: rec.getInt("paused") };
 }
 // "в пятницу, 9 октября, в 18:00" — Moscow time is UTC+3 all year round.
 function when(ts) {
@@ -232,6 +233,8 @@ function meta(rec, exam, t) {
     duration: rec.getInt("duration"), phase: phase, via_tg: rec.getBool("via_tg"), until: untilOf(a, phase) };
   // Only the photo phase needs these (the banner and the screen word it differently); the exam is parsed for it alone.
   if (phase === "photos") { m.early = rec.getInt("finished") > 0; m.nolong = !hasLong(exam); }
+  // on hold: the time that will be left once the student resumes
+  if (phase === "paused") m.left = Math.max(0, Core.times(a).end - a.paused);
   return m;
 }
 
@@ -408,6 +411,37 @@ function done(e) {
   const a = during(e, ["photos"], (r, a) => { r.set("photos_done", a.t); });
   if (a.res) return;
   settle(a.rec, a.exam, a.t);
+  return e.json(200, { ok: true });
+}
+
+// The teacher puts one running exam on hold (a one-off exception). `at` (unix seconds,
+// optional) backdates the pause to the moment the student actually stopped; it may not
+// be before the exam was opened, after now, or after the end of the window. `add`
+// (seconds, optional, up to an hour) gives the student that much extra time.
+function pause(e) {
+  if (!isTeacher(e)) return fail(e, 403, "forbidden");
+  const b = e.requestInfo().body || {}, t = nowS(), at = b.at == null ? t : intOf(b.at), add = b.add == null ? 0 : intOf(b.add);
+  if (at === null || at > t || add === null || add < 0 || add > 3600) return fail(e, 400, "bad input");
+  let bad = "";
+  const out = mutate(e.request.pathValue("id"), (r) => {
+    const a = shape(r);
+    if (Core.phase(a, t) !== "open" || !a.opened) { bad = "not running"; return false; }
+    if (at < a.opened || at >= Core.times(a).end) { bad = "bad time"; return false; }
+    r.set("paused", at);
+    if (add) r.set("duration", r.getInt("duration") + add);
+  });
+  if (out === null) return fail(e, 404, "not found");
+  if (bad) return fail(e, bad === "bad time" ? 400 : 409, bad);
+  return e.json(200, { ok: true });
+}
+
+// The student resumes: the window moves on by the length of the pause.
+function resume(e) {
+  const a = during(e, ["paused"], (r, a) => {
+    r.set("duration", r.getInt("duration") + Math.max(0, a.t - r.getInt("paused")));
+    r.set("paused", 0);
+  }, null, true);
+  if (a.res) return;
   return e.json(200, { ok: true });
 }
 
@@ -668,6 +702,7 @@ function botPhoto(msg) {
   if (!mark) { say(TEXT.botNoExam); return true; }
   const refuse = (text) => { if (!mark.quiet) say(text); return true; };
   if (mark.phase === "missed" || mark.phase === "scheduled") return refuse(TEXT.botNoExam);
+  if (mark.phase === "paused") return refuse(TEXT.botPaused);
   if (mark.phase !== "open" && mark.phase !== "photos") return refuse(TEXT.botLate);
   if (mark.phase === "open" && !mark.opened) return refuse(TEXT.botNotOpened);   // the statements were never seen
 
@@ -707,6 +742,6 @@ function botPhoto(msg) {
 }
 
 module.exports = { assign: assign, move: move, cancel: cancel, mine: mine, get: get,
-  answers: answers, away: away, finish: finish, done: done, viaTg: viaTg,
+  answers: answers, away: away, finish: finish, done: done, viaTg: viaTg, pause: pause, resume: resume,
   addPhoto: addPhoto, delPhoto: delPhoto, photoList: photoList, botPhoto: botPhoto, check: check, tick: tick,
   summary: summary, histAdd: histAdd, histList: histList, histDel: histDel };

@@ -198,7 +198,7 @@
      (in one run of text the status chip landed mid-line and the next line began with a dot) */
   .asg-info{display:flex;flex-direction:column;gap:2px;flex:1 1 220px;min-width:0;}
   .asg-top{display:flex;gap:var(--s2);align-items:baseline;flex-wrap:wrap;}
-  .chip.ex-open,.chip.ex-photos{background:var(--accent-soft);color:var(--accent);}
+  .chip.ex-open,.chip.ex-photos,.chip.ex-paused{background:var(--accent-soft);color:var(--accent);}
   .chip.ex-submitted{background:var(--warn-soft);color:var(--warn-text);}
   .chip.ex-checked{background:var(--ok-soft);color:var(--ok-text);}
   .chip.ex-missed{background:var(--err-soft);color:var(--err-text);}
@@ -503,7 +503,7 @@ async function load(){
     const m=/ (\d+)$/.exec(e.message);if(!m||m[1]!=='404')bad.push(m?m[1]:'net');return [];});
   const [exams,asg,photos]=await Promise.all([
     soft(all('exams',null,'id,title,full,created','created,id')),
-    soft(all('exam_assignments',null,'id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,created')),
+    soft(all('exam_assignments',null,'id,user,exam,start,duration,opened,finished,photos_done,settled,checked,p1,paused,created')),
     soft(all('exam_photos',null,'id,assignment,user,n,file'))]);
   data.exams=exams;data.asg=asg;data.photos=photos;data.examErr=bad[0]||null;
   /* Teacher-only names. A server without the collection just means no names yet. */
@@ -577,7 +577,7 @@ const examLabel=e=>`№${examNo(e.id)} · ${e.title}`;
 const dispName=u=>(data.alias&&data.alias[u.id])||u.name||u.login;
 const nameOf=uid=>{const u=(data.userOf||{})[uid];return u?dispName(u):'—';};
 const realName=u=>data.alias&&data.alias[u.id]&&(u.name||u.login)!==data.alias[u.id]?` <span class="muted">(${esc(u.name||u.login)})</span>`:'';
-const phaseOf=a=>ExamCore.phase({start:a.start,duration:a.duration,opened:a.opened,finished:a.finished,photos_done:a.photos_done,checked:a.checked},nowS());
+const phaseOf=a=>ExamCore.phase({start:a.start,duration:a.duration,opened:a.opened,finished:a.finished,photos_done:a.photos_done,checked:a.checked,paused:a.paused},nowS());
 const asgOfUser=uid=>(data.asg||[]).filter(a=>a.user===uid);
 const photosOfAsg=id=>(data.photos||[]).filter(p=>p.assignment===id);
 // timestamps in seconds; anything that is not a sane number is shown as a dash
@@ -923,7 +923,7 @@ function renderExams(){
     <tbody>${rows.map(a=>asgRow(a,kind==='live'||kind==='missed'?asgActs(a):'',kind)).join('')}</tbody></table></div>`:'';
   const toCheck=by('submitted').sort(newest),missed=by('missed').sort(newest),done=by('checked').sort(newest).slice(0,20);
   // running and photo-collecting first, then scheduled with the nearest start on top
-  const live=[...by('open').sort(oldest),...by('photos').sort(oldest),...by('scheduled').sort(oldest)];
+  const live=[...by('open').sort(oldest),...by('paused').sort(oldest),...by('photos').sort(oldest),...by('scheduled').sort(oldest)];
   const sec=(title,html,empty)=>`<div class="panel"><h3>${title}</h3>${html||`<p class="muted">${empty}</p>`}</div>`;
   const times=id=>A.filter(a=>a.exam===id).length;
   const warn=data.examErr?`<p class="muted">Не удалось загрузить часть данных пробников${/^\d+$/.test(data.examErr)?` (код ${esc(data.examErr)})`:''}. Списки могут быть неполными.</p>`:'';

@@ -48,3 +48,12 @@ test('total adds part 1 and the teacher points, capped by each task max', () => 
   assert.deepEqual(C.total(tasks, 1, { 13: { pts: 2 }, 14: { pts: 9 } }), { pts: 6, max: 7 });
   assert.deepEqual(C.total(tasks, 2, null), { pts: 2, max: 7 });
 });
+
+test('paused: the phase stands still until resumed; only an opened, unfinished exam pauses', () => {
+  const x = a({ opened: 1005, paused: 1040 });
+  assert.equal(C.phase(x, 1041), 'paused');
+  assert.equal(C.phase(x, 99999), 'paused');
+  assert.equal(C.phase(a({ paused: 1040 }), 1041), 'open');                 // never opened: a pause means nothing
+  assert.equal(C.phase(a({ opened: 1005, finished: 1030, paused: 1040 }), 1041), 'photos');
+  assert.equal(C.phase(a({ opened: 1005, paused: 1040, checked: 2000 }), 2001), 'checked');
+});
