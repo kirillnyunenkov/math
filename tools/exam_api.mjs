@@ -187,7 +187,8 @@ if (cmd === 'exams') {
   const rows = await all('/collections/exam_assignments/records?filter=' + encodeURIComponent('user="' + s.item.id + '" && exam="' + e.item.id + '"') + '&fields=id,start,duration,opened,finished,photos_done,checked,paused');
   const a = rows[0];
   if (!a) die('У ' + s.item.name + ' нет назначения на ' + examName(list, e.item) + '.');
-  if (Core.phase(a, now) !== 'open' || !a.opened) die('Пробник сейчас не идёт (статус: ' + P.PHASE_TEXT[Core.phase(a, now)] + '). Ничего не сделано.');
+  if (Core.phase(a, now) !== 'open') die('Пробник сейчас не идёт (статус: ' + P.PHASE_TEXT[Core.phase(a, now)] + '). Ничего не сделано.');
+  if (!a.opened) die('Ученик ещё не открывал этот пробник, ставить на паузу нечего. Ничего не сделано.');
   const left = Math.max(0, a.start + a.duration - at);
   console.log('Поставлю на паузу: ' + s.item.name + ' · ' + examName(list, e.item) + ' · с ' + fmt(at) + ' (МСК).');
   console.log('После «Возобновить» у ученика будет ' + Math.floor(left / 60) + ' мин' + (add ? ' + ' + add + ' мин сверху = ' + (Math.floor(left / 60) + add) + ' мин' : '') + '. Сообщение в Telegram не уходит.');
