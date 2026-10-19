@@ -154,13 +154,14 @@ function webhook(e) {
 }
 
 // Everyone registered through the bot, with a cheap activity summary, so the
-// panel does not have to download every lead's journal.
+// panel does not have to download every lead's journal. `marks` counts every mark,
+// including the ones made on a device before the first sign-in (source "import").
 function leads(e) {
   if (!e.auth || e.auth.collection().name !== "users" || e.auth.get("role") !== "teacher") return e.json(403, { message: "forbidden" });
   const rows = arrayOf(new DynamicModel({ id: "", user: "", username: "", mine: false, created: "", name: "", active: false, marks: 0, last: "", placeholder: false }));
   $app.db().newQuery(
     "SELECT p.id, p.user, p.username, p.mine, p.created, u.name, u.active, (substr(p.tg_id, 1, 1) = '0') AS placeholder, " +
-    "(SELECT COUNT(*) FROM events e WHERE e.user = p.user AND e.kind = 'mark' AND e.source != 'import') AS marks, " +
+    "(SELECT COUNT(*) FROM events e WHERE e.user = p.user AND e.kind = 'mark') AS marks, " +
     "COALESCE((SELECT MAX(e.created) FROM events e WHERE e.user = p.user), '') AS last " +
     "FROM tg_profiles p JOIN users u ON u.id = p.user ORDER BY p.created DESC"
   ).all(rows);
