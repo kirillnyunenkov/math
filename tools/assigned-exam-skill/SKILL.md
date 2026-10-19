@@ -17,8 +17,11 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
   commit or `/tmp`. Work in `~/math-source/exams/<slug>/` (slug: `proba-<n>` or `YYYY-MM-DD-<name>`).
 - Never print, log or paste `~/ege-teacher-link.txt`, a token or any secret. The tools read the file themselves.
 - Never invent answers. Recompute every part 1 answer yourself (Python/sympy) and compare with the source.
-- **Production writes are the owner's to run.** `tools/exam_api.mjs` targets production by default. You never run
-  `upload`, `assign` or `delete` against production: you give Кирилл the command in a bash block. The read-only
+- **Production writes are the owner's to run, unless he says otherwise in that request.** `tools/exam_api.mjs` targets
+  production by default. By default you never run `upload`, `assign`, `delete` or `history add|delete` against production:
+  you give Кирилл the command in a bash block. If he writes "делай сам" (or similar) for a request, you may run the write with
+  `--yes` yourself, but only after his explicit yes that names the exact data (student, dates, titles, scores). The permission
+  covers that request only, never later ones. The read-only
   `exams`, `students` and `status` you may run for him. To test the tools, use only a local dev stack (`node tools/exam-dev-stack.mjs`), always with an explicit
   `--api http://127.0.0.1:8090/api --link-file <throwaway file>`.
 - Assigning sends a Telegram message to the student. Run `--yes` (or give him the `--yes` command) only after
@@ -130,6 +133,34 @@ with the next free number from `exams`) — the variant is always full (`full: t
 8. **Status:** `node tools/exam_api.mjs status` answers "что назначено / ждёт проверки" (read-only, you may run it).
    Part 2 is checked in the panel: `teacher.html#/check/<assignment id>`; the bot sends that
    link when a student submits.
+
+## Archive exams (results written before the trainer: «Мои пробники»)
+
+Kirill sends a table or screenshot of old results (a Google sheet: tasks 1-20 down, exams across, with dates,
+the primary score row and the test score row). Each exam becomes one entry on the student's page «Мои пробники».
+Run `git pull` in `~/math` first (the `history` command must exist). Never put student data into files of the repo.
+
+- **Cell meaning:** empty = the student did not solve it; `0` = solved, got 0; `-` = the task was not in the variant
+  (old format had no task 6, so the maximum was 32). Maxima by task: 1-13: 1; 14: 2; 15: 3; 16: 2; 17: 2; 18: 3; 19: 4; 20: 4.
+- **Test score:** never computed for old exams. It is a fixed number taken from Kirill's sheet (`--test`). There is NO
+  conversion scale for 32 points anywhere in the code, and you must not add one. Check instead that the primary score
+  you get from the cells equals the primary score row of the sheet.
+- **Year:** sheets show only `dd.mm`. Infer the year from the order (dates run forward in time, the last one is in the past),
+  say so, and get his yes on the years before writing. Default title if he gives none: «Вариант N» as in the sheet.
+- **Student:** `node tools/exam_api.mjs students` (read-only). `--student` accepts a name or a part of it; an exact match wins.
+  Two similar names: ask which one.
+- **One exam:** `node tools/exam_api.mjs history add --student "<name>" --date YYYY-MM-DD --title "<title>" --scores "<20 values>" --test <0..100>`
+  `--scores` is 20 comma-separated values for tasks 1..20, e.g. `1,1,,1,1,-,1,,,1,0,1,,,,2,,,,`. Without `--yes` the tool prints
+  the check table (every task, `Первичный балл: N из M`, the test score as given) and writes nothing. Show him a compact table
+  (title, date, primary, test) and ask for his yes naming the student. Then add `--yes`.
+  `history list --student "<name>"` shows what is recorded (with row ids); `history delete --student "<name>" --id <id> --yes` removes one
+  row (it checks that the id belongs to that student). Duplicate (same student, date and title) is refused.
+- **Many exams in a row:** the server limits logins (HTTP 429, nothing is written). Leave about 8 seconds between commands
+  (a small script that runs them one after another, run in the background, stops at the first failure and ends with `history list`).
+  Dry-run (no `--yes`) of 8 exams also logs in 8 times: do the dry-run for one exam, or space them out too.
+- **Rollout:** the page needs the server part of PR «Мои пробники» (collection `exam_history`): check
+  `curl -s -o /dev/null -w '%{http_code}\n' https://api.kirillnyun.space/api/ege/exams/summary` prints 403 (404 = not deployed).
+- **Check:** after writing, show the `history list` output; tell him to open «Пробники» in the trainer as that student.
 
 ## When something fails
 

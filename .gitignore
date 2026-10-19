@@ -8,5 +8,4 @@ tools/scrape_ege.py
 tools/compare_ege.py
 tools/remap_solutions.py
 tools/make_prototypes.py
-tools/make_migration.py
 tools/README.md
