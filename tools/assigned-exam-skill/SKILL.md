@@ -1,6 +1,6 @@
 ---
 name: assigned-exam
-description: Prepare, upload and assign Kirill's own mock exams (пробники) for the exam trainer, and report what is assigned or waiting for a check. Use when Кирилл sends the source of a new пробник (PDF, Word, text, photos), asks to load a пробник into the catalog, asks to assign one to a student for a date and time, or asks what is assigned or waiting for a check.
+description: Prepare, upload and assign Kirill's own mock exams (пробники) for the exam trainer, and report what is assigned or waiting for a check. Use when Кирилл sends the source of a new пробник (PDF, Word, text, photos), asks to load a пробник into the catalog, asks to assign one to a student for a date and time, asks what is assigned or waiting for a check, asks to pause a running пробник or give a student extra time («поставь на паузу», «добавь 15 минут»), asks to attach a link to the solutions of a пробник, or sends old results to record in «Мои пробники».
 ---
 
 # Assigned mock exams (пробники от преподавателя)
@@ -18,7 +18,7 @@ assign when he explicitly asks. Run every command from the repo root (`~/math`).
 - Never print, log or paste `~/ege-teacher-link.txt`, a token or any secret. The tools read the file themselves.
 - Never invent answers. Recompute every part 1 answer yourself (Python/sympy) and compare with the source.
 - **Production writes are the owner's to run, unless he says otherwise in that request.** `tools/exam_api.mjs` targets
-  production by default. By default you never run `upload`, `assign`, `delete` or `history add|delete` against production:
+  production by default. By default you never run `upload`, `assign`, `delete`, `pause`, `link` or `history add|delete` against production:
   you give Кирилл the command in a bash block. If he writes "делай сам" (or similar) for a request, you may run the write with
   `--yes` yourself, but only after his explicit yes that names the exact data (student, dates, titles, scores). The permission
   covers that request only, never later ones. The read-only
@@ -133,6 +133,25 @@ with the next free number from `exams`) — the variant is always full (`full: t
 8. **Status:** `node tools/exam_api.mjs status` answers "что назначено / ждёт проверки" (read-only, you may run it).
    Part 2 is checked in the panel: `teacher.html#/check/<assignment id>`; the bot sends that
    link when a student submits.
+
+## During and after an exam: pause, link to the solutions
+
+Both are production writes: give him the command in a bash block (or run it with `--yes` under the "делай сам" rule).
+Without `--yes` each command prints its plan and writes nothing; read-only `students` / `exams` resolve names first.
+
+- **Pause** (a one-off exception: a student had to stop in the middle, the connection dropped, etc.):
+  `node tools/exam_api.mjs pause --student "<name>" --exam <№> [--at "YYYY-MM-DD HH:MM"] [--add <minutes>]`.
+  From `--at` (Moscow time, default now; it may be in the past, back to the moment the student actually stopped, but not
+  before they opened the exam and not in the future) the exam window stands still: the student sees no tasks and a
+  «Возобновить» button. On resume the paused time is added back, plus `--add` extra minutes (whole number, 0-60).
+  No Telegram message is sent, so tell him to warn the student himself. The plan line shows how many minutes the student
+  will have after resuming: repeat it to him. Refused (nothing written) when the exam is not running now or the student
+  has not opened it yet: there is nothing to pause, tell him so. A 400 means `--at` is outside the time the exam was open.
+  404 from the server = the pause route is not deployed (backend/README.md, "Pausing a running exam").
+- **Link to the solutions:** `node tools/exam_api.mjs link --exam <№> --url https://…` attaches a link (for example a
+  video or a PDF with the разбор) to a catalog exam. It is shown only to Кирилл on the check page in the panel, never to
+  students. Only a plain `https://` link up to 500 characters; a new link replaces the old one. A 400 from the server = the
+  migration `1790800016_exam_solution_url.js` is not applied.
 
 ## Archive exams (results written before the trainer: «Мои пробники»)
 
