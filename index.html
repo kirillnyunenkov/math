@@ -1716,6 +1716,7 @@ var THEME_COLOR={light:'#f2efe7',dark:'#161713'};
 
 <script src="sync-core.js"></script>
 <script src="config.js"></script>
+<script src="archive-data.js"></script>
 <script>
 
 /* ============================================================ ЛОГИКА — не трогай ============================================================ */
@@ -2841,6 +2842,7 @@ function doInstall(){
   else showHint(HINT_INSTALLED);
 }
 function parseRoute(){
+  const archive=location.hash.match(/^#\/archive(?:\/(2023|2024))?\/?$/);if(archive)return{view:'archive',year:archive[1]||''};
   if(/#\/help\b/.test(location.hash))return{view:'help'};
   if(/#\/v\b/.test(location.hash))return{view:'variant'};
   if(/#\/exams\b/.test(location.hash))return{view:'exams'};
@@ -2942,6 +2944,7 @@ function renderHub(){
     <div class="hps-bottom">
       <span class="hps-legend"><span><i class="dot g"></i>Умею <b>${allG}</b></span><span><i class="dot o"></i>Повторить <b>${allO}</b></span><span><i class="dot b"></i>Разобраться <b>${allB}</b></span><span><i class="dot n"></i>Осталось <b>${left}</b></span></span>
       <button class="btn primary hps-cta" data-variant>Собрать вариант <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12h14"/><path d="M13 6.5 18.5 12 13 17.5"/></svg></button>
+      <button class="btn" data-archive>ЕГЭ прошлых лет</button>
     </div>
   </div>`;
   const noteHTML=resetNote?`<div class="hub-note">
@@ -3275,7 +3278,7 @@ function render(){
   burgerEl.style.display='';
   viewFilter='all';filterKeep.clear();
   const r=parseRoute();
-  const key=r.view+(r.n||'');
+  const key=r.view+(r.n||r.year||'');
   if(key!==lastRouteKey){lastRouteKey=key;scrollTop();}
   headerEl.style.display=r.view==='task'?'none':'';
   /* Считаем сразу, не дожидаясь наблюдателя: он догоняет изменения
@@ -3298,6 +3301,7 @@ function render(){
   else if(r.view==='exam'&&window.ExamUI)exUI('render',r.id);
   else if(r.view==='exams'&&window.ExamUI&&typeof window.ExamUI.renderMy==='function')exUI('renderMy');
   else if(r.view==='variant')renderVariant();
+  else if(r.view==='archive')ArchiveUI.render(r.year);
   else if(r.view==='task')renderTask(r.n);
   else renderHub();
 }
@@ -3867,5 +3871,6 @@ window.addEventListener('DOMContentLoaded',()=>{
 <script src="exam-history-core.js"></script>
 <script src="exam-my-view.js"></script>
 <script src="exam.js"></script>
+<script src="archive.js"></script>
 </body>
 </html>
