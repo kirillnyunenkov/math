@@ -125,7 +125,7 @@ function doneMsg(id, exam, tasks, t) {
     return () => {
       const k = photosOf(r).length;
       // an exam without part 2 has nothing to say about it
-      const how = !hasLongIn(tasks) ? "" : k ? TEXT.howPhotos(k) : r.getBool("via_tg") ? TEXT.howTg : TEXT.howNone;
+      const how = !hasLongIn(tasks) ? "" : k ? TEXT.howPhotos(k) : r.getBool("via_tg") && !r.getInt("checked") ? TEXT.howTg : TEXT.howNone;
       const name = $app.findRecordById("users", r.getString("user")).getString("name");
       return tg.send(chat, TEXT.done(name, exam.getString("title"), r.getInt("p1"), max1, how),
         site() + "teacher.html#/check/" + id, TEXT.btnCheck);
@@ -139,7 +139,7 @@ function checkedMsg(id, exam, tasks, t) {
     if (!r.getInt("checked")) return null;
     return () => {
       const sum = Core.total(tasks, r.getInt("p1"), J(r, "part2", {}));
-      return tell(r.getString("user"), TEXT.checked(exam.getString("title"), sum.pts, sum.max, hasLongIn(tasks)), examUrl(id), TEXT.btnResult);
+      return tell(r.getString("user"), TEXT.checked(exam.getString("title"), sum.pts, sum.max, hasLongIn(tasks) && photosOf(r).length > 0), examUrl(id), TEXT.btnResult);
     };
   });
 }
@@ -256,15 +256,22 @@ function photosOf(rec) {
 function settle(rec, exam, t) {
   if (rec.getInt("settled") || Core.phase(shape(rec), t) !== "submitted") return rec;
   const tasks = J(exam, "tasks", []), key = J(exam, "key", {});   // parsed before the write, not inside it
-  let cur = rec, did = false;
-  mutate(rec.id, (r) => {
+  let cur = rec, did = false, autoChecked = false;
+  mutate(rec.id, (r, tx) => {
     cur = r;
     if (r.getInt("settled") || Core.phase(shape(r), t) !== "submitted") return false;
     const g = Ans.gradePart1(tasks, key, J(r, "answers", {}));
     r.set("p1", g.p1); r.set("ok", g.ok); r.set("settled", t);
+    if (!tx.countRecords("exam_photos", $dbx.hashExp({ assignment: r.id }))) {
+      r.set("checked", t);
+      autoChecked = true;
+    }
     did = true;
   });
-  if (did) doneMsg(rec.id, exam, tasks, t);
+  if (did) {
+    doneMsg(rec.id, exam, tasks, t);
+    if (autoChecked) checkedMsg(rec.id, exam, tasks, t);
+  }
   return cur;
 }
 
@@ -480,10 +487,18 @@ function addPhoto(e) {
   if (!task) return fail(e, 400, "bad task");
   const files = e.findUploadedFiles("file");
   if (!files || files.length !== 1) return fail(e, 400, "one file expected");
-  if ($app.countRecords("exam_photos", $dbx.hashExp({ assignment: a.rec.id, n: n })) >= MAX_PHOTOS) return fail(e, 400, "too many");
-  const p = new Record($app.findCollectionByNameOrId("exam_photos"));
-  p.set("user", e.auth.id); p.set("assignment", a.rec.id); p.set("n", n); p.set("file", files[0]);
-  try { $app.save(p); } catch (_) { return fail(e, 400, "bad file"); }   // size or type refused by the field
+  let p = null, error = "";
+  try {
+    $app.runInTransaction((tx) => {
+      const r = tx.findRecordById("exam_assignments", a.rec.id), phase = Core.phase(shape(r), nowS());
+      if (phase !== "open" && phase !== "photos") { error = "closed"; return; }
+      if (tx.countRecords("exam_photos", $dbx.hashExp({ assignment: r.id, n: n })) >= MAX_PHOTOS) { error = "too many"; return; }
+      p = new Record(tx.findCollectionByNameOrId("exam_photos"));
+      p.set("user", e.auth.id); p.set("assignment", r.id); p.set("n", n); p.set("file", files[0]);
+      tx.save(p);
+    });
+  } catch (_) { return fail(e, 400, "bad file"); }
+  if (error) return fail(e, error === "closed" ? 409 : 400, error);
   return e.json(200, { id: p.id, n: n, file: p.getString("file") });
 }
 
@@ -498,9 +513,16 @@ function delPhoto(e) {
   if (isTeacher(e)) return delFeedback(e);
   const a = during(e, ["open", "photos"]);
   if (a.res) return;
-  const p = byId("exam_photos", e.request.pathValue("pid"));
-  if (!p || p.getString("assignment") !== a.rec.id) return fail(e, 404, "not found");
-  $app.delete(p);
+  let error = 0;
+  $app.runInTransaction((tx) => {
+    const r = tx.findRecordById("exam_assignments", a.rec.id), phase = Core.phase(shape(r), nowS());
+    if (phase !== "open" && phase !== "photos") { error = 409; return; }
+    let p;
+    try { p = tx.findRecordById("exam_photos", e.request.pathValue("pid")); } catch (_) { error = 404; return; }
+    if (p.getString("assignment") !== r.id) { error = 404; return; }
+    tx.delete(p);
+  });
+  if (error) return fail(e, error, error === 409 ? "closed" : "not found");
   return e.json(200, { ok: true });
 }
 
@@ -712,7 +734,7 @@ function botPhoto(msg) {
   }
   if (botCount(a) >= MAX_BOT_PHOTOS) return refuse(TEXT.botTooMany);   // fast path; the real check is below
 
-  let stored = false, full = false;
+  let stored = false, full = false, late = false;
   try {
     const info = $http.send({ url: tgApi() + "/bot" + env("TG_BOT_TOKEN") + "/getFile?file_id=" + encodeURIComponent(f.file_id), method: "GET", timeout: 10 });
     const path = info.json && info.json.result && info.json.result.file_path;
@@ -720,6 +742,8 @@ function botPhoto(msg) {
     const file = $filesystem.fileFromURL(tgApi() + "/file/bot" + env("TG_BOT_TOKEN") + "/" + path, 30);   // network: outside the transaction
     // count and save in one write transaction, so parallel album parts cannot pass the cap
     $app.runInTransaction((tx) => {
+      const r = tx.findRecordById("exam_assignments", a.id), phase = Core.phase(shape(r), nowS());
+      if (phase !== "open" && phase !== "photos") { late = true; return; }
       if (botCount(a, tx) >= MAX_BOT_PHOTOS) { full = true; return; }
       const ph = new Record(tx.findCollectionByNameOrId("exam_photos"));
       ph.set("user", user.id); ph.set("assignment", a.id); ph.set("n", ""); ph.set("file", file);
@@ -727,6 +751,7 @@ function botPhoto(msg) {
       stored = true;
     });
   } catch (err) { console.log("exams: bot photo failed"); }       // never log the URL or the error text: they can hold the token
+  if (late) return refuse(TEXT.botLate);
   if (full) return refuse(TEXT.botTooMany);
   if (!stored) {
     // the next part of this album must not be silent; a DB error here must not fail the webhook
