@@ -1249,7 +1249,9 @@
   function paintResult(v) {
     const id = st.id, tasks = C.wellFormedTasks(v.tasks);
     if (!tasks.length) { fail('Не получилось загрузить задания пробника.', true); return; }
-    const R = C.resultOf(v, tasks, { secondary: typeof secondaryScore === 'function' ? secondaryScore : null });
+    const isNewFull = v.full && tasks.length === 19 && tasks.some((t) => Number(t.n) === 13 && t.kind === 'long');
+    const scale = isNewFull ? ExamHistoryCore.SCALE_32 : ExamHistoryCore.SCALE_33;
+    const R = C.resultOf(v, tasks, { secondary: (points) => scale[Math.max(0, Math.min(Math.floor(points), scale.length - 1))] });
     const dropped = !Array.isArray(v.tasks) || v.tasks.length !== tasks.length;
     const lost = takeLost(id), rej = takeRejected(id);
     // A session of its own so that the file token, the thumbnails and the stale-screen checks work as on the other screens;

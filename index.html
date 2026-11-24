@@ -908,8 +908,7 @@
   .cond .figwrap img.fig.pending{opacity:0;}
   .cond .figwrap img.fig{transition:opacity .3s var(--ease);}
   /* графики производной шире прочих чертежей; width:100% определён,
-     поэтому резервирование работает и здесь. Номер задания — 9: после
-     перенумерации банка производная переехала с восьмого места.
+     поэтому резервирование работает и здесь. Номер задания — 8.
      data-n несёт КАЖДЫЙ контейнер, внутри которого живёт условие: обёртка
      списка задач и карточка варианта. Иначе правило молча не долетало бы
      до варианта, и там график оставался бы 280 px из атрибута.
@@ -920,8 +919,8 @@
      в размере из атрибутов — клетка та же, что у широких графиков на 520 px.
      Исключение стоит в селекторе, а не отдельным width:auto: авторский auto
      тоже перебивает атрибут, и незагруженный рисунок схлопывается в 0x0. */
-  [data-n="9"] .cond .figwrap img.fig:not([height="300"]){width:100%;max-width:520px;}
-  /* ---- графики двенадцатого ----
+  [data-n="8"] .cond .figwrap img.fig:not([height="300"]){width:100%;max-width:520px;}
+  /* ---- графики одиннадцатого ----
      Тут чертежи не широкие, а наоборот: 56 из 69 квадратные, остальные
      вытянуты вверх, вплоть до 192x300. Такие и читались хуже всех — узкий
      график получал и самую маленькую ширину. Общий потолок ширины поднимает
@@ -931,7 +930,7 @@
      выезжал 400x480 вместо 376x480. Шесть процентов растяжения по горизонтали
      на глаз почти незаметны, но клетка перестаёт быть клеткой, а по ней
      ученик и снимает значения. Пусть лучше самый узкий будет высоким. */
-  [data-n="12"] .cond .figwrap img.fig{width:100%;max-width:360px;}
+  [data-n="11"] .cond .figwrap img.fig{width:100%;max-width:360px;}
   .answer{display:inline-block;background:var(--ok-soft);color:var(--ok-text);font-weight:600;
     padding:5px var(--s3);border-radius:var(--r-sm);margin-bottom:var(--s3);
     font-size:var(--fs-base);font-family:'Golos Text',sans-serif;}
@@ -1714,8 +1713,8 @@ var THEME_COLOR={light:'#f2efe7',dark:'#161713'};
   <div class="sheet" id="sheet-body"></div>
 </div>
 
-<script src="sync-core.js"></script>
-<script src="config.js"></script>
+<script src="sync-core.js?v=118"></script>
+<script src="config.js?v=118"></script>
 <script>
 
 /* ============================================================ ЛОГИКА — не трогай ============================================================ */
@@ -1723,7 +1722,9 @@ const COND = (n,id)=>`img/t${n}/cond/${String(id).padStart(4,'0')}.png`;
 const SOL  = (n,id)=>`img/t${n}/sol/${String(id).padStart(4,'0')}.png`;
 /* Видеоразборы — по номеру задания. Сдвинуты вслед за перенумерацией банка;
    у нового шестого и тринадцатого разборов пока нет, кнопка там не рисуется. */
-const VIDEOS = {1:'https://www.youtube.com/watch?v=_IZcVx4715Q',2:'https://www.youtube.com/watch?v=cd8nn2c99dU',3:'https://www.youtube.com/watch?v=dPdYn3n_rL8',4:'https://www.youtube.com/watch?v=_Qs5l-41ss0',5:'https://www.youtube.com/watch?v=f_3dkUWJ7Z4',7:'https://www.youtube.com/watch?v=Ft6x-ECfH88',8:'https://www.youtube.com/watch?v=Ft6x-ECfH88',9:'https://www.youtube.com/watch?v=bmY0KXMo_Tw',10:'https://www.youtube.com/watch?v=uffcbE9n0AE',11:'https://www.youtube.com/watch?v=YLkDqydq7TI',12:'https://www.youtube.com/watch?v=XUzWJx4fvrQ'};
+const LEGACY_VIDEOS = {1:'https://www.youtube.com/watch?v=_IZcVx4715Q',2:'https://www.youtube.com/watch?v=cd8nn2c99dU',3:'https://www.youtube.com/watch?v=dPdYn3n_rL8',4:'https://www.youtube.com/watch?v=_Qs5l-41ss0',5:'https://www.youtube.com/watch?v=f_3dkUWJ7Z4',7:'https://www.youtube.com/watch?v=Ft6x-ECfH88',8:'https://www.youtube.com/watch?v=Ft6x-ECfH88',9:'https://www.youtube.com/watch?v=bmY0KXMo_Tw',10:'https://www.youtube.com/watch?v=uffcbE9n0AE',11:'https://www.youtube.com/watch?v=YLkDqydq7TI',12:'https://www.youtube.com/watch?v=XUzWJx4fvrQ'};
+const VIDEOS = Object.fromEntries(Object.entries(LEGACY_VIDEOS).filter(([n])=>+n!==6&&+n!==13).map(([n,url])=>[+n<=5?+n:+n-1,url]));
+VIDEOS[12]='https://www.youtube.com/watch?v=B_lVXxlsrpg';
 const taskCfg = n => TASKS.find(t=>t.n===n);
 // Источник правды о количестве задач — сам data.js. После загрузки приводим
 // count в конфиге к реальной длине, чтобы рассинхрон count↔данные не давал
@@ -1798,7 +1799,7 @@ function ensureData(n, cb){
   if(dataLoading[n]){dataLoading[n].push(cb);return;}
   dataLoading[n]=[cb];
   const s=document.createElement('script');
-  s.src=`img/t${n}/data.js`;
+  s.src=`img/bank19/t${n}/data.js`;
   s.onload=()=>{syncCount(n);(dataLoading[n]||[]).forEach(f=>f());dataLoading[n]=null;};
   s.onerror=()=>{
     window.TASKDATA=window.TASKDATA||{};
@@ -1820,7 +1821,7 @@ function ensureSol(n, cb){
   if(solLoading[n]){solLoading[n].push(cb);return;}
   solLoading[n]=[cb];
   const s=document.createElement('script');
-  s.src=`img/t${n}/sol.js`;
+  s.src=`img/bank19/t${n}/sol.js`;
   const done=()=>{(solLoading[n]||[]).forEach(f=>f());solLoading[n]=null;};
   s.onload=done;
   s.onerror=()=>{window.SOLDATA[n]='error';s.remove();done();};
@@ -1840,16 +1841,18 @@ function prefetchSol(ns){
   if(thriftyNet())return;
   onIdle(()=>{ns.filter(n=>!isLongAns(n)).forEach(n=>ensureSol(n,()=>{}));},{timeout:5000});}
 
-/* ---- сброс прогресса после перенумерации банка ----
-   Банк перенумеровали вслед за ЕГЭ: задания 6-11 сдвинулись на +1, шестым
-   встали «Случайные величины», «Поиск экстремума» из экзамена убрали.
-   Одна и та же позиция в state теперь означает другую тему, поэтому
-   переносить старые отметки нельзя — ключ поднят до v3, старые данные
-   не читаются. Тем, у кого отметки были, хаб один раз объясняет, куда они
-   делись (см. RESET_NOTE_KEY). */
-const STORAGE_KEY='ege_hub_v3', STORAGE_KEY_OLD='ege_hub_v2';
+/* Keep the previous snapshot intact and translate stable topic IDs once.
+   v2 belongs to an older, incompatible migration and retains its notice. */
+const STORAGE_KEY='ege_hub_v4', STORAGE_KEY_OLD='ege_hub_v2';
 let state={};
-try{state=JSON.parse(localStorage.getItem(STORAGE_KEY))||{};}catch(e){state={};}
+try{
+  const saved=localStorage.getItem(STORAGE_KEY);
+  if(saved!==null)state=JSON.parse(saved)||{};
+  else {
+    state=SyncCore.stateFromWire(JSON.parse(localStorage.getItem('ege_hub_v3'))||{});
+    try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch(e){}
+  }
+}catch(e){state={};}
 /* Плашку показываем только тому, кто реально потерял отметки. Наличия
    старого ключа для этого мало: он остаётся и после «Сбросить», и тогда
    объяснение получил бы человек, которому нечего было терять. Поэтому
@@ -1884,10 +1887,16 @@ function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}cat
    прихода событий на итог не влияет. Схема: backend/README.md. */
 /* локальная разработка ходит в локальный PocketBase (backend/README.md) */
 const API=/^(localhost|127\.0\.0\.1)$/.test(location.hostname)?'http://127.0.0.1:8090/api':'https://api.kirillnyun.space/api';
-const AUTH_KEY='ege_auth_v1',OUTBOX_KEY='ege_outbox_v1',STAMPS_KEY='ege_stamps_v1',
+const AUTH_KEY='ege_auth_v1',OUTBOX_KEY='ege_outbox_v1',STAMPS_KEY='ege_stamps_v2',
       CURSOR_KEY='ege_cursor_v1',VCLEAR_KEY='ege_vclear_v1';
 const loadJ=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v;}catch(e){return d;}};
 const saveJ=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}};
+try{
+  if(localStorage.getItem(STAMPS_KEY)===null){
+    const old=JSON.parse(localStorage.getItem('ege_stamps_v1'))||SyncCore.newStamps();
+    localStorage.setItem(STAMPS_KEY,JSON.stringify(SyncCore.stampsFromWire(old)));
+  }
+}catch(e){}
 let auth=loadJ(AUTH_KEY,null);
 /* короткий id браузера — создаётся только когда журнал реально нужен */
 function deviceId(){let d=loadJ('ege_device_v1',null);if(!d){d=SyncCore.uid().slice(0,8);saveJ('ege_device_v1',d);}return d;}
@@ -1901,7 +1910,7 @@ function queue(c,body){const ob=loadJ(OUTBOX_KEY,[]);ob.push({c:c,b:body});saveJ
    с другого устройства, пришедшее позже, перебило бы свежую отметку. */
 function journal(ev){
   const r=SyncCore.applyEvents({},loadJ(STAMPS_KEY,SyncCore.newStamps()),[ev]);
-  saveJ(STAMPS_KEY,r.stamps);queue('events',ev);
+  saveJ(STAMPS_KEY,r.stamps);SyncCore.eventsToWire(ev).forEach(e=>queue('events',e));
 }
 const HIST_FIELDS=['uid','t','p','s','ms','total','m','q'];
 const Sync={
@@ -1932,9 +1941,14 @@ const Sync={
         for(const x of chunk){
           const one=await this.api('/collections/'+x.c+'/records',{method:'POST',body:body(x)});
           if(one.status>=500||one.status===429)break;
-          /* 400 на повторном uid — уже доставлено; иной 400 не пройдёт
-             никогда, держать его в очереди значит застрять навсегда. */
-          if(one.status===200||one.status===400)done.add(x.b.uid);
+          if(one.status===200)done.add(x.b.uid);
+          else if(one.status===400){
+            // A validation error is not necessarily a duplicate. Keep the
+            // event unless the server confirms its uid is already stored.
+            const filter=encodeURIComponent(`uid=${JSON.stringify(x.b.uid)} && user=${JSON.stringify(auth.userId)}`);
+            const found=await this.api('/collections/'+x.c+'/records?filter='+filter+'&perPage=1');
+            if(found.status===200&&found.json&&found.json.items&&found.json.items.length)done.add(x.b.uid);
+          }
         }
       }else return;
       if(!done.size)return;
@@ -1961,7 +1975,7 @@ const Sync={
     const dl=await this.fetchNew('variant_deletes',cur)||[];
     let changed=false;
     if(evs.length){
-      const r=SyncCore.applyEvents(state,loadJ(STAMPS_KEY,SyncCore.newStamps()),evs);
+      const r=SyncCore.applyEvents(state,loadJ(STAMPS_KEY,SyncCore.newStamps()),SyncCore.eventsFromWire(evs));
       saveJ(STAMPS_KEY,r.stamps);
       if(r.changed){state=r.state;save();changed=true;}
     }
@@ -2121,9 +2135,17 @@ async function accountSheet(){
    state целиком уезжает в ссылку «поделиться прогрессом», и чужая закладка
    на чужом прототипе там не нужна. Хранится только последнее место — не
    история: тренажёру достаточно знать, откуда продолжать. */
-const LAST_KEY='ege_last_v2';
+const LAST_KEY='ege_last_v3';
 let lastPos=null;
-try{lastPos=JSON.parse(localStorage.getItem(LAST_KEY))||null;}catch(e){lastPos=null;}
+try{
+  const saved=localStorage.getItem(LAST_KEY);
+  if(saved!==null)lastPos=JSON.parse(saved)||null;
+  else {
+    const old=JSON.parse(localStorage.getItem('ege_last_v2'));
+    if(old){const n=SyncCore.fromWire(old.n);if(n<=19)lastPos=Object.assign({},old,{n});}
+    localStorage.setItem(LAST_KEY,JSON.stringify(lastPos));
+  }
+}catch(e){lastPos=null;}
 /* id опускают, когда задание только открыли: номер задания уже известен,
    а конкретный прототип — ещё нет, и затирать прошлый им нельзя. */
 function saveLast(n,id){
@@ -2134,7 +2156,7 @@ function saveLast(n,id){
   lastPos={n:n,id:keep};
   try{localStorage.setItem(LAST_KEY,JSON.stringify(lastPos));}catch(e){}
 }
-function clearLast(){lastPos=null;try{localStorage.removeItem(LAST_KEY);}catch(e){}}
+function clearLast(){lastPos=null;try{localStorage.setItem(LAST_KEY,'null');}catch(e){}}
 function taskState(n){return state[n]||(state[n]={});}
 function countTask(n){const ts=state[n]||{},pl=protoList(n);
   if(pl){let g=0,o=0,b=0;pl.forEach(grp=>{const s=ts[grp.ids[0]];if(s==='g')g++;else if(s==='o')o++;else if(s==='b')b++;});return{g,o,b};}
@@ -2330,7 +2352,7 @@ const solInner=(ans,html,failed,ansOnly)=>`<div class="sol-inner">`+
   `</div>`;
 /* Вторая часть (14-20): поля ввода нет, разборов нет. Ученик раскрывает
    эталонный ответ ФИПИ и сам сравнивает со своим. */
-const isLongAns=n=>n>=14;
+const isLongAns=n=>n>=13;
 const ansInner=ans=>`<div class="sol-inner"><div class="answer long tex">Ответ: ${ans||'на источнике не указан'}</div></div>`;
 /* Разбор есть только у представителя прототипа (первый id группы). */
 const isProtoRep=(n,id)=>protoIds(n).includes(id);
@@ -2598,18 +2620,20 @@ function syncTaskDone(n){
 }
 
 // --- перевод первичного балла в тестовый (профиль; 13 задач части 1 + 20 баллов части 2 = 33) ---
-const SEC_SCORE=[0,6,11,17,22,27,34,40,46,52,58,62,66,70,72,74,76,78,80,82,84,86,88,90,92,94,95,96,97,98,99,100,100,100];
+const LEGACY_SEC_SCORE=[0,6,11,17,22,27,34,40,46,52,58,62,66,70,72,74,76,78,80,82,84,86,88,90,92,94,95,96,97,98,99,100,100,100];
+const SEC_SCORE=[0,6,11,17,22,27,34,40,46,52,58,64,70,72,74,76,78,80,82,84,86,88,90,92,94,95,96,97,98,99,100,100,100];
+function legacySecondaryScore(primary){return LEGACY_SEC_SCORE[Math.max(0,Math.min(primary,LEGACY_SEC_SCORE.length-1))];}
 function secondaryScore(primary){return SEC_SCORE[Math.max(0,Math.min(primary,SEC_SCORE.length-1))];}
 /* Part 2 is self-graded: the student reads the criteria next to each task
    and picks the score. Criteria wording comes from the owner. */
 const PART2_CRIT={
-  14:{max:2,rules:['а) — 1 балл','б) — 1 балл']},
-  15:{max:3,rules:['а) — 1 балл','б) — 2 балла','б) — 1 балл, если логика верна и ошибка чисто арифметическая']},
-  16:{max:2,rules:['2 балла — полностью верное решение','1 балл — логика верна, ошибка чисто арифметическая','1 балл — ошибка только в круглых и квадратных скобках']},
-  17:{max:2,rules:['2 балла — полностью верное решение','1 балл — уравнение составлено верно, но не доведено до ответа','1 балл — уравнение составлено верно, логика верна, ошибка чисто арифметическая']},
-  18:{max:3,rules:['а) — 1 балл','б) — 2 балла','б) — 1 балл, если логика верна и ошибка чисто арифметическая']},
-  19:{max:4,rules:[]},
-  20:{max:4,rules:['а) — 1 балл','б) — 1 балл','в) — 2 балла']}
+  13:{max:2,rules:['а) — 1 балл','б) — 1 балл']},
+  14:{max:3,rules:['а) — 1 балл','б) — 2 балла','б) — 1 балл, если логика верна и ошибка чисто арифметическая']},
+  15:{max:2,rules:['2 балла — полностью верное решение','1 балл — логика верна, ошибка чисто арифметическая','1 балл — ошибка только в круглых и квадратных скобках']},
+  16:{max:2,rules:['2 балла — полностью верное решение','1 балл — уравнение составлено верно, но не доведено до ответа','1 балл — уравнение составлено верно, логика верна, ошибка чисто арифметическая']},
+  17:{max:3,rules:['а) — 1 балл','б) — 2 балла','б) — 1 балл, если логика верна и ошибка чисто арифметическая']},
+  18:{max:4,rules:[]},
+  19:{max:4,rules:['а) — 1 балл','б) — 1 балл','в) — 2 балла']}
 };
 const itemMax=n=>isLongAns(n)?((PART2_CRIT[n]||{}).max||0):1;
 const ballWord=k=>{const a=k%10,b=k%100;return a===1&&b!==11?'балл':a>=2&&a<=4&&(b<12||b>14)?'балла':'баллов';};
@@ -2620,7 +2644,7 @@ function ensureAll(ns,cb){let left=ns.length;if(!left){cb();return;}ns.forEach(n
 const HIST_KEY='ege_variants_v1';
 function loadHistory(){try{return JSON.parse(localStorage.getItem(HIST_KEY))||[];}catch(e){return[];}}
 function saveHistory(a){try{localStorage.setItem(HIST_KEY,JSON.stringify(a));}catch(e){}}
-function pushHistory(rec){rec.uid=SyncCore.uid();const a=loadHistory();a.push(rec);if(a.length>50)a.splice(0,a.length-50);saveHistory(a);
+function pushHistory(rec){if(Array.isArray(rec.q))rec.q.push([0,0,0,"bank19"]);rec.uid=SyncCore.uid();const a=loadHistory();a.push(rec);if(a.length>50)a.splice(0,a.length-50);saveHistory(a);
   if(tracking())queue('variants',rec);}
 function clearHistory(){saveHistory([]);const c={uid:SyncCore.uid(),ts:Date.now()};
   try{localStorage.setItem(VCLEAR_KEY,String(c.ts));}catch(e){}
@@ -2635,12 +2659,13 @@ function b64ToBytes(str){let b=str.replace(/-/g,'+').replace(/_/g,'/');while(b.l
 function histEncode(){
   const h=loadHistory();if(!h.length)return'';
   const s=h.slice().sort((a,b)=>a.t-b.t),base=Math.floor(s[0].t/60000),L=[];
-  L.push([3,8]);L.push([Math.min(s.length,255),8]);L.push([base,32]);
+  L.push([4,8]);L.push([Math.min(s.length,255),8]);L.push([base,32]);
   s.slice(0,255).forEach(r=>{
     const dm=Math.min(Math.max(Math.floor(r.t/60000)-base,0),1048575);
     L.push([dm,20]);L.push([Math.min(r.p|0,63),6]);L.push([Math.min(r.total|0,63),6]);
     L.push([Math.min((r.m||r.total)|0,63),6]);
     L.push([Math.min(Math.round(r.ms/1000),16383),14]);
+    L.push([historyNew(r)?1:0,1]);
     const q=qRows(r).slice(0,63);L.push([q.length,6]);
     q.forEach(([n,id,pts])=>{L.push([Math.min(n,31),5]);L.push([Math.min(id,2047),11]);L.push([Math.min(pts,7),3]);});
   });
@@ -2649,10 +2674,10 @@ function histEncode(){
 function histDecode(str){
   try{const by=b64ToBytes(str);let idx=0,bit=0;
     const read=n=>{let v=0;for(let k=0;k<n;k++){v=(v<<1)|((by[idx]>>(7-bit))&1);if(++bit===8){bit=0;idx++;}}return v;};
-    const ver=read(8);if(ver<1||ver>3)return null;const count=read(8),base=read(32),out=[];
+    const ver=read(8);if(ver<1||ver>4)return null;const count=read(8),base=read(32),out=[];
     for(let i=0;i<count;i++){const dm=read(20),p=read(ver===1?4:6),tot=read(ver===1?5:6),
-        m=ver===1?tot:read(6),sec=read(14),rec={t:(base+dm)*60000,p,total:tot,m,s:secondaryScore(p),ms:sec*1000};
-      if(ver>=3){const k=read(6);if(k){rec.q=[];for(let j=0;j<k;j++){const n=read(5),id=read(11),pts=read(3);rec.q.push([n,id,pts,'']);}}}
+        m=ver===1?tot:read(6),sec=read(14),isNew=ver>=4?!!read(1):false,rec={t:(base+dm)*60000,p,total:tot,m,s:isNew?secondaryScore(p):legacySecondaryScore(p),ms:sec*1000};
+      if(ver>=3){const k=read(6);if(k||isNew){rec.q=[];for(let j=0;j<k;j++){const n=read(5),id=read(11),pts=read(3);rec.q.push([n,id,pts,'']);}if(isNew)rec.q.push([0,0,0,"bank19"]);}}
       out.push(rec);}
     if(idx>by.length)return null;
     return out;}catch(e){return null;}
@@ -2681,10 +2706,13 @@ function sparkline(hist){
 /* q приходит и с сервера (variants.q — произвольный JSON от любого
    зарегистрированного пользователя), поэтому перед выводом приводим его
    к числам и строке: в разметку не должно попасть ничего, кроме них. */
-function qRows(r){return (Array.isArray(r&&r.q)?r.q:[]).filter(Array.isArray)
+function historyNew(r){return Array.isArray(r&&r.q)&&r.q.some(x=>Array.isArray(x)&&x[0]===0&&x[3]==="bank19");}
+function legacyMax(n){return n<14?1:({14:2,15:3,16:2,17:2,18:3,19:4,20:4}[n]||0);}
+function histDisplayNumber(r,n){return historyNew(r)?n:n===6?null:n<=5?n:n-1;}
+function qRows(r){return (Array.isArray(r&&r.q)?r.q:[]).filter(x=>Array.isArray(x)&&+x[0]>0)
   .map(x=>[+x[0]||0,+x[1]||0,+x[2]||0,x[3]==null?'':String(x[3])]);}
 function histCells(r){const by={};
-  qRows(r).forEach(([n,,pts])=>{const full=pts>=itemMax(n),c=by[n]||(by[n]={full:0,zero:0,k:0});
+  qRows(r).forEach(([n,,pts])=>{const display=histDisplayNumber(r,n);if(display==null)return;const full=pts>=(historyNew(r)?itemMax(n):legacyMax(n)),c=by[display]||(by[display]={full:0,zero:0,k:0});
     c.k++;if(full)c.full++;else if(!pts)c.zero++;});
   const out={};Object.keys(by).forEach(n=>{const c=by[n];out[n]=c.full===c.k?'ok':c.zero===c.k?'no':'part';});
   return out;}
@@ -2721,6 +2749,14 @@ function histPanel(){
 }
 /* Details of one attempt: needs the task data for the right answers,
    so it is built on the first opening, after ensureAll. */
+window.LEGACY_TASKDATA=window.LEGACY_TASKDATA||{};
+function ensureLegacyAll(ns,cb){
+  let left=ns.length;if(!left){cb();return;}
+  ns.forEach(n=>{if(window.LEGACY_TASKDATA[n]){if(!--left)cb();return;}
+    const script=document.createElement('script');script.src=`img/bank20/t${n}/data.js`;
+    script.onload=script.onerror=()=>{if(!--left)cb();};document.head.appendChild(script);
+  });
+}
 function toggleHistRow(btn){
   const i=+btn.dataset.vhrow,det=document.getElementById('vhdet-'+i),r=loadHistory()[i];
   if(!det||!r||!r.q)return;
@@ -2728,21 +2764,19 @@ function toggleHistRow(btn){
   const open=det.hidden;det.hidden=!open;btn.setAttribute('aria-expanded',open);
   if(!open||det.dataset.ready)return;
   det.innerHTML='<p class="vh-wait">Загружаю…</p>';
-  ensureAll([...new Set(q.map(x=>x[0]))],()=>{det.dataset.ready='1';
+  (historyNew(r)?ensureAll:ensureLegacyAll)([...new Set(q.map(x=>x[0]))],()=>{det.dataset.ready='1';
     det.innerHTML=q.slice().sort((a,b)=>a[0]-b[0]).map(([n,id,pts,given])=>{
-      const d=(window.TASKDATA[n]||[])[id-1]||{},mx=itemMax(n),full=pts>=mx;
-      const tag=isLongAns(n)?`<span class="vtag ${full?'ok':pts?'part':'no'}">${pts} из ${mx}</span>`
+      const legacy=!historyNew(r),d=((legacy?window.LEGACY_TASKDATA:window.TASKDATA)[n]||[])[id-1]||{},mx=legacy?legacyMax(n):itemMax(n),full=pts>=mx,long=legacy?n>=14:isLongAns(n);
+      const tag=long?`<span class="vtag ${full?'ok':pts?'part':'no'}">${pts} из ${mx}</span>`
         :`<span class="vtag ${full?'ok':'no'}">${full?'верно':'неверно'}</span>`;
-      const ans=isLongAns(n)?'':full?`<span class="vh-a">${escapeHtml(plainAnswer(d.a))||'—'}</span>`
+      const ans=long?'':full?`<span class="vh-a">${escapeHtml(plainAnswer(d.a))||'—'}</span>`
         :`<span class="vh-a">${given?escapeHtml(given):'—'} → <b>${escapeHtml(plainAnswer(d.a))||'—'}</b></span>`;
       return `<div class="vh-d"><span class="vh-n">${n}</span>${tag}<span class="vh-art">№ ${d.art||id}</span>${ans}</div>`;}).join('');
   });
 }
 
-/* Версия 4 = нумерация заданий после перенумерации банка. Ссылки прежних
-   версий отвергаем: там задание 7 значило уравнения, а теперь значит
-   вычисления, и чужие галочки легли бы не на те задачи. */
-const STATE_VER=4;
+/* Version 4 links use the previous bank numbering; version 5 uses this bank. */
+const STATE_VER=5;
 // Самоописываемый формат: версия + для каждого задания с отметками его номер,
 // максимальный отмеченный id и статусы 1..maxId. Не зависит от текущего TASKS,
 // поэтому смена count / порядка / добавление заданий не ломает старые ссылки.
@@ -2760,7 +2794,7 @@ function decodeState(str){
   try{const by=b64ToBytes(str);let idx=0,bit=0;
     const read=n=>{let v=0;for(let k=0;k<n;k++){v=(v<<1)|((by[idx]>>(7-bit))&1);if(++bit===8){bit=0;idx++;}}return v;};
     const ver=read(8);
-    if(ver!==STATE_VER)return null;              // другая версия формата — отвергаем явно
+    if(ver!==4&&ver!==STATE_VER)return null;
     const tc=read(8);if(tc>40)return null;
     const res={};
     for(let i=0;i<tc;i++){const n=read(8),maxId=read(16);
@@ -2769,7 +2803,7 @@ function decodeState(str){
       for(let id=1;id<=maxId;id++){const v=read(2);
         if(v===1)res[n][id]='g';else if(v===2)res[n][id]='b';else if(v===3)res[n][id]='o';}}
     if(idx>by.length)return null;                // строка обрезана — не доверяем
-    return res;
+    return ver===4?SyncCore.stateFromWire(res):res;
   }catch(e){return null;}
 }
 function shareLink(){
@@ -3350,7 +3384,7 @@ function renderHelp(){
 function startVariantTimer(){const el=document.getElementById('v-timer');if(!el)return;
   const upd=()=>{el.textContent=fmtTime(Date.now()-variant.startAt);};upd();variantTimerId=setInterval(upd,1000);}
 // --- конструктор варианта: ученик сам выбирает задания, количество и режим ---
-const BUILDER_KEY='ege_builder_v2';
+const BUILDER_KEY='ege_builder_v3';
 const EXAM_HINT='Таймер, ввод ответов, в конце — первичный и тестовый балл. Ответы влияют на прогресс.';
 const TRAIN_HINT='Без таймера: решаешь и сразу проверяешь каждую задачу, отмечаешь статус. Прогресс сохраняется.';
 /* Part 1 is auto-checked; part 2 has no auto-check, the student grades
@@ -3360,7 +3394,15 @@ function maxForTask(n){return displayCount(n);}                 // потоло�
 function defaultBuilder(){const counts={};activeTasks().forEach(t=>counts[t.n]=Math.min(1,maxForTask(t.n)));return{counts,mode:'exam'};}
 let builder=null;
 function loadBuilder(){
-  let b=null;try{b=JSON.parse(localStorage.getItem(BUILDER_KEY));}catch(e){}
+  let b=null;try{
+    const saved=localStorage.getItem(BUILDER_KEY);
+    if(saved!==null)b=JSON.parse(saved);
+    else {
+      const old=JSON.parse(localStorage.getItem('ege_builder_v2'));
+      if(old&&old.counts)b=Object.assign({},old,{counts:SyncCore.stateFromWire(old.counts)});
+      if(b)localStorage.setItem(BUILDER_KEY,JSON.stringify(b));
+    }
+  }catch(e){}
   const d=defaultBuilder();
   if(b&&b.counts){activeTasks().forEach(t=>{const v=b.counts[t.n];
     if(typeof v==='number')d.counts[t.n]=Math.max(0,Math.min(v,maxForTask(t.n)));});
@@ -3862,10 +3904,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   render();
 });
 </script>
-<script src="exam-validate.js"></script>
-<script src="exam-client-core.js"></script>
-<script src="exam-history-core.js"></script>
-<script src="exam-my-view.js"></script>
-<script src="exam.js"></script>
+<script src="exam-validate.js?v=118"></script>
+<script src="exam-client-core.js?v=118"></script>
+<script src="exam-history-core.js?v=118"></script>
+<script src="exam-my-view.js?v=118"></script>
+<script src="exam.js?v=118"></script>
 </body>
 </html>

@@ -67,6 +67,12 @@ test('student writes own events only', async () => {
   assert.equal((await req('POST', '/collections/events/records', tok.stu2, ev(ids.stu1, 'forged'))).status, 400);
 });
 
+test('journal accepts the restored derivative topic ID', async () => {
+  const derivative = { ...ev(ids.stu1, 'derivative21'), n: 21 };
+  assert.equal((await req('POST', '/collections/events/records', tok.stu1, derivative)).status, 200);
+  assert.equal((await req('POST', '/collections/events/records', tok.stu1, { ...derivative, uid: 'invalid22', n: 22 })).status, 400);
+});
+
 test('events are visible to owner and teacher only', async () => {
   await req('POST', '/collections/events/records', tok.stu2, ev(ids.stu2, 'other1'));
   const s1 = (await req('GET', '/collections/events/records', tok.stu1)).json.items;

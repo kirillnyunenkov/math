@@ -354,17 +354,19 @@
         }
       }
     });
-    // A full exam has the shape of the real one (the generator's table in index.html: PART2_CRIT): tasks 1-13 are part 1
-    // (1 point each), tasks 14-20 are part 2 with their own maxima, 33 primary points in all.
+    // Keep accepting historical full exams, and validate the new 19-task format independently.
     if (x.full === true) {
-      for (let n = 1; n <= 20; n++) if (!seen[n]) errors.push('Полный пробник: нет задания ' + n + ' (в полном варианте ровно 20 заданий, номера 1–20).');
+      const newFormat = x.tasks.some(function (t) { return t && t.n === 13 && t.kind === 'long'; });
+      const count = newFormat ? 19 : 20, firstLong = newFormat ? 13 : 14;
+      const maxima = newFormat ? { 13: 2, 14: 3, 15: 2, 16: 2, 17: 3, 18: 4, 19: 4 } : FULL_LONG_MAX;
+      for (let n = 1; n <= count; n++) if (!seen[n]) errors.push('Полный пробник: нет задания ' + n + ' (в полном варианте ровно ' + count + ' заданий, номера 1–' + count + ').');
       x.tasks.forEach(function (t) {
         if (!t || typeof t !== 'object' || !isInt(t.n, 1, 40)) return;
         const where = 'Задание ' + t.n + ': ';
-        if (t.n > 20) { errors.push(where + 'в полном пробнике заданий больше 20 не бывает (номера 1–20).'); return; }
-        const long = t.n >= 14;
+        if (t.n > count) { errors.push(where + 'в полном пробнике заданий больше ' + count + ' не бывает (номера 1–' + count + ').'); return; }
+        const long = t.n >= firstLong;
         if (t.kind !== (long ? 'long' : 'short')) errors.push(where + (long ? 'в полном пробнике это задание второй части (kind "long").' : 'в полном пробнике это задание первой части (kind "short").'));
-        else if (long && t.max !== FULL_LONG_MAX[t.n]) errors.push(where + 'в полном пробнике оно стоит ' + FULL_LONG_MAX[t.n] + ' ' + pointsWord(FULL_LONG_MAX[t.n]) + ' (по таблице генератора).');
+        else if (long && t.max !== maxima[t.n]) errors.push(where + 'в полном пробнике оно стоит ' + maxima[t.n] + ' ' + pointsWord(maxima[t.n]) + ' (по таблице генератора).');
       });
     }
     Object.keys(x.key).forEach(function (n) { if (!seen[n]) warnings.push('В key есть ответ для задания ' + n + ', а самого задания нет.'); });
