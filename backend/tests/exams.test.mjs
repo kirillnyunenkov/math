@@ -258,10 +258,10 @@ test('photo phase hides the statements; after it the key is released', async () 
 
   await shift(id, { start: nowS() - 1300, duration: 600 });              // photo grace is over too
   v = await view(id, s.token);
-  assert.equal(v.json.phase, 'submitted');
+  assert.equal(v.json.phase, 'checked');
   assert.deepEqual(v.json.tasks, TASKS);
   assert.deepEqual(v.json.key, KEY);
-  assert.equal('part2' in v.json, false);
+  assert.deepEqual(v.json.total, { pts: 0, max: 4 });
 });
 
 const post = (id, what, token, body) => req('POST', `/ege/exams/${id}/${what}`, token, body);
@@ -343,7 +343,7 @@ test('early finish opens the photo phase; done closes it', async () => {
   assert.equal((await post(id, 'via-tg', s.token, { on: false })).status, 200);
   assert.equal((await post(id, 'done', s.token)).status, 200);
   const v = await view(id, s.token);
-  assert.equal(v.json.phase, 'submitted');
+  assert.equal(v.json.phase, 'checked');
   assert.equal(v.json.via_tg, false);
   assert.equal((await post(id, 'via-tg', s.token, { on: true })).status, 409);
 });
@@ -355,7 +355,7 @@ test('without a part 2 there is no photo phase: finishing hands the work in at o
   await post(id, 'answers', s.token, { answers: { 1: '5', 2: '0,5' } });   // both right: its message to the teacher differs from the other tests'
   assert.equal((await post(id, 'finish', s.token)).status, 200);
   const v = await view(id, s.token);
-  assert.equal(v.json.phase, 'submitted');
+  assert.equal(v.json.phase, 'checked');
   assert.equal(v.json.p1, 2);
 });
 
@@ -507,6 +507,41 @@ test('settling grades part 1 and tells the teacher once', async () => {
   assert.ok(msgs[0].reply_markup.inline_keyboard[0][0].url.endsWith('teacher.html#/check/' + id));
 });
 
+test('a submitted exam without photos is checked immediately and appears in the history', async () => {
+  const { id, s } = await started(7000000440);
+  await post(id, 'answers', s.token, { answers: { 1: '5', 2: '0,6' } });
+  await post(id, 'finish', s.token);
+  assert.equal((await view(id, s.token)).json.phase, 'photos');
+  assert.equal((await post(id, 'done', s.token)).status, 200);
+  const v = (await view(id, s.token)).json;
+  assert.equal(v.phase, 'checked');
+  assert.equal(v.p1, 1);
+  assert.deepEqual(v.total, { pts: 1, max: 4 });
+  assert.equal((await summary(s.token)).json.items[0].id, id);
+  await tick(); await view(id, s.token);
+  assert.equal(said(s.chat, 'проверен: 1 из 4'), 1);
+  const message = sent.find(m => String(m.chat_id) === String(s.chat) && m.text.includes('проверен: 1 из 4'));
+  assert.ok(!message.text.includes('комментарии по второй части'));
+});
+
+test('an upload racing submission is either included for review or refused', async () => {
+  for (let i = 0; i < 4; i++) {
+    const { id, s } = await started(7000000441 + i);
+    await post(id, 'finish', s.token);
+    const [photo, done] = await Promise.all([upload(id, s.token, 13), post(id, 'done', s.token)]);
+    assert.equal(done.status, 200);
+    const v = (await view(id, s.token)).json;
+    if (photo.status === 200) {
+      assert.equal(v.phase, 'submitted');
+      assert.equal(v.photos.length, 1);
+    } else {
+      assert.equal(photo.status, 409);
+      assert.equal(v.phase, 'checked');
+      assert.equal(v.photos.length, 0);
+    }
+  }
+});
+
 test('the tick settles a student who closed the page, and leaves a missed exam alone', async () => {
   const { id, s } = await started(7000000044);
   await post(id, 'answers', s.token, { answers: { 1: '5' } });
@@ -518,7 +553,8 @@ test('the tick settles a student who closed the page, and leaves a missed exam a
   assert.equal((await tick()).status, 200);
   const row = await rowOf(id);
   assert.ok(row.settled > 0); assert.equal(row.p1, 1);
-  assert.equal(sent.filter(m => String(m.chat_id) === TEACHER_CHAT && m.text.includes('решения пришлёт в Telegram')).length, 1);
+  assert.ok(row.checked > 0);
+  assert.ok(sent.some(m => String(m.chat_id) === TEACHER_CHAT && m.text.includes('фото нет')));
   assert.equal((await rowOf(missed)).settled, 0);
 });
 
@@ -553,7 +589,7 @@ test('check: teacher only, valid points only, the student is told once', async (
   const check = (token, part2) => post(id, 'check', token, { part2 });
   assert.equal((await check(tok.teacher, { 13: { pts: 1 } })).status, 409);     // not submitted yet
   await post(id, 'answers', s.token, { answers: { 1: '5', 2: '0,5' } });
-  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  await post(id, 'finish', s.token); await upload(id, s.token, 13); await post(id, 'done', s.token);
   assert.equal((await check(s.token, { 13: { pts: 1 } })).status, 403);
   assert.equal((await check(tok.teacher, {})).status, 400);                     // task 13 missing
   assert.equal((await check(tok.teacher, { 13: { pts: 3 } })).status, 400);     // above max
@@ -696,7 +732,7 @@ test('the student\'s "проверен" message is retried after a refusal, and 
   const exam = await mkExam('Пробник П'), s = await student(7000000058);
   const id = (await assign(s.id, exam, nowS() - 10)).json.id;
   await view(id, s.token);
-  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  await post(id, 'finish', s.token); await upload(id, s.token, 13); await post(id, 'done', s.token);
   const text = '«Пробник П» проверен';
   down.add(String(s.chat));
   try {
@@ -803,6 +839,10 @@ test('a photo sent to the bot lands on the exam, with no task, and the sign-in l
   assert.equal(ph.length, 1); assert.equal(ph[0].n, '');
   assert.equal(said(s.chat, 'Принял фото к пробнику «Пробник Ф» (всего 1)'), 1);
   assert.equal(sent.slice(before).filter(m => m.chat_id === 7000000300 && m.reply_markup).length, 0);
+  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  const result = (await view(id, s.token)).json;
+  assert.equal(result.phase, 'submitted');
+  assert.equal(result.photos.length, 1);
 });
 
 test('an album is answered once; the next photo counts on', async () => {
@@ -958,7 +998,7 @@ test('meta.until is the end of the current phase', async () => {
   assert.ok(Math.abs(v.until - (nowS() + 600)) <= 2);                    // finish time + 10 minutes
   await shift(id, { start: nowS() - 5000, duration: 600, finished: 0, photos_done: 0 });
   v = (await view(id, s.token)).json;
-  assert.equal(v.phase, 'submitted');
+  assert.equal(v.phase, 'checked');
   assert.equal(v.until, 0);
 });
 
@@ -985,7 +1025,7 @@ test('teacher photos: only the teacher adds them, to a long task, once the work 
 test('teacher photos stay hidden from the student until the check, then show up in the view and can be fetched', async () => {
   const { id, s } = await started(7000000101);
   await post(id, 'answers', s.token, { answers: { 1: '5' } });
-  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  await post(id, 'finish', s.token); await upload(id, s.token, 13); await post(id, 'done', s.token);
   const up = (await upload(id, tok.teacher, 13)).json;
   assert.equal((await view(id, s.token)).json.fb, undefined);                    // submitted: not in the view
   const list = await req('GET', '/collections/exam_feedback_photos/records', s.token);
@@ -1078,7 +1118,7 @@ const ROW = (o = {}) => ({ scores: { 1: 1, 2: 0, 14: 2, 15: 0 }, na: [6], test: 
 test('summary: own checked exams only, per task, nothing from the statements or the key', async () => {
   const { id, s } = await started(7000000120);
   await post(id, 'answers', s.token, { answers: { 1: '5' } });
-  await post(id, 'finish', s.token); await post(id, 'done', s.token);
+  await post(id, 'finish', s.token); await upload(id, s.token, 13); await post(id, 'done', s.token);
   assert.equal((await summary(s.token)).json.items.length, 0);                    // submitted, not checked yet
   await post(id, 'check', tok.teacher, { part2: { 13: { pts: 2, comment: '' } } });
   const r = await summary(s.token);
