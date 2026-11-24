@@ -2,9 +2,9 @@
    При выкладке новой версии сайта поднимай VERSION (любое изменение этого файла
    заставит браузер установить новый SW и удалить старый кеш). HTML грузится
    network-first, поэтому онлайн-пользователи всегда получают свежую версию. */
-const VERSION = 'v118';
+const VERSION = 'v119';
 const CACHE = 'ege-' + VERSION;
-const SHELL = ['./', './index.html', './sync-core.js?v=118', './config.js?v=118', './stats-core.js?v=118', './exam-core.js?v=118', './exam-panel-core.js?v=118', './exam-validate.js?v=118', './exam-client-core.js?v=118', './exam-history-core.js?v=118', './exam-my-view.js?v=118', './exam.js?v=118', './teacher.html', './manifest.webmanifest',
+const SHELL = ['./', './index.html', './sync-core.js?v=119', './config.js?v=119', './stats-core.js?v=119', './exam-core.js?v=119', './exam-panel-core.js?v=119', './exam-validate.js?v=119', './exam-client-core.js?v=119', './exam-history-core.js?v=119', './exam-my-view.js?v=119', './exam.js?v=119', './teacher.html', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png', './apple-touch-icon.png',
   './logo.svg', './favicon.ico', './favicon-32.png',
   './katex/katex.min.css', './katex/katex.min.js', './katex/auto-render.min.js',
