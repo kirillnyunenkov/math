@@ -21,6 +21,53 @@
 
   const newStamps = () => ({ m: {}, r: {} });
 
+  // Journal numbers are stable across bank renumbering. 21 identifies the
+  // restored derivative bank; 6 and 13 are retained as hidden historical topics.
+  function fromWire(n) {
+    n = +n;
+    if (n === 0) return 0;
+    if (n === 6) return 26;
+    if (n === 13) return 33;
+    if (n === 21) return 12;
+    if (n >= 7 && n <= 20) return n - 1;
+    return n;
+  }
+  function toWire(n) {
+    n = +n;
+    if (n === 26) return 6;
+    if (n === 33) return 13;
+    if (n === 12) return 21;
+    if ((n >= 6 && n <= 11) || (n >= 13 && n <= 19)) return n + 1;
+    return n;
+  }
+  function stateFromWire(state) {
+    const result = {};
+    for (const n in state || {}) result[fromWire(n)] = state[n];
+    return result;
+  }
+  function stampsFromWire(stamps) {
+    const result = newStamps();
+    for (const key in (stamps || {}).m || {}) {
+      const [n, pid] = key.split('/');
+      result.m[fromWire(n) + '/' + pid] = stamps.m[key];
+    }
+    for (const n in (stamps || {}).r || {}) result.r[+n === 0 ? 40 : fromWire(n)] = stamps.r[n];
+    return result;
+  }
+  function eventsFromWire(events) {
+    return (events || []).map(e => Object.assign({}, e, {
+      n: e.kind === 'reset' && +e.n === 0 ? 40 : fromWire(e.n)
+    }));
+  }
+  function eventsToWire(e) {
+    if (e.kind === 'reset' && +e.n === 0) {
+      // Old clients understand the first reset; the second also resets the
+      // restored derivative bank. Distinct uids make both events durable.
+      return [Object.assign({}, e), Object.assign({}, e, { uid: uid(), n: 21 })];
+    }
+    return [Object.assign({}, e, { n: toWire(e.n) })];
+  }
+
   function markEvent(n, pid, status, o) {
     o = o || {};
     return { uid: o.uid || uid(), ts: o.ts || Date.now(), kind: 'mark', n: +n, pid: +pid,
@@ -38,7 +85,8 @@
   // problem that has no mark in the journal (progress made before login).
   function statusOf(stamps, n, pid, legacy) {
     const m = stamps.m[n + '/' + pid];
-    const r = Math.max(stamps.r[n] || -Infinity, stamps.r[0] || -Infinity);
+    const r = Math.max(stamps.r[n] || -Infinity, stamps.r[0] || -Infinity,
+      +n === 12 ? -Infinity : (stamps.r[40] || -Infinity));
     if (!m) return r === -Infinity ? legacy : '';
     return m.ts > r ? m.s : '';
   }
@@ -51,7 +99,7 @@
         const k = e.n + '/' + e.pid;
         if (newer(e, st.m[k])) { st.m[k] = { ts: e.ts, uid: e.uid, s: e.status || '' }; touched.add(k); }
       } else if (e.kind === 'reset') {
-        if (!(st.r[e.n] >= e.ts)) { st.r[e.n] = e.ts; touched.add(e.n === 0 ? '*' : e.n + '/*'); }
+        if (!(st.r[e.n] >= e.ts)) { st.r[e.n] = e.ts; touched.add(e.n === 0 || e.n === 40 ? '*' : e.n + '/*'); }
       }
     }
     if (!touched.size) return { state, stamps, changed: false };
@@ -106,7 +154,8 @@
     return [...by.values()].filter(v => v.t >= cut && !gone.has(v.uid)).sort((a, b) => a.t - b.t).slice(-50);
   }
 
-  const api = { uid, newStamps, markEvent, resetEvent, applyEvents, snapshotEvents, importEvents, mergeVariants, statusOf };
+  const api = { uid, newStamps, markEvent, resetEvent, applyEvents, snapshotEvents, importEvents, mergeVariants, statusOf,
+    fromWire, toWire, stateFromWire, stampsFromWire, eventsFromWire, eventsToWire };
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.SyncCore = api;
 })(typeof self !== 'undefined' ? self : globalThis);

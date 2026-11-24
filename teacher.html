@@ -407,14 +407,14 @@
 </div>
 <div class="sheet-ov" id="sheet-ov"><div class="sheet" id="sheet"></div></div>
 
-<script src="sync-core.js"></script>
-<script src="stats-core.js"></script>
-<script src="exam-core.js"></script>
-<script src="exam-panel-core.js"></script>
-<script src="exam-validate.js"></script>
-<script src="exam-history-core.js?v=101"></script>
-<script src="exam-my-view.js?v=101"></script>
-<script src="config.js"></script>
+<script src="sync-core.js?v=118"></script>
+<script src="stats-core.js?v=118"></script>
+<script src="exam-core.js?v=118"></script>
+<script src="exam-panel-core.js?v=118"></script>
+<script src="exam-validate.js?v=118"></script>
+<script src="exam-history-core.js?v=118"></script>
+<script src="exam-my-view.js?v=118"></script>
+<script src="config.js?v=118"></script>
 <script>
 /* Панель преподавателя. Данные учеников сюда приходят только с сервера и
    только после входа по ссылке учителя; в самой странице их нет.
@@ -528,7 +528,7 @@ const summaries={};
 const myExams={};   // student id -> exam summary rows (ExamMyView items)
 function summaryOf(u){
   if(!summaries[u.id]){const d=data.byUser[u.id];
-    summaries[u.id]=StatsCore.studentSummary(d.events,d.variants,d.clears,Date.now(),cfg);}
+    summaries[u.id]=StatsCore.studentSummary(SyncCore.eventsFromWire(d.events),d.variants,d.clears,Date.now(),cfg);}
   return summaries[u.id];}
 
 function ago(ts){
@@ -587,7 +587,7 @@ const chipFor=ph=>`<span class="chip ex-${ph}">${ExamPanelCore.PHASE_TEXT[ph]}</
 // ---- список учеников ----
 let sortKey='last',sortDir=-1;
 function rowData(u){const s=summaryOf(u),lastV=s.variants[s.variants.length-1];
-  let g=0;for(let n=1;n<=20;n++)g+=s.byTask[n].g;
+  let g=0;for(let n=1;n<=19;n++)g+=s.byTask[n].g;
   return{u,last:s.lastActive,week:s.solved7d,mastered:g,mock:lastV?lastV.s:null,mockT:lastV?lastV.t:null};}
 function renderList(){
   const rows=data.students.map(rowData);
@@ -678,10 +678,10 @@ function renderStudent(id){
   }
   const prof=data.profOf[id],lead=!!prof&&!prof.mine;
   const s=summaryOf(u),d=data.byUser[id];
-  const protos=StatsCore.problemPrototypes(d.events,cfg).slice(0,12);
+  const protos=StatsCore.problemPrototypes(SyncCore.eventsFromWire(d.events),cfg).slice(0,12);
   const maxAct=Math.max(1,...s.activity.map(a=>a.count));
   const tasksHTML=[];
-  for(let n=1;n<=20;n++){const c=s.byTask[n];if(!c.total)continue;
+  for(let n=1;n<=19;n++){const c=s.byTask[n];if(!c.total)continue;
     const p=x=>(x/c.total*100).toFixed(1)+'%';
     tasksHTML.push(`<div class="t"><span class="n">${n}</span><span class="tt" title="${esc(taskTitle(n))}">${esc(taskTitle(n))}</span>
       <span title="умею ${c.g} · повторить ${c.o} · разобраться ${c.b} из ${c.total}"><span class="bar"><i class="g" style="width:${p(c.g)}"></i><i class="o" style="width:${p(c.o)}"></i><i class="b" style="width:${p(c.b)}"></i></span></span></div>`);}
@@ -750,7 +750,7 @@ async function fillMyExams(id){
 window.TASKDATA=window.TASKDATA||{};
 const dataP={};
 function ensureData(n){return dataP[n]||(dataP[n]=new Promise(res=>{
-  const sc=document.createElement('script');sc.src=`img/t${n}/data.js`;sc.onload=res;sc.onerror=res;document.head.appendChild(sc);}));}
+  const sc=document.createElement('script');sc.src=`img/bank19/t${n}/data.js`;sc.onload=res;sc.onerror=res;document.head.appendChild(sc);}));}
 function plain(html){const t=document.createElement('div');t.innerHTML=html||'';return(t.textContent||'').trim();}
 function fillWrong(){
   document.querySelectorAll('[data-cond]').forEach(el=>{

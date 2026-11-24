@@ -19,13 +19,19 @@
     if (!items.length) return '';
     const last = items.length - 1, isLast = (i) => items.length > 1 && i === last;   // the newest exam: only its date is marked
     const head = '<tr><th class="my-n"></th>' + items.map((it, i) => '<th' + (isLast(i) ? ' class="my-last"' : '') + ' title="' + esc(it.title) + '">' + dm(it.date) + '</th>').join('') + '<th class="my-sol">Решаемость</th></tr>';
-    const rows = H.NUMS.map((n) => {
-      const sol = H.solvability(items, n);
+    const rows = H.NUMS.slice(0, 19).map((n) => {
+      const sol = H.displaySolvability(items, n);
       const slc = sol === null ? '' : sol < 50 ? ' my-sl' : sol < 80 ? ' my-sm' : '';
-      return '<tr' + (n === 14 ? ' class="my-p2"' : '') + '><th class="my-n">' + n + '</th>' + items.map((it, i) => {
-        const s = H.cellState(it, n), v = it.scores[n];
+      return '<tr' + (n === 13 ? ' class="my-p2"' : '') + '><th class="my-n">' + n + '</th>' + items.map((it, i) => {
+        const k = H.displayNum(it, n), s = H.cellState(it, k), v = it.scores[k];
         return '<td class="my-c my-' + s + '">' + (s === 'na' ? '-' : s === 'blank' ? '' : v) + '</td>';
-      }).join('') + '<td class="my-sol' + slc + '">' + (sol === null ? '-' : sol + '%') + '</td></tr>';
+      }).join('') + '<td class="my-sol' + slc + '">' + (sol === null ? '-' : sol + '%') + '</td></tr>' +
+        (n === 5 && items.some((it) => it.format !== 19 && H.cellState(it, 6) !== 'na') ?
+          '<tr class="my-extra"><th class="my-n" title="Старое задание 6: случайные величины">+</th>' + items.map((it) => {
+            const state = it.format === 19 ? 'na' : H.cellState(it, 6);
+            return '<td class="my-c my-' + state + '" title="Старое задание 6: случайные величины">' +
+              (state === 'na' || state === 'blank' ? '' : '+' + it.scores[6]) + '</td>';
+          }).join('') + '<td></td></tr>' : '');
     }).join('');
     const total = (label, f, first) => '<tr class="my-total' + (first ? ' my-p2' : ' my-test') + '"><th class="my-n">' + label + '</th>' + items.map((it) => { const v = f(it); return '<td>' + (v === null ? '' : v) + '</td>'; }).join('') + '<td></td></tr>';
     return '<div class="my-scroll" data-my-scroll><table class="my-tbl">' + head + rows + total('Первичный<br>балл', H.primaryOf, true) + total('Тестовый<br>балл', H.testOf, false) + '</table></div>';
@@ -87,7 +93,7 @@
     const chart = chartHtml(items), table = tableHtml(items);
     return (chart ? '<section class="my-card"><h3>Тестовый балл</h3>' + chart + '</section>' : '') +
       (table ? '<section class="my-card"><h3>Баллы по заданиям</h3>' + table +
-      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте. Линия перед 14-м заданием отделяет вторую часть. Наведи мышь на ячейку, чтобы выделить её строку и столбец. Решаемость: какую долю баллов за это задание ' + ((opt && opt.readonly) ? 'ученик набрал' : 'ты набрал') + ' по всем пробникам.</p></section>' : '') +
+      '<p class="my-legend">Зелёный: максимум, жёлтый: часть баллов, красный: 0, пусто: не решал, «-»: задания не было в варианте. Линия перед 13-м заданием отделяет вторую часть. Дополнительная строка «+» — старое задание 6, учитывается только в общем балле. Наведи мышь на ячейку, чтобы выделить её строку и столбец. Решаемость: какую долю баллов за это задание ' + ((opt && opt.readonly) ? 'ученик набрал' : 'ты набрал') + ' по всем пробникам.</p></section>' : '') +
       '<section class="my-card"><h3>Все пробники</h3><div class="my-list">' + listHtml(items, (opt && opt.seen) || [], !!(opt && opt.readonly)) + '</div></section>';
   }
 

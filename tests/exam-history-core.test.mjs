@@ -47,11 +47,12 @@ test('cell states', () => {
   assert.equal(H.cellState({ scores: { 1: 1 }, na: [], maxes: { 1: 3 } }, 1), 'part');   // the item's own maximum wins
 });
 
-test('the 33 scale; any other maximum has no computed test score', () => {
+test('the 32 and 33 scales; other maxima have no computed test score', () => {
   assert.equal(H.SCALE_33.length, 34);
   assert.equal(H.testScore(11, 33), 62);
   assert.equal(H.testScore(33, 33), 100);
-  assert.equal(H.testScore(11, 32), null);
+  assert.equal(H.testScore(11, 32), 64);
+  assert.equal(H.testScore(12, 32), 70);
   assert.equal(H.testScore(5, 20), null);
   assert.equal(H.testScore(-1, 33), null);
 });
@@ -63,11 +64,12 @@ test('checkTest accepts an integer from 0 to 100', () => {
   for (const bad of [101, -1, 52.5, '52', null, undefined]) assert.match(H.checkTest(bad), /Тестовый балл/);
 });
 
-test('the 33 scale is the one in index.html', () => {
+test('the two exam scales are present in the trainer', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   const m = html.match(/const SEC_SCORE=\[([0-9,]+)\]/);
   assert.ok(m, 'SEC_SCORE not found in index.html');
-  assert.deepEqual(H.SCALE_33, m[1].split(',').map(Number));
+  const values = m[1].split(',').map(Number);
+  assert.ok(JSON.stringify(values) === JSON.stringify(H.SCALE_33) || JSON.stringify(values) === JSON.stringify(H.SCALE_32));
 });
 
 test('parseScores reads a pasted row of 20 values', () => {
@@ -109,4 +111,32 @@ test('dates', () => {
   assert.equal(H.validDate('2025-02-30'), false);
   assert.equal(H.validDate('21.10.2025'), false);
   assert.equal(H.dateToTs('2025-10-21'), Date.UTC(2025, 9, 21, 9, 0, 0) / 1000);   // 12:00 Moscow time
+});
+
+
+test('new and old formats map topics without merging the old extra task', () => {
+  const old = { scores: { 6: 1, 7: 0, 13: 1, 14: 2 }, na: [] };
+  const now = { format: 19, scores: { 6: 1, 12: 0, 13: 1 }, na: [], maxes: { 6: 1, 12: 1, 13: 2 } };
+  assert.equal(H.displayNum(old, 6), 7);
+  assert.equal(H.displayNum(now, 6), 6);
+  assert.equal(H.displaySolvability([old, now], 6), 50);
+  assert.equal(H.displaySolvability([old, now], 12), 50);
+  assert.equal(H.displaySolvability([old, now], 13), 75);
+  assert.equal(H.primaryOf(old), 4);
+  assert.equal(H.testOf({ ...now, test: 77 }), 77);
+});
+
+test('new full exam summary totals and scores use the 32-point scale', () => {
+  const maxima = { 13: 2, 14: 3, 15: 2, 16: 2, 17: 3, 18: 4, 19: 4 };
+  const tasks = Array.from({ length: 19 }, (_, i) => {
+    const n = i + 1;
+    return { n, kind: n < 13 ? 'short' : 'long', max: maxima[n] || 1 };
+  });
+  const answers = {}, ok = {};
+  for (let n = 1; n <= 12; n++) { answers[n] = '1'; ok[n] = true; }
+  const row = { ...H.taskScores(tasks, answers, ok, {}, []), format: 19 };
+  assert.equal(H.primaryOf(row), 12);
+  assert.equal(H.maxOfItem(row), 32);
+  assert.equal(H.testOf(row), 70);
+  assert.equal(H.displayNum(row, 13), 13);
 });

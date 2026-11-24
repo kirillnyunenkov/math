@@ -515,3 +515,16 @@ test('the SVG gate is linear in time on hostile repetitive input', () => {
   });
   assert.ok(Date.now() - t0 < 3000, 'took ' + (Date.now() - t0) + ' ms');
 });
+
+
+test('a full 19-task exam has 12 short tasks and the shifted long-task maxima', () => {
+  const old = fullExam();
+  const tasks = old.tasks.filter(t => t.n !== 6).map(t => ({ ...t, n: t.n > 6 ? t.n - 1 : t.n }));
+  const key = {};
+  for (const t of old.tasks) if (t.n !== 6) key[t.n > 6 ? t.n - 1 : t.n] = old.key[t.n];
+  const x = { ...old, tasks, key };
+  assert.deepEqual(errs(x), []);
+  assert.equal(x.tasks.reduce((sum, t) => sum + t.max, 0), 32);
+  x.tasks.find(t => t.n === 13).max = 3;
+  assert.ok(errs(x).some(e => /задание 13/i.test(e) && /2 балл/i.test(e)));
+});

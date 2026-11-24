@@ -15,6 +15,8 @@
   // Archive exams have no scale here: each carries its own fixed test score.
   const SCALE_33 = [0, 6, 11, 17, 22, 27, 34, 40, 46, 52, 58, 62, 66, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 92, 94, 95, 96, 97, 98, 99, 100, 100, 100];
 
+  const SCALE_32 = [0, 6, 11, 17, 22, 27, 34, 40, 46, 52, 58, 64, 70, 72, 74, 76, 78, 80, 82, 84, 86, 88, 90, 92, 94, 95, 96, 97, 98, 99, 100, 100, 100];
+
   const isInt = (v) => typeof v === 'number' && isFinite(v) && Math.floor(v) === v;
   const naOf = (item) => (item && Array.isArray(item.na) ? item.na : []);
 
@@ -41,11 +43,27 @@
     return s;
   }
   function testScore(primary, max) {
-    if (max !== 33 || typeof primary !== 'number' || !(primary >= 0)) return null;
-    return SCALE_33[Math.min(Math.floor(primary), SCALE_33.length - 1)];
+    if (typeof primary !== 'number' || !(primary >= 0)) return null;
+    const scale = max === 33 ? SCALE_33 : max === 32 ? SCALE_32 : null;
+    return scale ? scale[Math.min(Math.floor(primary), scale.length - 1)] : null;
   }
   // An archive exam has its own fixed score; an exam written in the trainer is converted by the 33 scale.
-  const testOf = (item) => (item && typeof item.test === 'number' ? item.test : testScore(primaryOf(item), maxOfItem(item)));
+  const testOf = (item) => (item && typeof item.test === 'number' ? item.test :
+    (item && item.format === 19 ? testScore(primaryOf(item), 32) :
+      (maxOfItem(item) === 33 ? testScore(primaryOf(item), 33) : null)));
+
+  // Older manual records use the original 20-slot sheet with task 6 absent.
+  // New full exams are explicitly marked; never guess their format from the date.
+  const displayNum = (item, n) => item && item.format === 19 ? n : n <= 5 ? n : n + 1;
+  function displaySolvability(items, n) {
+    let got = 0, max = 0;
+    (items || []).forEach(function (it) {
+      const k = displayNum(it, n), st = cellState(it, k);
+      if (st === 'na' || st === 'blank') return;
+      got += it.scores[k]; max += maxFor(it, k);
+    });
+    return max ? Math.round(got / max * 100) : null;
+  }
   function checkTest(v) { return isInt(v) && v >= 0 && v <= 100 ? '' : 'Тестовый балл: целое число от 0 до 100.'; }
 
   // The share of the points won on a task over the exams where it was attempted; null when there is none.
@@ -122,7 +140,7 @@
     return Date.UTC(Number(p[0]), Number(p[1]) - 1, Number(p[2]), 9, 0, 0) / 1000;
   }
 
-  const api = { MAXES: MAXES, NUMS: NUMS, SCALE_33: SCALE_33, maxFor: maxFor, cellState: cellState,
+  const api = { MAXES: MAXES, NUMS: NUMS, SCALE_33: SCALE_33, SCALE_32: SCALE_32, displayNum: displayNum, displaySolvability: displaySolvability, maxFor: maxFor, cellState: cellState,
     primaryOf: primaryOf, maxOfItem: maxOfItem, testScore: testScore, testOf: testOf, checkTest: checkTest, solvability: solvability,
     parseScores: parseScores, checkManual: checkManual, taskScores: taskScores, validDate: validDate, dateToTs: dateToTs };
   if (typeof module === 'object' && module.exports) module.exports = api;

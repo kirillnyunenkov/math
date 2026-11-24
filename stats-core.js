@@ -19,7 +19,7 @@
     const marks = events.filter(real);
 
     const byTask = {};
-    for (let n = 1; n <= 20; n++) {
+    for (let n = 1; n <= 19; n++) {
       const ts = state[n] || {}, reps = cfg.reps(n);
       const vals = reps ? reps.map(id => ts[id]) : Object.values(ts);
       byTask[n] = { g: 0, o: 0, b: 0, total: reps ? reps.length : cfg.count(n) };
@@ -41,7 +41,7 @@
     const activity = [];
     for (let i = 29; i >= 0; i--) { const d = mskDay(now - i * DAY); activity.push({ day: d, count: perDay[d] || 0 }); }
 
-    const wrong = marks.filter(e => e.status === 'b' && e.source === 'check')
+    const wrong = marks.filter(e => e.n >= 1 && e.n <= 19 && e.status === 'b' && e.source === 'check')
       .sort((a, b) => b.ts - a.ts).slice(0, 50)
       .map(e => ({ ts: e.ts, n: e.n, pid: e.pid, given: e.given }));
 
@@ -52,7 +52,7 @@
   // for tasks without prototypes), worst first.
   function problemPrototypes(events, cfg) {
     const by = new Map();
-    for (const e of events.filter(real)) {
+    for (const e of events.filter(e => real(e) && e.n >= 1 && e.n <= 19)) {
       const proto = cfg.protoOf(e.n, e.pid);
       const key = e.n + '/' + (proto === null ? 'id' + e.pid : proto);
       let g = by.get(key);

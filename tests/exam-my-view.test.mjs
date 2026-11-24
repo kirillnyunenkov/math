@@ -19,11 +19,11 @@ test('empty state: no dashboard, one friendly line', () => {
 test('table: a row per task, coloured cells, "-" for a task that was not there, solvability and totals', () => {
   const h = V.tableHtml([A, B]);
   assert.match(h, /my-tbl/);
-  assert.equal((h.match(/<tr/g) || []).length, 1 + 20 + 2);                  // header + 20 tasks + primary + test
+  assert.equal((h.match(/<tr/g) || []).length, 1 + 19 + 2);                  // header + 20 tasks + primary + test
   assert.match(h, /my-c my-full">1</);
   assert.match(h, /my-c my-zero[^>]*">0</);
   assert.match(h, /my-c my-part">1</);                                       // task 14: 1 of 2
-  assert.match(h, /my-c my-na">-</);
+
   assert.match(h, />50%</);                                                  // task 1: 1 of 2 over two exams
   assert.match(h, /21\.10/);
 });
@@ -96,7 +96,7 @@ test('table polish: second-part divider, tinted weak tasks, only the newest date
   const mkp = (id, date, s15, test) => { const x = mk(id, date, 1, { test }); x.scores[15] = s15; return x; };
   const C = mkp('c', 1000000, 1, 60), D = mkp('d', 2000000, 2, 70), E = mkp('e', 3000000, 0, 64);
   const h = V.tableHtml([C, D, E]);
-  assert.match(h, /<tr class="my-p2"><th class="my-n">14</);                  // before task 14
+  assert.match(h, /<tr class="my-p2"><th class="my-n">13</);                  // before task 13
   assert.match(h, /<tr class="my-total my-test">/);                          // the test score row is marked
   assert.match(h, /<tr class="my-total my-p2">/);                              // and before the totals
   assert.equal((h.match(/my-last/g) || []).length, 1);                         // the date of the newest exam only
@@ -104,4 +104,15 @@ test('table polish: second-part divider, tinted weak tasks, only the newest date
   assert.match(h, /my-sol my-sm">50%</);                                      // task 15: 3 of 6 points, a middling task is tinted
   assert.match(h, /my-c my-part">1</);                                        // partial scores stay one plain colour
   assert.doesNotMatch(h, /my-pl|my-ph|my-up|my-dn|<small/);
+});
+
+
+test('extra old sixth task is displayed separately; old task 13 shares new row 12', () => {
+  const old = mk('old', 1000000, 1, { na: [], scores: { 5: 1, 6: 1, 7: 0, 13: 1, 14: 2 } });
+  const fresh = mk('new', 2000000, 1, { format: 19, na: [], scores: { 5: 0, 6: 1, 12: 0, 13: 2 }, maxes: { 5: 1, 6: 1, 12: 1, 13: 2 } });
+  const html = V.tableHtml([old, fresh]);
+  assert.match(html, /my-extra[\s\S]*?\+1/);
+  assert.match(html, /my-n">12<\/th><td class="my-c my-full">1<\/td><td class="my-c my-zero">0<\/td>/);
+  assert.match(html, /my-n">6<\/th><td class="my-c my-zero">0<\/td><td class="my-c my-full">1<\/td>/);
+  assert.equal((html.match(/<th class="my-n">\d+<\/th>/g) || []).length, 19);
 });

@@ -1230,3 +1230,70 @@ test('pause with extra time: the student gets the added minutes on top of what w
   const v = await view(id, s.token);
   assert.ok(v.json.left > 1400 && v.json.left <= 1500, String(v.json.left));
 });
+
+test('summary and dashboard preserve old and new full-exam formats and exclude drills from the table', async () => {
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const H = require('../../exam-history-core.js'), V = require('../../exam-my-view.js');
+  const s = await student(7000000199);
+  async function fullExam(count) {
+    const firstLong = count === 19 ? 13 : 14;
+    const longMax = [2, 3, 2, 2, 3, 4, 4], tasks = [], key = {};
+    for (let n = 1; n <= count; n++) {
+      const long = n >= firstLong;
+      tasks.push({ n, kind: long ? 'long' : 'short', max: long ? longMax[n - firstLong] : 1, cond: '<p>Task</p>' });
+      key[n] = long ? { a: '<p>Answer</p>' } : { a: '1', sol: '<p>Solution</p>' };
+    }
+    const r = await req('POST', '/collections/exams/records', tok.teacher, { title: `Full ${count}`, full: true, tasks, key });
+    assert.equal(r.status, 200, JSON.stringify(r.json));
+    return { id: r.json.id, tasks, firstLong };
+  }
+  async function complete(exam) {
+    const a = await assign(s.id, exam.id, nowS() - 10);
+    assert.equal(a.status, 200, JSON.stringify(a.json));
+    const id = a.json.id;
+    assert.equal((await view(id, s.token)).status, 200);
+    const answers = {};
+    for (const t of exam.tasks) if (t.kind === 'short') answers[t.n] = '1';
+    assert.equal((await post(id, 'answers', s.token, { answers })).status, 200);
+    assert.equal((await post(id, 'finish', s.token)).status, 200);
+    assert.equal((await post(id, 'done', s.token)).status, 200);
+    const part2 = {};
+    for (const t of exam.tasks) if (t.kind === 'long') part2[t.n] = { pts: t.n === exam.firstLong ? 2 : 0 };
+    const checked = await post(id, 'check', tok.teacher, { part2 });
+    assert.equal(checked.status, 200, JSON.stringify(checked.json));
+  }
+  await complete(await fullExam(20));
+  await complete(await fullExam(19));
+  const drill = await mkExam('Drill excluded');
+  const a = await assign(s.id, drill, nowS() - 10);
+  assert.equal(a.status, 200);
+  const id = a.json.id;
+  await view(id, s.token);
+  await post(id, 'answers', s.token, { answers: { 1: '5' } });
+  await post(id, 'finish', s.token);
+  await post(id, 'done', s.token);
+  assert.equal((await post(id, 'check', tok.teacher, { part2: { 13: { pts: 2 } } })).status, 200);
+
+  const r = await summary(s.token);
+  assert.equal(r.status, 200);
+  assert.equal(r.json.items.length, 3);
+  const old = r.json.items.find(it => it.title === 'Full 20');
+  const fresh = r.json.items.find(it => it.title === 'Full 19');
+  const partial = r.json.items.find(it => it.title === 'Drill excluded');
+  assert.equal(old.format, 20);
+  assert.equal(fresh.format, 19);
+  assert.equal(partial.full, false);
+  assert.equal(H.primaryOf(old), 15);
+  assert.equal(H.maxOfItem(old), 33);
+  assert.equal(H.testOf(old), 74);
+  assert.equal(H.primaryOf(fresh), 14);
+  assert.equal(H.maxOfItem(fresh), 32);
+  assert.equal(H.testOf(fresh), 74);
+  const table = V.tableHtml(r.json.items);
+  assert.match(table, /Full 20/);
+  assert.match(table, /Full 19/);
+  assert.doesNotMatch(table, /Drill excluded/);
+  assert.match(table, /my-extra[\s\S]*?\+1/);
+  assert.equal((table.match(/<th class="my-n">\d+<\/th>/g) || []).length, 19);
+});
